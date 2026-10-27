@@ -16,4 +16,16 @@ describe('developEliteMapIntelPick', () => {
 
     panel.remove()
   })
+
+  it('ignores clicks on map tool flyout panel', () => {
+    const panel = document.createElement('div')
+    panel.className = 'develop-elite-map__panel'
+    const btn = document.createElement('button')
+    panel.appendChild(btn)
+    document.body.appendChild(panel)
+
+    expect(shouldIgnoreDevelopEliteMapIntelPickClick(btn)).toBe(true)
+
+    panel.remove()
+  })
 })

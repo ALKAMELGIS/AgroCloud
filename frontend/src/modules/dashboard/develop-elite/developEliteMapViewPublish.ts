@@ -2,7 +2,7 @@ import { quantizeLngLatBBox } from '@/modules/gis/map/siMapViewport'
 import type { DevelopEliteMapView } from './developEliteKpiEngine'
 
 /** Coarse grid — fewer dashboard re-renders while panning the map. */
-export const DEVELOP_ELITE_MAP_VIEW_BBOX_TILE_DEG = 0.28
+export const DEVELOP_ELITE_MAP_VIEW_BBOX_TILE_DEG = 0.42
 const ZOOM_QUANTUM = 0.5
 
 export function quantizeDevelopEliteMapView(view: DevelopEliteMapView): DevelopEliteMapView {

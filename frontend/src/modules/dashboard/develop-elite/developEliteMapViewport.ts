@@ -8,7 +8,7 @@ function boundsSpanDegrees(bounds: L.LatLngBounds): number {
 }
 
 /** Bump when default globe camera / topographic default changes — clients re-apply {@link DEVELOP_ELITE_MAP_DEFAULT_VIEW}. */
-export const DEVELOP_ELITE_MAP_VIEWPORT_PRESET_VERSION = 9
+export const DEVELOP_ELITE_MAP_VIEWPORT_PRESET_VERSION = 11
 export const DEVELOP_ELITE_MAP_VIEWPORT_PRESET_LS_KEY = 'develop_elite_map_viewport_preset_v'
 
 export type DevelopEliteMapDefaultCamera = {
@@ -33,6 +33,20 @@ export const DEVELOP_ELITE_MAP_DEFAULT_VIEW: DevelopEliteMapDefaultCamera = {
   bearing: 0,
 }
 
+/** Grid dashboard (Mercator): same framing as product globe home (Atlantic / Africa portfolio). */
+export const DEVELOP_ELITE_GRID_MAP_DEFAULT_VIEW: DevelopEliteMapDefaultCamera = {
+  center: [2.5, 17.5],
+  zoom: 2,
+  pitch: 0,
+  bearing: 0,
+}
+
+export function resolveDevelopEliteMapDefaultView(): DevelopEliteMapDefaultCamera {
+  return DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY
+    ? DEVELOP_ELITE_GRID_MAP_DEFAULT_VIEW
+    : DEVELOP_ELITE_MAP_DEFAULT_VIEW
+}
+
 /** `acp-map--3d` / viewport chrome follows the topographic toolbar, not the flat globe home. */
 export const DEVELOP_ELITE_MAP_PORTFOLIO_GLOBE_PRESENTATION = false
 
@@ -48,6 +62,9 @@ export function isDevelopEliteMapPortfolio3dActive(viewMode3d: boolean): boolean
 export const DEVELOP_ELITE_MAP_DEFAULT_CENTER: [number, number] = DEVELOP_ELITE_MAP_DEFAULT_VIEW.center
 /** @deprecated Use {@link DEVELOP_ELITE_MAP_DEFAULT_VIEW}. */
 export const DEVELOP_ELITE_MAP_DEFAULT_ZOOM = DEVELOP_ELITE_MAP_DEFAULT_VIEW.zoom
+
+/** Embedded dashboard grid map: Mercator-only (no globe/starfield) for smooth pan/zoom. */
+export const DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY = true
 
 /** Allow slight zoom-out past the default globe view. */
 export const DEVELOP_ELITE_MAP_MIN_ZOOM = 0.5

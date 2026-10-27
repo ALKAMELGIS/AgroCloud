@@ -3,6 +3,7 @@ import { DevelopEliteCountryListPanel } from './DevelopEliteCountryListPanel'
 import { DevelopEliteFarmListPanel } from './DevelopEliteFarmListPanel'
 import { DevelopEliteZoneListPanel } from './DevelopEliteZoneListPanel'
 import type { useDevelopEliteDashboardData } from './useDevelopEliteDashboardData'
+import { developEliteStructureSideTypeIsActive } from './developEliteSpatialScope'
 
 type DashboardData = ReturnType<typeof useDevelopEliteDashboardData>
 
@@ -70,21 +71,57 @@ export function DevelopEliteListPanels({
       className="develop-elite__structure-stack develop-elite-list-panels__section develop-elite-list-panels__structures"
       aria-label="Structure counts"
     >
-      <div className="develop-elite__structure-box develop-elite__structure-box--glasshouse">
+      <div
+        className={`develop-elite__structure-box develop-elite__structure-box--glasshouse develop-elite__structure-box--actionable${developEliteStructureSideTypeIsActive('glasshouse', data.filters) ? ' develop-elite__structure-box--active' : ''}`}
+        role="button"
+        tabIndex={0}
+        title="Filter dashboard and fly to glasshouse structures"
+        onClick={() => data.selectStructureSideType('glasshouse')}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            data.selectStructureSideType('glasshouse')
+          }
+        }}
+      >
         <span className="develop-elite__structure-label">Glasshouse</span>
         <div className="develop-elite__structure-metric">
           <i className="fa-solid fa-house develop-elite__structure-icon" aria-hidden />
           <strong>{data.sideCounts.glasshouse}</strong>
         </div>
       </div>
-      <div className="develop-elite__structure-box develop-elite__structure-box--nethouse">
+      <div
+        className={`develop-elite__structure-box develop-elite__structure-box--nethouse develop-elite__structure-box--actionable${developEliteStructureSideTypeIsActive('nethouse', data.filters) ? ' develop-elite__structure-box--active' : ''}`}
+        role="button"
+        tabIndex={0}
+        title="Filter dashboard and fly to nethouse structures"
+        onClick={() => data.selectStructureSideType('nethouse')}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            data.selectStructureSideType('nethouse')
+          }
+        }}
+      >
         <span className="develop-elite__structure-label">Nethouse</span>
         <div className="develop-elite__structure-metric">
           <i className="fa-solid fa-house develop-elite__structure-icon" aria-hidden />
           <strong>{data.sideCounts.nethouse}</strong>
         </div>
       </div>
-      <div className="develop-elite__structure-box develop-elite__structure-box--greenhouse">
+      <div
+        className={`develop-elite__structure-box develop-elite__structure-box--greenhouse develop-elite__structure-box--actionable${developEliteStructureSideTypeIsActive('greenhouse', data.filters) ? ' develop-elite__structure-box--active' : ''}`}
+        role="button"
+        tabIndex={0}
+        title="Filter dashboard and fly to greenhouse structures"
+        onClick={() => data.selectStructureSideType('greenhouse')}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            data.selectStructureSideType('greenhouse')
+          }
+        }}
+      >
         <span className="develop-elite__structure-label">Greenhouse</span>
         <div className="develop-elite__structure-metric">
           <i className="fa-solid fa-house develop-elite__structure-icon" aria-hidden />

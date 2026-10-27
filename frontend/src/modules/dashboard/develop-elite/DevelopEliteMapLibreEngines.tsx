@@ -1,9 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
 import maplibregl from 'maplibre-gl'
-import { Link } from 'react-router-dom'
 import { DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT } from '@/modules/gis/editing/leafletMapSketchInteraction'
-import { wmoWeatherIconClass } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import { useDevelopEliteMapLibre } from './developEliteMapLibreContext'
 import { registerDevelopEliteMapLibreIntelPick } from './developEliteMapLibreIntelPick'
 import { useDevelopEliteMapInsight } from './DevelopEliteMapInsightTools'
@@ -21,6 +18,8 @@ import {
 import { DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT } from './developEliteDashboardEvents'
 import { isDevelopEliteMapLibreStyleReady } from './developEliteMapLibreStyle'
 import { applyDevelopEliteMapLibrePerformanceTuning } from './developEliteMapLibrePerformance'
+import { setDevelopEliteMapLibreOverlaysInteractionPaused } from './developEliteMapLibreOverlays'
+import { DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY } from './developEliteMapViewport'
 
 export function DevelopEliteMapLibreInteractionTune() {
   const { mapRef, mapReady } = useDevelopEliteMapLibre()
@@ -28,26 +27,79 @@ export function DevelopEliteMapLibreInteractionTune() {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
+    if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) return
     const container = map.getContainer()
+    const mapShell = container.closest<HTMLElement>('.develop-elite-map')
     let interacting = 0
+    const setInteractingChrome = (active: boolean) => {
+      container.classList.toggle('develop-elite-map--interacting', active)
+      mapShell?.classList.toggle('develop-elite-map--interacting', active)
+    }
+    const overlaysPausedForGesture = () =>
+      interacting > 0 || container.classList.contains('develop-elite-map--zooming')
+
+    const setOverlaysPaused = (paused: boolean) => {
+      if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) return
+      setDevelopEliteMapLibreOverlaysInteractionPaused(map, paused)
+    }
+    let overlayRestoreTimer = 0
+    const scheduleOverlayRestore = () => {
+      if (overlayRestoreTimer) window.clearTimeout(overlayRestoreTimer)
+      const restore = () => {
+        overlayRestoreTimer = 0
+        setOverlaysPaused(overlaysPausedForGesture())
+      }
+      const onIdle = () => {
+        map.off('idle', onIdle)
+        restore()
+      }
+      map.once('idle', onIdle)
+      overlayRestoreTimer = window.setTimeout(() => {
+        map.off('idle', onIdle)
+        restore()
+      }, 120)
+    }
+
     const bump = (delta: number) => {
       interacting = Math.max(0, interacting + delta)
-      container.classList.toggle('develop-elite-map--interacting', interacting > 0)
+      setInteractingChrome(interacting > 0)
     }
     const resetInteractionChrome = () => {
       interacting = 0
-      container.classList.remove('develop-elite-map--interacting', 'develop-elite-map--zooming')
+      setInteractingChrome(false)
+      container.classList.remove('develop-elite-map--zooming')
+      mapShell?.classList.remove('develop-elite-map--zooming')
+      if (overlayRestoreTimer) window.clearTimeout(overlayRestoreTimer)
+      overlayRestoreTimer = 0
+      setOverlaysPaused(false)
     }
-    const onMoveStart = () => bump(1)
-    const onMoveEnd = () => bump(-1)
-    const onZoomStart = () => container.classList.add('develop-elite-map--zooming')
-    const onZoomEnd = () => container.classList.remove('develop-elite-map--zooming')
+    const onMoveStart = () => {
+      bump(1)
+      if (overlayRestoreTimer) window.clearTimeout(overlayRestoreTimer)
+      setOverlaysPaused(true)
+    }
+    const onMoveEnd = () => {
+      bump(-1)
+      scheduleOverlayRestore()
+    }
+    const onZoomStart = () => {
+      container.classList.add('develop-elite-map--zooming')
+      mapShell?.classList.add('develop-elite-map--zooming')
+      if (overlayRestoreTimer) window.clearTimeout(overlayRestoreTimer)
+      setOverlaysPaused(true)
+    }
+    const onZoomEnd = () => {
+      container.classList.remove('develop-elite-map--zooming')
+      mapShell?.classList.remove('develop-elite-map--zooming')
+      scheduleOverlayRestore()
+    }
     map.on('movestart', onMoveStart)
     map.on('moveend', onMoveEnd)
     map.on('zoomstart', onZoomStart)
     map.on('zoomend', onZoomEnd)
     window.addEventListener(DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT, resetInteractionChrome)
     return () => {
+      if (overlayRestoreTimer) window.clearTimeout(overlayRestoreTimer)
       map.off('movestart', onMoveStart)
       map.off('moveend', onMoveEnd)
       map.off('zoomstart', onZoomStart)
@@ -102,7 +154,14 @@ export function DevelopEliteMapLibreResizeBridge() {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    const refresh = () => requestAnimationFrame(() => map.resize())
+    let resizeTimer = 0
+    const refresh = () => {
+      if (resizeTimer) window.clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(() => {
+        resizeTimer = 0
+        requestAnimationFrame(() => map.resize())
+      }, 100)
+    }
     window.addEventListener('develop-elite-layout-changed', refresh)
     window.addEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, refresh)
     window.addEventListener('orientationchange', refresh)
@@ -112,6 +171,7 @@ export function DevelopEliteMapLibreResizeBridge() {
     if (root && ro) ro.observe(root)
     refresh()
     return () => {
+      if (resizeTimer) window.clearTimeout(resizeTimer)
       window.removeEventListener('develop-elite-layout-changed', refresh)
       window.removeEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, refresh)
       window.removeEventListener('orientationchange', refresh)
@@ -171,7 +231,7 @@ export function DevelopEliteMapLibreLayerLiveEngine() {
         if (!mapSwipeOpen) setLayerLiveStatus('')
         return
       }
-      const liveClip = draw?.clipGeoJson ?? clipSource
+      const liveClip = draw?.clipGeoJson
       if (!developEliteLayerLiveHasDrawnAoiClip(liveClip)) {
         setLayerLiveStatus('Draw an AOI with Edit (DRAW) to show Layer Live inside the sketch only.')
         clearDevelopEliteLayerLiveMaplibre(map)
@@ -200,21 +260,7 @@ export function DevelopEliteMapLibreLayerLiveEngine() {
     }
 
     sync()
-    let layerLiveRaf = 0
-    const scheduleLayerLiveSync = () => {
-      if (layerLiveRaf) cancelAnimationFrame(layerLiveRaf)
-      layerLiveRaf = requestAnimationFrame(() => {
-        layerLiveRaf = 0
-        if (typeof map.isMoving === 'function' && map.isMoving()) return
-        sync()
-      })
-    }
-    map.on('moveend', scheduleLayerLiveSync)
-    map.on('zoomend', scheduleLayerLiveSync)
     return () => {
-      if (layerLiveRaf) cancelAnimationFrame(layerLiveRaf)
-      map.off('moveend', scheduleLayerLiveSync)
-      map.off('zoomend', scheduleLayerLiveSync)
       clearDevelopEliteLayerLiveMaplibre(map)
     }
   }, [
@@ -262,70 +308,5 @@ export function DevelopEliteMapLibreInsightEngine() {
     }
   }, [insight?.point, insight?.tool, mapReady, mapRef])
 
-  const map = mapRef.current
-  const host =
-    map?.getContainer()?.closest<HTMLElement>('.develop-elite-map__viewport') ??
-    map?.getContainer() ??
-    null
-  if (!insight || !host || insight.tool !== 'intel') return null
-
-  const stopMapEvent = (event: { stopPropagation(): void }) => {
-    event.stopPropagation()
-  }
-
-  return createPortal(
-    <aside
-      className="develop-elite-map__insight-panel"
-      aria-label="Open-Meteo weather"
-      onPointerDown={stopMapEvent}
-      onClick={stopMapEvent}
-      onDoubleClick={stopMapEvent}
-    >
-      <p className="develop-elite-map__insight-panel-title">Open-Meteo</p>
-      {!insight.point ? <p>Click the map to read weather at that point.</p> : null}
-      {insight.weatherStatus === 'loading' ? <p>Loading forecast…</p> : null}
-      {insight.weatherStatus === 'error' ? <p>{insight.weatherError}</p> : null}
-      {insight.point && insight.weatherStatus !== 'ready' && !insight.snapshot ? (
-        <p>
-          {insight.weatherStatus === 'loading'
-            ? 'Loading…'
-            : insight.point
-              ? `${insight.point.lat.toFixed(3)}, ${insight.point.lng.toFixed(3)}`
-              : ''}
-        </p>
-      ) : null}
-      {insight.snapshot ? (
-        <div className="develop-elite-map__insight-wx">
-          <i className={wmoWeatherIconClass(insight.snapshot.weatherCode)} aria-hidden />
-          <strong>
-            {insight.snapshot.temperatureC != null ? `${Math.round(insight.snapshot.temperatureC)}°C` : '—'}
-          </strong>
-          <span>{insight.snapshot.conditionLabel}</span>
-          <span>
-            {insight.point ? `${insight.point.lat.toFixed(3)}, ${insight.point.lng.toFixed(3)}` : ''}
-          </span>
-          <span>
-            Humidity {insight.snapshot.humidityPct != null ? `${Math.round(insight.snapshot.humidityPct)}%` : '—'}
-            {' · '}
-            Wind{' '}
-            {insight.snapshot.windSpeedKmh != null
-              ? `${Math.round(insight.snapshot.windSpeedKmh)} km/h ${insight.snapshot.windDirectionLabel}`
-              : '—'}
-          </span>
-          <span>
-            Rain {insight.snapshot.precipMm != null ? `${insight.snapshot.precipMm.toFixed(1)} mm` : '—'}
-          </span>
-          {insight.point ? (
-            <Link
-              className="develop-elite-map__insight-wi-link"
-              to={`/weather/intelligence?lat=${insight.point.lat}&lng=${insight.point.lng}`}
-            >
-              Open Weather Intelligence
-            </Link>
-          ) : null}
-        </div>
-      ) : null}
-    </aside>,
-    host,
-  )
+  return null
 }

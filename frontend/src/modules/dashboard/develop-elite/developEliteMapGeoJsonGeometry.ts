@@ -32,3 +32,12 @@ export function developEliteMapPointZoomScale(zoom: number): number {
   if (zoom >= 8) return 0.58 + (zoom - 8) * 0.067
   return Math.max(0.48, 0.34 + zoom * 0.04)
 }
+
+/** AgroLocation PMS symbols — stay readable on the grid map canvas when zoomed out. */
+export function developEliteAgriLocationPointZoomScale(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 1
+  if (zoom >= 14) return 1
+  if (zoom >= 10) return 0.88 + (zoom - 10) * 0.03
+  if (zoom >= 6) return 0.72 + (zoom - 6) * 0.04
+  return Math.max(0.68, 0.52 + zoom * 0.05)
+}

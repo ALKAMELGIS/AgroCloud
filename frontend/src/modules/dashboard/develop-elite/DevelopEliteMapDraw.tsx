@@ -131,8 +131,8 @@ export function DevelopEliteMapDrawProvider({ children }: { children: ReactNode 
     featureGroupRef.current?.clearLayers()
     setHasClearableDrawing(false)
     setActiveTool(null)
-    refreshClip()
-  }, [refreshClip])
+    setClipGeoJson(null)
+  }, [])
 
   const notifyDrawingChanged = useCallback(
     (count: number) => {
@@ -256,6 +256,7 @@ export function DevelopEliteMapDrawEngine() {
                 onToolChange={draw.setActiveTool}
                 hasClearableDrawing={draw.hasClearableDrawing}
                 onClearDrawing={draw.clearDrawing}
+                clearDrawingTitle="Clear AOI sketch and remove analysis layers from the map"
                 onDeactivate={() => draw.stopDrawing()}
               />
             </div>,

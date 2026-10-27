@@ -6,9 +6,11 @@ import {
   DEFAULT_BASEMAP_ID,
   ESRI_BASEMAP_IDS,
   GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
+  MAPBOX_BASEMAP_IDS,
   getBasemapThumbnail,
   resolveBasemapId,
 } from './basemapCatalog'
+import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
 import { rasterTileMaxNativeZoom } from '../layers/raster/rasterTileZoom'
 import {
   SATELLITE_3D_BASEMAP_ID,
@@ -206,9 +208,11 @@ export const BasemapLayer: React.FC<{
 /** Gray canvas basemaps over-fetch placeholder tiles in the DE grid map — keep in GIS catalog only. */
 const DEVELOP_ELITE_BASEMAP_EXCLUDE = new Set(['esri-light-gray', 'esri-dark-gray'])
 
-/** Develop Elite / GIS map picker order (Google + ArcGIS Online list). */
-export function listDevelopEliteBasemapEntries(catalog = buildBasemapCatalog('')) {
+/** Develop Elite / GIS map picker order (Mapbox when configured, then Google + ArcGIS Online). */
+export function listDevelopEliteBasemapEntries(catalog = buildBasemapCatalog(getMapboxAccessToken())) {
+  const mapboxIds = MAPBOX_BASEMAP_IDS.filter(id => catalogEntryById(catalog, id))
   const ids = [
+    ...mapboxIds,
     'google-earth-satellite',
     GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
     SATELLITE_3D_BASEMAP_ID,

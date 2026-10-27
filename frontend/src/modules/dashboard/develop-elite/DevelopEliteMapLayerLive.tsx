@@ -92,13 +92,6 @@ export function DevelopEliteMapLayerLiveProvider({ primaryClip, fallbackClip, ch
   )
 
   useEffect(() => {
-    if (!hasDrawnAoiClip && layerLiveActive) {
-      setLayerLiveActive(false)
-      setLayerLiveStatus('Draw an AOI with Edit (DRAW) to show Layer Live inside the sketch only.')
-    }
-  }, [hasDrawnAoiClip, layerLiveActive])
-
-  useEffect(() => {
     if (!layerGroups.length) return
     const flat = layerGroups.flatMap(g => g.options)
     if (flat.some(o => o.id === layerId || o.id.toUpperCase() === layerId.toUpperCase())) return
@@ -137,6 +130,16 @@ export function DevelopEliteMapLayerLiveProvider({ primaryClip, fallbackClip, ch
     setLayerLiveStatus('')
   }, [primaryClip])
 
+  const deactivateLayerLive = useCallback(() => {
+    setLayerLiveActive(false)
+    setLayerLiveLegendOpen(false)
+    setLayerLiveStatus('')
+  }, [])
+
+  useEffect(() => {
+    if (!hasDrawnAoiClip) deactivateLayerLive()
+  }, [deactivateLayerLive, hasDrawnAoiClip])
+
   const toggleLayerLiveLegend = useCallback(() => {
     setLayerLiveLegendOpen(open => {
       const next = !open
@@ -174,6 +177,7 @@ export function DevelopEliteMapLayerLiveProvider({ primaryClip, fallbackClip, ch
       hasDrawnAoiClip,
       onToggleLayerLive,
       activateLayerLive,
+      deactivateLayerLive,
       layerLiveTitle,
       layerLiveStatus,
       setLayerLiveStatus,
@@ -194,6 +198,7 @@ export function DevelopEliteMapLayerLiveProvider({ primaryClip, fallbackClip, ch
       layerGroups,
       layerId,
       activateLayerLive,
+      deactivateLayerLive,
       layerLiveActive,
       layerLiveStatus,
       layerLiveTitle,
@@ -242,7 +247,7 @@ export function DevelopEliteMapLayerLiveEngine() {
       return
     }
 
-    const liveClip = draw?.clipGeoJson ?? clipSource
+    const liveClip = draw?.clipGeoJson
     if (!developEliteLayerLiveHasDrawnAoiClip(liveClip)) {
       setLayerLiveStatus('Draw an AOI with Edit (DRAW) to show Layer Live inside the sketch only.')
       clearDevelopEliteLayerLiveMounted(map, mountedRef.current)

@@ -10,6 +10,7 @@ import {
   mapboxGlStyleForEntry,
   resolveBasemapId,
 } from '@/modules/gis/map/basemapCatalog'
+import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
 import {
   agroCloudMapboxTransformRequest,
   cancelAgroCloudTerrainSync,
@@ -24,7 +25,7 @@ const DE_3D_ENTER_PITCH = 45
 const DE_CAMERA_EASE_MS = 650
 
 function resolveStyle(basemapId: string): StyleSpecification {
-  const catalog = buildBasemapCatalog('')
+  const catalog = buildBasemapCatalog(getMapboxAccessToken())
   const resolved = resolveBasemapId(basemapId)
   const entry =
     catalogEntryById(catalog, resolved) ?? catalogEntryById(catalog, DEFAULT_BASEMAP_ID)

@@ -39,6 +39,7 @@ export function DevelopEliteMapSpaceBackdrop({ hostRef }: Props) {
 
     let raf = 0
     let running = true
+    let gestureActive = false
 
     const resize = () => {
       const rect = host.getBoundingClientRect()
@@ -55,6 +56,7 @@ export function DevelopEliteMapSpaceBackdrop({ hostRef }: Props) {
     const paint = (timeMs: number) => {
       raf = 0
       if (!running) return
+      if (gestureActive) return
       const camera = readCamera(map)
       const blend = computeDevelopEliteSpaceBlend(camera)
       host.classList.toggle('develop-elite-map__viewport--space-canvas', blend > 0.04)
@@ -75,11 +77,22 @@ export function DevelopEliteMapSpaceBackdrop({ hostRef }: Props) {
     resize()
     schedule()
 
-    map.on('move', schedule)
-    map.on('zoom', schedule)
-    map.on('rotate', schedule)
-    map.on('pitch', schedule)
-    map.on('moveend', schedule)
+    const onGestureStart = () => {
+      gestureActive = true
+      if (raf) {
+        cancelAnimationFrame(raf)
+        raf = 0
+      }
+    }
+    const onGestureEnd = () => {
+      gestureActive = false
+      schedule()
+    }
+
+    map.on('movestart', onGestureStart)
+    map.on('zoomstart', onGestureStart)
+    map.on('moveend', onGestureEnd)
+    map.on('zoomend', onGestureEnd)
 
     const ro = new ResizeObserver(() => {
       resize()
@@ -90,11 +103,10 @@ export function DevelopEliteMapSpaceBackdrop({ hostRef }: Props) {
     return () => {
       running = false
       if (raf) cancelAnimationFrame(raf)
-      map.off('move', schedule)
-      map.off('zoom', schedule)
-      map.off('rotate', schedule)
-      map.off('pitch', schedule)
-      map.off('moveend', schedule)
+      map.off('movestart', onGestureStart)
+      map.off('zoomstart', onGestureStart)
+      map.off('moveend', onGestureEnd)
+      map.off('zoomend', onGestureEnd)
       ro.disconnect()
       host.classList.remove('develop-elite-map__viewport--space-canvas')
     }

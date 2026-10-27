@@ -13,6 +13,7 @@ import {
   TOPOGRAPHIC_3D_BASEMAP_ID,
 } from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
 import { getGoogleMapsApiKeyFromEnv } from '@/core/config/googleMapsApiKey'
+import { getMapboxAccessToken, getMapboxAccessTokenFromEnv } from '@/core/config/mapboxAccessToken'
 import { ensureRasterStyleMaxNativeZoom, rasterTileMaxNativeZoom } from '../layers/raster/rasterTileZoom'
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
@@ -20,9 +21,64 @@ const ATTR_ESRI = 'Tiles © Esri'
 const ATTR_GOOGLE = '© Google'
 const ATTR_OSM = '© OpenStreetMap contributors'
 const ATTR_CARTO = '© OpenStreetMap © CARTO'
+const ATTR_MAPBOX = '© Mapbox © OpenStreetMap'
+
+/** Mapbox-hosted styles (requires access token in env or browser settings). */
+export const MAPBOX_BASEMAP_IDS = [
+  'mapbox-satellite-streets',
+  'mapbox-satellite',
+  'mapbox-streets',
+  'mapbox-outdoors',
+  'mapbox-light',
+  'mapbox-dark',
+] as const
+
+export type MapboxBasemapId = (typeof MAPBOX_BASEMAP_IDS)[number]
+
+function mapboxStyleRasterTileUrl(stylePath: string, token: string): string {
+  return `https://api.mapbox.com/styles/v1/${stylePath}/tiles/256/{z}/{x}/{y}?access_token=${encodeURIComponent(token)}`
+}
+
+function mapboxRasterBasemapEntry(
+  id: string,
+  label: string,
+  stylePath: string,
+  token: string,
+): BasemapCatalogEntry {
+  const url = mapboxStyleRasterTileUrl(stylePath, token)
+  const layer = { url, attribution: ATTR_MAPBOX, maxNativeZoom: 22 }
+  return {
+    id,
+    label,
+    mapboxStyle: rasterStyleFromTiles([layer]),
+    leafletLayers: [layer],
+    requiresMapboxToken: true,
+  }
+}
+
+function appendMapboxBasemapEntries(entries: BasemapCatalogEntry[], token: string): void {
+  const t = token.trim()
+  if (!t) return
+  const mapboxEntries = [
+    mapboxRasterBasemapEntry(
+      'mapbox-satellite-streets',
+      'Mapbox Satellite Streets',
+      'mapbox/satellite-streets-v12',
+      t,
+    ),
+    mapboxRasterBasemapEntry('mapbox-satellite', 'Mapbox Satellite', 'mapbox/satellite-v9', t),
+    mapboxRasterBasemapEntry('mapbox-streets', 'Mapbox Streets', 'mapbox/streets-v12', t),
+    mapboxRasterBasemapEntry('mapbox-outdoors', 'Mapbox Outdoors', 'mapbox/outdoors-v12', t),
+    mapboxRasterBasemapEntry('mapbox-light', 'Mapbox Light', 'mapbox/light-v11', t),
+    mapboxRasterBasemapEntry('mapbox-dark', 'Mapbox Dark', 'mapbox/dark-v11', t),
+  ]
+  entries.unshift(...mapboxEntries)
+}
 
 /** Google VT hybrid (satellite imagery + roads/labels, lyrs=y). */
 export const GOOGLE_SATELLITE_HYBRID_BASEMAP_ID = 'google-satellite-hybrid'
+
+export const MAPBOX_SATELLITE_BASEMAP_ID = 'mapbox-satellite'
 
 export type LeafletTileSpec = {
   url: string
@@ -156,14 +212,17 @@ const ESRI_IMAGERY = esriTile('World_Imagery')
 const ESRI_IMAGERY_STYLE = rasterStyleFromTiles([{ url: ESRI_IMAGERY, attribution: ATTR_ESRI }])
 
 export type BuildBasemapCatalogOptions = {
-  /** @deprecated Mapbox basemaps removed; option ignored. */
-  includeMapboxVectorBasemaps?: boolean
+  /** When false, skip Mapbox styles even if a token is configured. Default true. */
+  includeMapboxBasemaps?: boolean
 }
 
-/** Build basemap catalog (Esri / Google / OSM / Carto — no Mapbox-hosted styles). */
-export function buildBasemapCatalog(_legacyMapboxToken = '', _options?: BuildBasemapCatalogOptions): BasemapCatalogEntry[] {
-  void _legacyMapboxToken
-  void _options
+/** Build basemap catalog (Mapbox when token present, plus Esri / Google / OSM / Carto). */
+export function buildBasemapCatalog(
+  mapboxToken = '',
+  options?: BuildBasemapCatalogOptions,
+): BasemapCatalogEntry[] {
+  const token = (mapboxToken || getMapboxAccessTokenFromEnv()).trim()
+  const includeMapbox = options?.includeMapboxBasemaps !== false && Boolean(token)
   const googleKey = getGoogleMapsApiKeyFromEnv()
 
   const entries: BasemapCatalogEntry[] = [
@@ -359,6 +418,8 @@ export function buildBasemapCatalog(_legacyMapboxToken = '', _options?: BuildBas
     },
   ]
 
+  if (includeMapbox) appendMapboxBasemapEntries(entries, token)
+
   void googleKey
 
   const dedup = new Map<string, BasemapCatalogEntry>()
@@ -396,6 +457,10 @@ export function getBasemapThumbnail(entry: BasemapCatalogEntry, _mapboxToken = '
   }
   if (entry.id === GOOGLE_SATELLITE_HYBRID_BASEMAP_ID) {
     return 'https://mt1.google.com/vt/lyrs=y&x=2&y=1&z=2'
+  }
+  if (entry.id.startsWith('mapbox-') && entry.leafletLayers?.[0]?.url) {
+    const direct = rasterPreviewFromTemplate(entry.leafletLayers[0].url)
+    if (direct) return direct
   }
   if (entry.id === TOPOGRAPHIC_3D_BASEMAP_ID) {
     return esriTile('World_Shaded_Relief').replace('{z}', '2').replace('{y}', '1').replace('{x}', '2')
@@ -435,9 +500,9 @@ export function listEsriBasemapEntries(catalog = buildBasemapCatalog('')): Basem
 /** Map saved UI / config ids to current catalog ids after deduplication or renames. */
 export function resolveBasemapId(id: string): string {
   const legacy: Record<string, string> = {
-    'mapbox-alkamelgis': 'google-earth-satellite',
-    'mapbox-standard-satellite': 'google-earth-satellite',
-    'mapbox-hybrid': GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
+    'mapbox-alkamelgis': 'mapbox-satellite-streets',
+    'mapbox-standard-satellite': 'mapbox-satellite',
+    'mapbox-hybrid': 'mapbox-satellite-streets',
     hybrid: GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
     'google-hybrid': GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
     'google-satellite-hybrid': GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
@@ -453,8 +518,6 @@ export function resolveBasemapId(id: string): string {
     'carto-positron': 'esri',
     'carto-dark-matter': 'esri',
     osm: 'esri-streets',
-    /** Legacy Mapbox satellite ids only — keep catalog `satellite` (Esri) and `esri` as-is. */
-    'mapbox-satellite': 'google-earth-satellite',
   }
   return legacy[id] ?? id
 }
@@ -473,9 +536,18 @@ export const DEFAULT_BASEMAP_ID = GOOGLE_EARTH_BASEMAP_ID
 /** @deprecated Alias — Mapbox basemaps removed; same default as {@link DEFAULT_BASEMAP_ID}. */
 export const DEFAULT_BASEMAP_ID_NO_MAPBOX = GOOGLE_EARTH_BASEMAP_ID
 
-/** Resolve stored or preferred basemap id (Google Earth when unset). */
+/** App-wide default when Mapbox is configured — otherwise Google Earth Satellite. */
+export function resolvePreferredBasemapId(): string {
+  const catalog = buildBasemapCatalog(getMapboxAccessToken())
+  if (catalogEntryById(catalog, MAPBOX_SATELLITE_BASEMAP_ID)) {
+    return MAPBOX_SATELLITE_BASEMAP_ID
+  }
+  return DEFAULT_BASEMAP_ID
+}
+
+/** Resolve stored or preferred basemap id. */
 export function pickDefaultBasemapId(storedOrPreferred?: string): string {
-  return resolveBasemapId(storedOrPreferred || DEFAULT_BASEMAP_ID)
+  return resolveBasemapId(storedOrPreferred || resolvePreferredBasemapId())
 }
 
 export function isGoogleEarthBasemapId(id: string): boolean {
@@ -498,13 +570,20 @@ export function isSatelliteImageryBasemapId(id: string): boolean {
     resolved === RASTER_BASEMAP_FALLBACK_ID ||
     resolved === GOOGLE_EARTH_BASEMAP_ID ||
     resolved === GOOGLE_SATELLITE_HYBRID_BASEMAP_ID ||
+    resolved === 'mapbox-satellite' ||
+    resolved === 'mapbox-satellite-streets' ||
     resolved === 'esri' ||
     resolved === 'satellite-3d' ||
     /satellite|imagery/i.test(resolved)
   )
 }
 
-/** @deprecated Mapbox basemaps removed; kept for import compatibility. */
+export function isMapboxBasemapId(id: string): boolean {
+  const resolved = resolveBasemapId(id)
+  return (MAPBOX_BASEMAP_IDS as readonly string[]).includes(resolved)
+}
+
+/** Catalog without Mapbox (static hosts without token). */
 export const BASEMAP_CATALOG_OPTS_SATELLITE_NO_MAPBOX_VECTOR: BuildBasemapCatalogOptions = {
-  includeMapboxVectorBasemaps: false,
+  includeMapboxBasemaps: false,
 }

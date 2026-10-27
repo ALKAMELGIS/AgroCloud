@@ -1,7 +1,9 @@
 import type { Map as MaplibreMap } from 'maplibre-gl'
+import { DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY } from './developEliteMapViewport'
 import {
   applyAgroCloudMapGoogleEarthMouseHandlers,
   applyAgroCloudMapPerformanceTuning,
+  ensureAgroCloudMapScrollZoom,
   type AgroCloudMapboxMapScrollLike,
 } from '@/modules/gis/map/agroCloudMapNavigation'
 
@@ -11,8 +13,8 @@ export const DEVELOP_ELITE_MAPLIBRE_WHEEL_ZOOM_RATE = 1 / 115
 /** Light tile work while panning/zooming the dashboard grid map. */
 export const DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS = {
   prefetchZoomDelta: 0,
-  maxParallelImageRequests: 14,
-  tileCacheMb: 72,
+  maxParallelImageRequests: 4,
+  tileCacheMb: 96,
 } as const
 
 export type DevelopEliteMapLibrePerformanceOptions = typeof DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS
@@ -22,6 +24,26 @@ function asNavMap(map: MaplibreMap): AgroCloudMapboxMapScrollLike {
 }
 
 /** Basemap + handler tuning for Develop Elite MapLibre (Portfolio tab). */
+/** Tile/cache tuning after gestures only — avoids work on every movestart. */
+export function bindDevelopEliteMapLibreGestureTileWarmup(
+  map: MaplibreMap | null | undefined,
+): () => void {
+  if (!map?.on || !map?.off) return () => {}
+  const nav = asNavMap(map)
+  const onEnd = () => {
+    applyAgroCloudMapPerformanceTuning(nav, { ...DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS })
+    ensureAgroCloudMapScrollZoom(nav, DEVELOP_ELITE_MAPLIBRE_WHEEL_ZOOM_RATE)
+  }
+  applyDevelopEliteMapLibrePerformanceTuning(map)
+  if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) return () => {}
+  map.on('moveend', onEnd)
+  map.on('zoomend', onEnd)
+  return () => {
+    map.off('moveend', onEnd)
+    map.off('zoomend', onEnd)
+  }
+}
+
 export function applyDevelopEliteMapLibrePerformanceTuning(map: MaplibreMap | null | undefined): void {
   if (!map) return
   const nav = asNavMap(map)

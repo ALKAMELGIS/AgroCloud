@@ -1,5 +1,9 @@
 import type { Map as MaplibreMap } from 'maplibre-gl'
-import { MAPLIBRE_GLOBE_FOG_GALAXY, MAPLIBRE_GLOBE_SKY_GALAXY } from '@/modules/gis/map/maplibreGlobeEnvironment'
+import {
+  MAPLIBRE_GLOBE_FOG_GALAXY,
+  MAPLIBRE_GLOBE_PORTFOLIO_MAX_ZOOM,
+  MAPLIBRE_GLOBE_SKY_GALAXY,
+} from '@/modules/gis/map/maplibreGlobeEnvironment'
 
 /** Zoom at which the space backdrop is fully visible (far from Earth). */
 export const DEVELOP_ELITE_SPACE_ZOOM_FULL = 0.85
@@ -32,6 +36,7 @@ function lerp(a: number, b: number, t: number): number {
  */
 export function computeDevelopEliteSpaceBlend(camera: DevelopEliteSpaceCamera): number {
   const zoom = Number.isFinite(camera.zoom) ? camera.zoom : DEVELOP_ELITE_SPACE_ZOOM_FULL
+  if (zoom >= MAPLIBRE_GLOBE_PORTFOLIO_MAX_ZOOM) return 0
   const pitch = Number.isFinite(camera.pitch) ? camera.pitch : 0
   const fromZoom = smoothstep(
     DEVELOP_ELITE_SPACE_ZOOM_FADE_END,
@@ -108,30 +113,52 @@ export function bindDevelopEliteMapSpaceEnvironment(
   map: SpaceBindMap,
   host: HTMLElement | null | undefined,
 ): () => void {
-  let raf = 0
-  const tick = () => {
-    raf = 0
+  let cssRaf = 0
+  let fogTimer = 0
+
+  const refreshCss = () => {
+    if (!host) return
+    applyDevelopEliteMapSpaceCssVars(host, {
+      zoom: map.getZoom(),
+      pitch: map.getPitch(),
+      bearing: map.getBearing(),
+    })
+  }
+
+  const refreshFogAndSky = () => {
     applyDevelopEliteMapSpaceEnvironment(map as MaplibreMap, host)
   }
-  const schedule = () => {
-    if (raf) return
-    raf = requestAnimationFrame(tick)
+
+  const scheduleCss = () => {
+    if (cssRaf) return
+    cssRaf = requestAnimationFrame(() => {
+      cssRaf = 0
+      refreshCss()
+    })
   }
 
-  schedule()
-  map.on('move', schedule)
-  map.on('zoom', schedule)
-  map.on('rotate', schedule)
-  map.on('pitch', schedule)
-  map.on('moveend', schedule)
+  const scheduleFog = () => {
+    if (fogTimer) window.clearTimeout(fogTimer)
+    fogTimer = window.setTimeout(() => {
+      fogTimer = 0
+      refreshFogAndSky()
+    }, 120)
+  }
+
+  const refreshAfterGesture = () => {
+    scheduleCss()
+    scheduleFog()
+  }
+
+  refreshAfterGesture()
+  map.on('moveend', refreshAfterGesture)
+  map.on('zoomend', refreshAfterGesture)
 
   return () => {
-    if (raf) cancelAnimationFrame(raf)
-    map.off('move', schedule)
-    map.off('zoom', schedule)
-    map.off('rotate', schedule)
-    map.off('pitch', schedule)
-    map.off('moveend', schedule)
+    if (cssRaf) cancelAnimationFrame(cssRaf)
+    if (fogTimer) window.clearTimeout(fogTimer)
+    map.off('moveend', refreshAfterGesture)
+    map.off('zoomend', refreshAfterGesture)
     host?.classList.remove('develop-elite-map__viewport--space-active')
   }
 }

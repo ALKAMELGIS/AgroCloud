@@ -14,6 +14,8 @@ import {
   developEliteDrawingInfoUsesPictureMarkers,
   developEliteMapLibreHiddenHitFillPaint,
   developEliteMapLibreInvisibleCircleHitPaint,
+  developEliteMapLibreAgriLocationCirclePaint,
+  developEliteMapLibreMapCanvasPointScale,
   developEliteMapLibrePointCirclePaint,
   developEliteMapLibrePointIconLayout,
   developEliteMapLibrePreparePointIcons,
@@ -95,6 +97,11 @@ export const DE_MAPLIBRE_OVERLAY_LAYER_IDS = [
 ] as const
 
 const overlayVisibilityBeforePause = new WeakMap<MaplibreMap, Map<string, string>>()
+let overlayPauseRaf = 0
+
+export function developEliteMapLibreOverlaysGesturePaused(map: MaplibreMap): boolean {
+  return overlayVisibilityBeforePause.has(map)
+}
 
 /** Hide vector overlays while panning/zooming so the GL canvas stays responsive. */
 export function setDevelopEliteMapLibreOverlaysInteractionPaused(
@@ -102,32 +109,40 @@ export function setDevelopEliteMapLibreOverlaysInteractionPaused(
   paused: boolean,
 ): void {
   if (!isDevelopEliteMapLibreStyleReady(map)) return
-  if (paused) {
-    const snapshot = new Map<string, string>()
+  const apply = () => {
+    overlayPauseRaf = 0
+    if (!isDevelopEliteMapLibreStyleReady(map)) return
+    if (paused) {
+      if (overlayVisibilityBeforePause.has(map)) return
+      const snapshot = new Map<string, string>()
+      for (const id of DE_MAPLIBRE_OVERLAY_LAYER_IDS) {
+        if (!developEliteMapLibreHasLayer(map, id)) continue
+        try {
+          const vis = map.getLayoutProperty(id, 'visibility')
+          snapshot.set(id, typeof vis === 'string' ? vis : 'visible')
+          map.setLayoutProperty(id, 'visibility', 'none')
+        } catch {
+          /* layer race during style swap */
+        }
+      }
+      overlayVisibilityBeforePause.set(map, snapshot)
+      return
+    }
+    if (!overlayVisibilityBeforePause.has(map)) return
+    const snapshot = overlayVisibilityBeforePause.get(map)
+    overlayVisibilityBeforePause.delete(map)
     for (const id of DE_MAPLIBRE_OVERLAY_LAYER_IDS) {
       if (!developEliteMapLibreHasLayer(map, id)) continue
+      const restore = snapshot?.get(id) ?? 'visible'
       try {
-        const vis = map.getLayoutProperty(id, 'visibility')
-        snapshot.set(id, typeof vis === 'string' ? vis : 'visible')
-        map.setLayoutProperty(id, 'visibility', 'none')
+        map.setLayoutProperty(id, 'visibility', restore)
       } catch {
-        /* layer race during style swap */
+        /* ignore */
       }
     }
-    overlayVisibilityBeforePause.set(map, snapshot)
-    return
   }
-  const snapshot = overlayVisibilityBeforePause.get(map)
-  overlayVisibilityBeforePause.delete(map)
-  for (const id of DE_MAPLIBRE_OVERLAY_LAYER_IDS) {
-    if (!developEliteMapLibreHasLayer(map, id)) continue
-    const restore = snapshot?.get(id) ?? 'visible'
-    try {
-      map.setLayoutProperty(id, 'visibility', restore)
-    } catch {
-      /* ignore */
-    }
-  }
+  if (overlayPauseRaf) cancelAnimationFrame(overlayPauseRaf)
+  overlayPauseRaf = requestAnimationFrame(apply)
 }
 
 const DATA_LAYER_STACK: Record<
@@ -158,7 +173,28 @@ function emptyFc(): GeoJSON.FeatureCollection {
   return { type: 'FeatureCollection', features: [] }
 }
 
+const geoJsonSourceDigestByMap = new WeakMap<MaplibreMap, Map<string, string>>()
+
+function developEliteGeoJsonSourceDigest(fc: GeoJSON.FeatureCollection): string {
+  const n = fc.features.length
+  if (!n) return '0'
+  const first = fc.features[0]?.properties as Record<string, unknown> | undefined
+  const last = fc.features[n - 1]?.properties as Record<string, unknown> | undefined
+  const a = String(first?.OBJECTID ?? first?.objectid ?? first?.Farm_Code ?? 0)
+  const b = String(last?.OBJECTID ?? last?.objectid ?? last?.Farm_Code ?? n)
+  return `${n}|${a}|${b}`
+}
+
 function ensureGeoJsonSource(map: MaplibreMap, id: string, data: GeoJSON.FeatureCollection) {
+  const digest = developEliteGeoJsonSourceDigest(data)
+  let perMap = geoJsonSourceDigestByMap.get(map)
+  if (!perMap) {
+    perMap = new Map()
+    geoJsonSourceDigestByMap.set(map, perMap)
+  }
+  if (perMap.get(id) === digest) return
+  perMap.set(id, digest)
+
   const existing = map.getSource(id) as GeoJSONSource | undefined
   if (existing?.setData) {
     existing.setData(data)
@@ -293,8 +329,13 @@ function ensureSymbolLayer(
   )
 }
 
+const dataLayerZOrderSigByMap = new WeakMap<MaplibreMap, string>()
+
 /** Panel order is top → bottom; bottom layers are stacked first, then each `moveLayer` to top. */
 function applyDataLayerZOrder(map: MaplibreMap, mapDataLayerOrder: DevelopEliteMapDataLayerId[]) {
+  const sig = mapDataLayerOrder.join('\0')
+  if (dataLayerZOrderSigByMap.get(map) === sig) return
+  dataLayerZOrderSigByMap.set(map, sig)
   const bottomToTop = [...mapDataLayerOrder].reverse()
   for (const dataLayerId of bottomToTop) {
     const stack = DATA_LAYER_STACK[dataLayerId]
@@ -339,6 +380,7 @@ function syncArcgisPointLayer(
   ensureGeoJsonSource(map, opts.sourceId, opts.data)
   const userScale = opts.userOpacityScale ?? 1
   const layerOpacity = layerOpacityFromDrawingInfo(opts.drawingInfo) * userScale
+  const canvasScale = developEliteMapLibreMapCanvasPointScale(map)
   const { spec, iconsReady, iconSize } = developEliteMapLibrePreparePointIcons(
     map,
     opts.layerSafeId,
@@ -346,14 +388,23 @@ function syncArcgisPointLayer(
     opts.layerKey,
     opts.mapZoom,
     () => opts.onArcgisIconsLoaded?.(),
+    canvasScale,
   )
   const iconsOn = opts.iconsVisible !== false
   const pictureMarkerRenderer =
     Boolean(spec?.entries?.length) || developEliteDrawingInfoUsesPictureMarkers(opts.drawingInfo)
   const showPictureIcons = iconsOn && Boolean(spec?.entries?.length) && iconsReady
 
+  const agriCanvasBoost =
+    opts.layerKey === 'agri-location' ? developEliteMapLibreMapCanvasPointScale(map) : 1
   const invisibleHitRadius =
-    opts.layerKey === 'irrigation-valves' ? 10 : opts.layerKey === 'trees' ? 8 : 7
+    (opts.layerKey === 'irrigation-valves'
+      ? 10
+      : opts.layerKey === 'trees'
+        ? 8
+        : opts.layerKey === 'agri-location'
+          ? 11
+          : 7) * agriCanvasBoost
 
   if (pictureMarkerRenderer) {
     /** Invisible circle footprint for identify (must stay layout-visible for queryRenderedFeatures). */
@@ -396,7 +447,10 @@ function syncArcgisPointLayer(
     return
   }
 
-  const circlePaint = developEliteMapLibrePointCirclePaint(opts.drawingInfo, opts.fallback)
+  const circlePaint =
+    opts.layerKey === 'agri-location'
+      ? developEliteMapLibreAgriLocationCirclePaint(opts.drawingInfo, opts.fallback, map)
+      : developEliteMapLibrePointCirclePaint(opts.drawingInfo, opts.fallback)
   ensureCircleLayer(map, opts.circleLayerId, opts.sourceId, circlePaint, DE_MAPLIBRE_POINT_FILTER)
   map.setLayoutProperty(opts.circleLayerId, 'visibility', opts.visible ? 'visible' : 'none')
   if (developEliteMapLibreHasLayer(map, opts.iconLayerId)) {
@@ -430,6 +484,7 @@ export type DevelopEliteMapLibreOverlaySyncOpts = {
 
 export function syncDevelopEliteMapLibreOverlays(map: MaplibreMap, opts: DevelopEliteMapLibreOverlaySyncOpts): void {
   developEliteMapLibreRunIfStyleReady(map, map => {
+  if (developEliteMapLibreOverlaysGesturePaused(map)) return
   const showWorld = isDevelopEliteMapDataLayerVisible(opts.mapLayerVisibility, 'world-countries')
   const showStructures = isDevelopEliteMapDataLayerVisible(opts.mapLayerVisibility, 'agro-structures')
   const showTrees = isDevelopEliteMapDataLayerVisible(opts.mapLayerVisibility, 'trees')

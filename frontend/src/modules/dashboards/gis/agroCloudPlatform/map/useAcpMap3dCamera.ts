@@ -274,22 +274,32 @@ export function useAcpMap3dCamera({
     const map = mapRef.current
     if (!map || !mapInstance) return
     let projectionRaf = 0
-    const syncProjection = () => {
+    const syncProjection = (allowWhileMoving = false) => {
       if (projectionRaf) cancelAnimationFrame(projectionRaf)
       projectionRaf = requestAnimationFrame(() => {
         projectionRaf = 0
-        if (typeof map.isMoving === 'function' && map.isMoving()) return
+        if (
+          !allowWhileMoving &&
+          typeof map.isMoving === 'function' &&
+          map.isMoving()
+        ) {
+          return
+        }
         if (forceGlobeProjection) setMapLibreGlobeProjection(asNavMap(map))
         else syncAgroCloudMapProjectionForZoom(asNavMap(map), map.getZoom())
       })
     }
     syncProjection()
-    map.on('zoomend', syncProjection)
-    map.on('moveend', syncProjection)
+    const onZoom = () => syncProjection(true)
+    const onZoomEnd = () => syncProjection(false)
+    map.on('zoom', onZoom)
+    map.on('zoomend', onZoomEnd)
+    map.on('moveend', onZoomEnd)
     return () => {
       if (projectionRaf) cancelAnimationFrame(projectionRaf)
-      map.off('zoomend', syncProjection)
-      map.off('moveend', syncProjection)
+      map.off('zoom', onZoom)
+      map.off('zoomend', onZoomEnd)
+      map.off('moveend', onZoomEnd)
     }
   }, [forceGlobeProjection, lockMercatorProjection, mapInstance, mapRef])
 

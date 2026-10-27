@@ -356,6 +356,7 @@ export function DevelopEliteMapLibreDrawEngine() {
         onToolChange={draw.setActiveTool}
         hasClearableDrawing={draw.hasClearableDrawing}
         onClearDrawing={draw.clearDrawing}
+        clearDrawingTitle="Clear AOI sketch and remove analysis layers from the map"
         onDeactivate={() => draw.stopDrawing()}
       />
     </div>,

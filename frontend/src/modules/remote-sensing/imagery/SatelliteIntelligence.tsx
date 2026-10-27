@@ -519,6 +519,7 @@ import {
   mapboxGlStyleForEntry,
   pickDefaultBasemapId,
   resolveBasemapId,
+  resolvePreferredBasemapId,
 } from '@/modules/gis/map/basemapCatalog';
 import {
   arcgisDrawingInfoPaintSig,
@@ -5044,7 +5045,7 @@ export default function SatelliteIntelligence() {
 
   const [isLayerDropdownOpen, setIsLayerDropdownOpen] = useState(false);
   const [mapToolboxEmbedHost, setMapToolboxEmbedHost] = useState<HTMLDivElement | null>(null);
-  const [basemapId, setBasemapId] = useState(() => pickDefaultBasemapId(DEFAULT_BASEMAP_ID));
+  const [basemapId, setBasemapId] = useState(() => pickDefaultBasemapId());
   const [isBasemapOpen, setIsBasemapOpen] = useState(false);
   const [isWeatherIntelOpen, setIsWeatherIntelOpen] = useState(false);
   const [weatherPickOnMap, setWeatherPickOnMap] = useState(false);
@@ -5060,7 +5061,7 @@ export default function SatelliteIntelligence() {
     setBasemapId(prev => {
       const picked = pickDefaultBasemapId(prev);
       if (catalogEntryById(basemapCatalog, picked)) return picked;
-      return DEFAULT_BASEMAP_ID;
+      return resolvePreferredBasemapId();
     });
   }, [basemapCatalog]);
   const [is3DView, setIs3DView] = useState(() => false);

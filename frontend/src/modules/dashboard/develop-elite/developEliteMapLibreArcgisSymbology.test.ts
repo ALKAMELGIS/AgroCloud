@@ -6,6 +6,7 @@ import {
   developEliteMapLibreHiddenHitFillPaint,
   developEliteDrawingInfoUsesPictureMarkers,
   developEliteMapLibreInvisibleCircleHitPaint,
+  developEliteMapLibrePointIconScale,
   developEliteMapLibreStructuresPaint,
 } from './developEliteMapLibreArcgisSymbology'
 
@@ -56,6 +57,18 @@ describe('developEliteDrawingInfoUsesPictureMarkers', () => {
     }
     expect(developEliteDrawingInfoUsesPictureMarkers(drawingInfo)).toBe(true)
     expect(developEliteDrawingInfoUsesPictureMarkers(null)).toBe(false)
+  })
+})
+
+describe('developEliteMapLibrePointIconScale', () => {
+  it('boosts AgroLocation symbols more than trees at field zoom', () => {
+    const agri = developEliteMapLibrePointIconScale('agri-location', 16, 1)
+    const trees = developEliteMapLibrePointIconScale('trees', 16, 1)
+    expect(agri).toBeGreaterThan(trees)
+    expect(developEliteMapLibrePointIconScale('agri-location', 16, 1.52)).toBeGreaterThan(agri)
+    expect(developEliteMapLibrePointIconScale('agri-location', 4, 1.52)).toBeGreaterThan(
+      developEliteMapLibrePointIconScale('trees', 4, 1),
+    )
   })
 })
 

@@ -2,9 +2,10 @@ import type { Map as MaplibreMap } from 'maplibre-gl'
 import { bbox } from '@turf/turf'
 import type { DevelopEliteMapView } from './developEliteKpiEngine'
 import {
-  DEVELOP_ELITE_MAP_DEFAULT_VIEW,
+  DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY,
   DEVELOP_ELITE_PORTFOLIO_FIT_PADDING,
   DEVELOP_ELITE_PORTFOLIO_MAX_ZOOM,
+  resolveDevelopEliteMapDefaultView,
   resolveDevelopElitePortfolioBounds,
 } from './developEliteMapViewport'
 import {
@@ -115,8 +116,11 @@ export function applyDevelopEliteMapLibreFlatPortfolioCamera(
   map: MaplibreMap,
   options?: { animate?: boolean },
 ): void {
-  const view = DEVELOP_ELITE_MAP_DEFAULT_VIEW
-  setMapLibreGlobeProjection(map)
+  const view = resolveDevelopEliteMapDefaultView()
+  if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
+    setMapLibreGlobeProjection(map)
+    applyMapLibreGlobeGalaxySky(map)
+  }
   map.easeTo({
     center: [view.center[1], view.center[0]],
     zoom: view.zoom,
@@ -124,7 +128,6 @@ export function applyDevelopEliteMapLibreFlatPortfolioCamera(
     bearing: 0,
     duration: options?.animate ? 600 : 0,
   })
-  applyMapLibreGlobeGalaxySky(map)
 }
 
 /** Canonical portfolio map view (fixed zoom — not fitBounds-derived). */
@@ -136,12 +139,15 @@ export function developEliteMapLibreApplyDefaultPortfolioView(
     applyDevelopEliteMapLibreFlatPortfolioCamera(map, { animate: options?.animate })
     return
   }
-  const view = DEVELOP_ELITE_MAP_DEFAULT_VIEW
+  const view = resolveDevelopEliteMapDefaultView()
   if (options?.cinematic && options?.animate !== false) {
     developEliteMapLibreCinematicFlyToPortfolioHome(map)
     return
   }
-  setMapLibreGlobeProjection(map)
+  if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
+    setMapLibreGlobeProjection(map)
+    applyMapLibreGlobeGalaxySky(map)
+  }
   map.flyTo({
     center: [view.center[1], view.center[0]],
     zoom: view.zoom,
@@ -149,20 +155,39 @@ export function developEliteMapLibreApplyDefaultPortfolioView(
     bearing: options?.preserveOrientation ? map.getBearing() : view.bearing,
     duration: options?.animate ? 600 : 0,
   })
-  applyMapLibreGlobeGalaxySky(map)
 }
 
 export function developEliteMapLibreResetView(map: MaplibreMap): void {
   developEliteMapLibreApplyDefaultPortfolioView(map, { animate: true })
 }
 
+/** Home / refresh: fit portfolio countries on grid map when geometry is ready. */
+export function developEliteMapLibreApplyPortfolioHome(
+  map: MaplibreMap,
+  options?: { animate?: boolean; worldCountries?: GeoJSON.FeatureCollection | null },
+): void {
+  if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY && options?.worldCountries?.features?.length) {
+    developEliteMapLibreFitPortfolio(map, options.worldCountries, { animate: options?.animate })
+    return
+  }
+  developEliteMapLibreApplyDefaultPortfolioView(map, { animate: options?.animate, cinematic: false })
+}
+
 export function developEliteMapLibreFitGeoJson(
   map: MaplibreMap,
   geojson: GeoJSON.FeatureCollection,
-  options?: { maxZoom?: number },
+  options?: { maxZoom?: number; viewMode3d?: boolean },
 ): boolean {
   const box = geoJsonBbox(geojson)
   if (!box) return false
+  const [west, south, east, north] = box
+  const span = Math.max(Math.abs(east - west), Math.abs(north - south))
+  if (!Number.isFinite(span) || span < 1e-6) {
+    developEliteMapLibreFlyToLatLng(map, (south + north) / 2, (west + east) / 2, options?.maxZoom ?? 14, {
+      viewMode3d: options?.viewMode3d,
+    })
+    return true
+  }
   developEliteMapLibreFitBbox(map, box, { maxZoom: options?.maxZoom ?? 14 })
   return true
 }

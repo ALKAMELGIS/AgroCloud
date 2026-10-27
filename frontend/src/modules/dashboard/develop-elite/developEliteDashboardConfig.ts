@@ -1,7 +1,9 @@
 import {
   GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
+  MAPBOX_SATELLITE_BASEMAP_ID,
   pickDefaultBasemapId,
 } from '@/modules/gis/map/basemapCatalog'
+import { resolveDevelopElitePreferredBasemapId } from './developEliteMapBasemapDefault'
 import { WORLD_COUNTRIES_FS51_URL } from '@/modules/gis/map/worldCountriesLayer'
 import { AGRO_STRUCTURES_FS21_URL } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import {
@@ -33,7 +35,7 @@ export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_LS_KEY = 'develop_elite_map_la
 /** Bump when default map layer stack changes (e.g. add irrigation valves layer). */
 export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION = 3
 export const DEVELOP_ELITE_BASEMAP_PRESET_LS_KEY = 'develop_elite_basemap_preset_v'
-export const DEVELOP_ELITE_BASEMAP_PRESET_VERSION = 2
+export const DEVELOP_ELITE_BASEMAP_PRESET_VERSION = 3
 
 /** Globe cockpit map tab (Portfolio tab always available). */
 export const DEVELOP_ELITE_GLOBE_COCKPIT_TAB_ENABLED = false
@@ -54,8 +56,12 @@ const DEVELOP_ELITE_LEGACY_DEFAULT_BASEMAP_IDS = new Set([
 
 export function normalizeDevelopEliteBasemapId(stored: unknown): string {
   const raw = String(stored ?? '').trim()
+  const preferred = resolveDevelopElitePreferredBasemapId()
   if (!raw || DEVELOP_ELITE_LEGACY_DEFAULT_BASEMAP_IDS.has(raw)) {
-    return GOOGLE_SATELLITE_HYBRID_BASEMAP_ID
+    return preferred
+  }
+  if (raw === GOOGLE_SATELLITE_HYBRID_BASEMAP_ID && preferred === MAPBOX_SATELLITE_BASEMAP_ID) {
+    return preferred
   }
   return pickDefaultBasemapId(raw)
 }
@@ -281,7 +287,7 @@ export const DEFAULT_DEVELOP_ELITE_CONFIG: DevelopEliteDashboardConfig = {
   agriLocationLayerUrl: DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL,
   irrigationValvesLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_VALVES_LAYER_URL,
   irrigationMainPipeLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_MAIN_PIPE_LAYER_URL,
-  basemapId: GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
+  basemapId: MAPBOX_SATELLITE_BASEMAP_ID,
   chartGroupField: 'Crop_Type',
   chartValueField: 'Total_Tree',
   chartValueLabel: 'Per Tons',
@@ -364,10 +370,14 @@ function mergeKpiCards(saved: DevelopEliteKpiCardConfig[]): DevelopEliteKpiCardC
 }
 
 export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
-  if (typeof window === 'undefined') return { ...DEFAULT_DEVELOP_ELITE_CONFIG }
+  const freshDefaults = (): DevelopEliteDashboardConfig => ({
+    ...DEFAULT_DEVELOP_ELITE_CONFIG,
+    basemapId: resolveDevelopElitePreferredBasemapId(),
+  })
+  if (typeof window === 'undefined') return freshDefaults()
   try {
     const raw = window.localStorage.getItem(DEVELOP_ELITE_CONFIG_LS_KEY)
-    if (!raw) return { ...DEFAULT_DEVELOP_ELITE_CONFIG }
+    if (!raw) return freshDefaults()
     const parsed = JSON.parse(raw) as Partial<DevelopEliteDashboardConfig>
     const presetKey = DEVELOP_ELITE_LAYOUT_PRESET_LS_KEY
     const storedPreset = Number(window.localStorage.getItem(presetKey) || 0)
@@ -429,7 +439,7 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
       ),
       basemapId: (() => {
         if (storedBasemapPreset < DEVELOP_ELITE_BASEMAP_PRESET_VERSION) {
-          return GOOGLE_SATELLITE_HYBRID_BASEMAP_ID
+          return resolveDevelopElitePreferredBasemapId()
         }
         return normalizeDevelopEliteBasemapId(parsed.basemapId)
       })(),
@@ -500,7 +510,7 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
     }
     return config
   } catch {
-    return { ...DEFAULT_DEVELOP_ELITE_CONFIG }
+    return freshDefaults()
   }
 }
 

@@ -15,6 +15,7 @@ import {
   resolveBasemapId,
 
 } from '@/modules/gis/map/basemapCatalog'
+import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
 
 import { bindSiGlobeCockpitSpin, nudgeSiMapboxGlobeCanvas } from '@/modules/gis/map/siGlobeCockpit'
 
@@ -50,7 +51,7 @@ const GLOBE_COCKPIT_BASEMAP_ID = 'google-satellite-hybrid'
 
 function resolveGlobeCockpitStyle(): StyleSpecification {
 
-  const catalog = buildBasemapCatalog('')
+  const catalog = buildBasemapCatalog(getMapboxAccessToken())
 
   const entry =
 

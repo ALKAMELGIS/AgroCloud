@@ -13,6 +13,7 @@ import type { DevelopEliteMapView } from './developEliteKpiEngine'
 import { DevelopEliteMapLibreProvider } from './developEliteMapLibreContext'
 import { DevelopEliteMapLibreCanvas } from './DevelopEliteMapLibreCanvas'
 import { DevelopEliteMapSpaceBackdrop } from './DevelopEliteMapSpaceBackdrop'
+import { DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY } from './developEliteMapViewport'
 import {
   DevelopEliteMapLibreFlyBridge,
   DevelopEliteMapLibreOverlays,
@@ -27,6 +28,7 @@ import {
   DevelopEliteMapLibreTransientPin,
 } from './DevelopEliteMapLibreEngines'
 import { DevelopEliteMapLibreDrawEngine } from './DevelopEliteMapLibreDraw'
+import { DevelopEliteMapDrawClearEffects } from './developEliteMapDrawClearEffects'
 import { DevelopEliteMapLibreFeaturePopupBridge } from './DevelopEliteMapLibreFeaturePopupBridge'
 import { DevelopEliteMapLayerLiveLegendHost } from './DevelopEliteMapLayerLiveLegendOverlay'
 import { DevelopEliteGlobeCockpitCanvas } from './DevelopEliteGlobeCockpitCanvas'
@@ -53,6 +55,7 @@ type Props = {
     nonce: number
   } | null
   mapCountryFlyRequest?: number
+  mapExtentFly?: { fc: GeoJSON.FeatureCollection; nonce: number } | null
   mapPopupFieldKey?: string | null
   mapPopupRequest?: number
   cropTablePopupLink?: DevelopEliteCropTablePopupLink | null
@@ -102,6 +105,7 @@ function DevelopEliteMapContent({
   mapFlyToLngLat = null,
   mapTableIdentifyRequest = null,
   mapCountryFlyRequest = 0,
+  mapExtentFly = null,
   mapPopupFieldKey = null,
   mapPopupRequest = 0,
   cropTablePopupLink = null,
@@ -183,7 +187,10 @@ function DevelopEliteMapContent({
               className={`develop-elite-map develop-elite-map--legend-rail develop-elite-map--webgl${compactMapLayout ? ' develop-elite-map--stacked-legend' : ''}`}
               ref={rootRef}
             >
-              <div className="develop-elite-map__viewport develop-elite-map__viewport--space" ref={viewportRef}>
+              <div
+                className={`develop-elite-map__viewport${DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY ? '' : ' develop-elite-map__viewport--space'}`}
+                ref={viewportRef}
+              >
                 <DevelopEliteMapViewportTabs value={mapCanvasTab} onChange={onMapCanvasTabChange} />
                 <div
                   className={`develop-elite-map__viewport-pane${mapCanvasTab !== 'portfolio' ? ' is-inactive' : ''}`}
@@ -191,7 +198,9 @@ function DevelopEliteMapContent({
                   role="tabpanel"
                   aria-labelledby="de-map-tab-portfolio"
                 >
-                <DevelopEliteMapSpaceBackdrop hostRef={viewportRef} />
+                {!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY ? (
+                  <DevelopEliteMapSpaceBackdrop hostRef={viewportRef} />
+                ) : null}
                 <DevelopEliteMapLibreCanvas basemapId={basemap} shellRef={viewportRef} />
                 <DevelopEliteMapLibreOverlays
                   geojson={geojson}
@@ -223,6 +232,7 @@ function DevelopEliteMapContent({
                   mapFlyToRequest={mapFlyToRequest}
                   mapFlyToLngLat={mapFlyToLngLat}
                   mapCountryFlyRequest={mapCountryFlyRequest}
+                  mapExtentFly={mapExtentFly}
                 />
                 <DevelopEliteMapLibreDrawEngine />
                 <DevelopEliteMapLibreInteractionTune />
@@ -230,6 +240,7 @@ function DevelopEliteMapContent({
                 <DevelopEliteMapLibreResizeBridge />
                 <DevelopEliteMapLibreTransientPin position={pin} />
                 <DevelopEliteMapLibreLayerLiveEngine />
+                <DevelopEliteMapDrawClearEffects />
                 <DevelopEliteMapLibreInsightEngine />
                 <DevelopEliteMapLibreFeaturePopupBridge
                   geojson={geojson}

@@ -270,20 +270,6 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     hint: 'AOI → Sentinel-1 SAR change detection → flood extent, boundaries & stats.',
   },
   {
-    id: 'flood-simulation',
-    icon: 'fa-solid fa-water',
-    label: 'Simulate Flood',
-    title: 'Simulate a Flood',
-    hint: '2D rainfall flood simulation in your browser — GPU preview on 3D terrain.',
-  },
-  {
-    id: 'raster-georeference',
-    icon: 'fa-solid fa-map-location-dot',
-    label: 'Georeference',
-    title: 'Georeference Tool',
-    hint: 'ArcGIS-style georeferencing toolbar for raster layers — control points, transform, apply & save.',
-  },
-  {
     id: 'table-geo-ai',
     icon: 'fa-solid fa-comments',
     label: 'Chat AI Agent',
@@ -365,8 +351,6 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'well-site',
   'well-suitability',
   'flood-monitoring',
-  'flood-simulation',
-  'raster-georeference',
   'table-geo-ai',
 ]);
 
@@ -382,8 +366,6 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'well-site',
   'well-suitability',
   'flood-monitoring',
-  'flood-simulation',
-  'raster-georeference',
 ]);
 
 function isMapFloatEmbedSection(
@@ -412,8 +394,6 @@ const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
     'agri-field-boundary',
     'well-site',
     'well-suitability',
-    'flood-simulation',
-    'raster-georeference',
   ],
 ];
 

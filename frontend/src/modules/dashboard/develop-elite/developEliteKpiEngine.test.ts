@@ -17,6 +17,9 @@ import {
   countScopedAgriLocationFeatures,
   countScopedAgriLocationLayer,
   countScopedTreeFeatures,
+  developEliteAgriKpiFilters,
+  developEliteCollectAgriProjectFarmCodes,
+  dedupeDevelopEliteCropTableRows,
   filterCropRowsForChartStats,
   filterCropRowsForStructures,
   filterStructureFeatures,
@@ -32,6 +35,9 @@ const filters: DevelopEliteFilters = {
   zoneId: 'all',
   selectedFieldKey: null,
   locationSearch: '',
+  structureTypeCode: null,
+  structureTypeCodes: null,
+  activeKpiCardId: null,
 }
 
 function polyFeature(props: Record<string, unknown>): GeoJSON.Feature {
@@ -176,7 +182,7 @@ describe('developEliteKpiEngine', () => {
     ])
     const scoped = filterStructureFeatures(
       features,
-      { country: 'UAE', zoneId: 'all', selectedFieldKey: null, locationSearch: '' },
+      { country: 'UAE', zoneId: 'all', selectedFieldKey: null, locationSearch: '', structureTypeCode: null, structureTypeCodes: null, activeKpiCardId: null },
       { countryLabels: labels },
     )
     expect(scoped).toHaveLength(1)
@@ -213,22 +219,120 @@ describe('developEliteKpiEngine', () => {
     const labels = new Map([['2', 'UAE']])
     const uae = filterStructureFeatures(
       features,
-      { country: '2', zoneId: 'all', selectedFieldKey: null, locationSearch: '' },
+      { country: '2', zoneId: 'all', selectedFieldKey: null, locationSearch: '', structureTypeCode: null, structureTypeCodes: null, activeKpiCardId: null },
       { countryLabels: labels },
     )
     expect(computeSideStructureCounts(uae)).toEqual({ greenhouse: 2, nethouse: 1, glasshouse: 0 })
     const zoneA = filterStructureFeatures(
       features,
-      { country: 'all', zoneId: 'A', selectedFieldKey: null, locationSearch: '' },
+      { country: 'all', zoneId: 'A', selectedFieldKey: null, locationSearch: '', structureTypeCode: null, structureTypeCodes: null, activeKpiCardId: null },
       { activeZoneLabel: 'Zone A' },
     )
     expect(computeSideStructureCounts(zoneA).greenhouse).toBe(1)
     const zoneC = filterStructureFeatures(
       features,
-      { country: 'all', zoneId: 'C', selectedFieldKey: null, locationSearch: '' },
+      { country: 'all', zoneId: 'C', selectedFieldKey: null, locationSearch: '', structureTypeCode: null, structureTypeCodes: null, activeKpiCardId: null },
       {},
     )
     expect(computeSideStructureCounts(zoneC).greenhouse).toBe(1)
+  })
+
+  it('dedupes duplicate crop records with the same farm and crop', () => {
+    const crops = [
+      { OBJECTID: 1, Farm_Code: 'MH131', Farm_Name: 'PIVOT-6', Crop_Type: '7001', ZONE_ID: 'MH' },
+      { OBJECTID: 2, Farm_Code: 'MH131', Farm_Name: 'PIVOT-6', Crop_Type: '7001', ZONE_ID: 'MH' },
+      { Farm_Code: 'MH999', Farm_Name: 'PIVOT-7', Crop_Type: '7002', ZONE_ID: 'MH' },
+    ]
+    expect(dedupeDevelopEliteCropTableRows(crops)).toHaveLength(2)
+  })
+
+  it('does not match zone MH from Farm_Code alone (e.g. MH132)', () => {
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [
+        polyFeature({ Farm_Code: 'MH132', ZONE_ID: 'AD', Country: 2 }),
+        polyFeature({ Farm_Code: 'UAE1', ZONE_ID: 'MH', Country: 2 }),
+      ],
+    })
+    const scoped = filterStructureFeatures(features, { ...filters, zoneId: 'MH' }, {})
+    expect(scoped).toHaveLength(1)
+    expect(scoped[0]?.properties?.Farm_Code).toBe('UAE1')
+  })
+
+  it('scopes MH project charts to Agri Location farm codes', () => {
+    const agri: GeoJSON.Feature[] = [
+      {
+        type: 'Feature',
+        properties: { Project_Code: 'MH', Farm_Code: 'MH132' },
+        geometry: { type: 'Point', coordinates: [55, 25] },
+      },
+    ]
+    const ctx = {
+      zoneProjectFarmCodes: developEliteCollectAgriProjectFarmCodes(agri, 'MH'),
+    }
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [polyFeature({ Farm_Code: 'MH132', ZONE_ID: 'NH 07' })],
+    })
+    const scoped = filterStructureFeatures(features, { ...filters, zoneId: 'MH' }, ctx)
+    expect(scoped).toHaveLength(1)
+    const crops = [
+      { Farm_Code: 'MH132', Crop_Type: '7001', ZONE_ID: 'MH', Per_Tons: 3 },
+      { Farm_Code: 'MH999', Crop_Type: '7002', ZONE_ID: 'MH', Per_Tons: 99 },
+    ] as import('./developEliteArcgisFetch').ArcGisTableRow[]
+    const chartScope = filterCropRowsForChartStats(
+      crops,
+      scoped,
+      { ...filters, zoneId: 'MH' },
+      'Farm_Code',
+      ctx,
+    )
+    expect(chartScope).toHaveLength(1)
+    expect(chartScope[0]?.Farm_Code).toBe('MH132')
+  })
+
+  it('scopes chart stats by Farm_Code join when zone selected, not crop ZONE_ID', () => {
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [
+        polyFeature({ Farm_Code: 'MH101', ZONE_ID: 'NH 01', Structure_Type: 1006 }),
+        polyFeature({ Farm_Code: 'MH102', ZONE_ID: 'NH 02', Structure_Type: 1006 }),
+      ],
+    })
+    const zoneStructures = features
+    const crops = [
+      { Farm_Code: 'MH101', ZONE_ID: 'NOT-MH', Crop_Type: 'Capsicum' },
+      { Farm_Code: 'MH102', ZONE_ID: 'MH', Crop_Type: 'Capsicum' },
+      { Farm_Code: 'MH999', ZONE_ID: 'MH', Crop_Type: 'Other' },
+    ] as import('./developEliteArcgisFetch').ArcGisTableRow[]
+    const scoped = filterCropRowsForChartStats(
+      crops,
+      zoneStructures,
+      { ...filters, zoneId: 'MH' },
+      'Farm_Code',
+    )
+    expect(scoped.map(r => String(r.Farm_Code)).sort()).toEqual(['MH101', 'MH102'])
+  })
+
+  it('ignores sidebar country for chart stats (full crop table when zone is all)', () => {
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [
+        polyFeature({ Farm_Code: 'UAE1', Country: 2, ZONE_ID: 'MH' }),
+        polyFeature({ Farm_Code: 'MA1', Country: 1, ZONE_ID: 'MZ' }),
+      ],
+    })
+    const crops = [
+      { Farm_Code: 'UAE1', Crop_Type: '100', ZONE_ID: 'MH' },
+      { Farm_Code: 'MA1', Crop_Type: '200', ZONE_ID: 'MZ' },
+      { Farm_Code: 'ORPHAN', Crop_Type: '300', ZONE_ID: 'MH' },
+    ] as import('./developEliteArcgisFetch').ArcGisTableRow[]
+    const chartScope = filterCropRowsForChartStats(
+      crops,
+      features,
+      { ...filters, country: '2', zoneId: 'all' },
+    )
+    expect(chartScope).toHaveLength(3)
   })
 
   it('uses full crop table for chart stats when country and zone are all', () => {
@@ -368,7 +472,7 @@ describe('developEliteKpiEngine', () => {
       null,
       { ...filters, locationSearch: 'no-such-farm-xyz' },
       agriScope,
-      { country: 'all', zoneId: 'all', selectedFieldKey: null, locationSearch: '' },
+      { country: 'all', zoneId: 'all', selectedFieldKey: null, locationSearch: '', structureTypeCode: null, structureTypeCodes: null, activeKpiCardId: null },
     )
     expect(kpis.cards['wildfelid']).toBe('1')
     expect(kpis.cards['total-projects']).toBe('2')
@@ -388,6 +492,43 @@ describe('developEliteKpiEngine', () => {
       null,
     )
     expect(n).toBe(1)
+  })
+
+  it('counts Agri_Location by country when points lack ZONE_ID', () => {
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [
+        polyFeature({ Country: 1, Country_Name: 'Morocco', ZONE_ID: 'MZ', Structure_Type: 1000 }),
+        polyFeature({ Country: 2, Country_Name: 'UAE', ZONE_ID: 'MH', Structure_Type: 1000 }),
+      ],
+    })
+    const moroccoFilters: DevelopEliteFilters = { ...filters, country: '1' }
+    const listCtx = { countryLabels: new Map([['1', 'Morocco'], ['2', 'UAE']]) }
+    const agriScope = filterStructureFeatures(
+      features,
+      developEliteAgriKpiFilters(moroccoFilters),
+      listCtx,
+    )
+    const agri: GeoJSON.Feature[] = [
+      {
+        type: 'Feature',
+        properties: { Country: 1, Name: 'MA Project' },
+        geometry: { type: 'Point', coordinates: [-7, 32] },
+      },
+      {
+        type: 'Feature',
+        properties: { Country: 2, Name: 'UAE Project' },
+        geometry: { type: 'Point', coordinates: [54, 24] },
+      },
+    ]
+    expect(
+      countScopedAgriLocationLayer(
+        agri,
+        agriScope,
+        developEliteAgriKpiFilters(moroccoFilters),
+        listCtx,
+      ),
+    ).toBe(1)
   })
 
   it('counts tree layer points for Tree KPI', () => {
@@ -590,5 +731,10 @@ describe('filterStructureFeaturesByMapView', () => {
     const view = { zoom: 4, west: 49, south: 22, east: 59, north: 27 }
     expect(developEliteShouldScopeKpisToMapView(view)).toBe(false)
     expect(filterStructureFeaturesByMapView(features, view)).toHaveLength(2)
+  })
+
+  it('scopes KPIs to map view from regional zoom upward', () => {
+    const view = { zoom: 5.5, west: 49, south: 22, east: 59, north: 27 }
+    expect(developEliteShouldScopeKpisToMapView(view)).toBe(true)
   })
 })

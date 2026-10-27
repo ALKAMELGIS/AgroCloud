@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { filterDevelopEliteMapOverlayGeoJson } from './developEliteMapOverlayFilter'
-import { buildWorldCountryListItems, filterWorldCountriesForMap } from './developEliteWorldCountries'
+import {
+  buildWorldCountryListItems,
+  filterWorldCountriesForMap,
+  findWorldCountryFeatureForFilter,
+} from './developEliteWorldCountries'
 
 describe('filterDevelopEliteMapOverlayGeoJson world-countries', () => {
   const fc: GeoJSON.FeatureCollection = {
@@ -17,7 +21,7 @@ describe('filterDevelopEliteMapOverlayGeoJson world-countries', () => {
   it('ignores zone filter for world-countries layer', () => {
     const out = filterDevelopEliteMapOverlayGeoJson(
       fc,
-      { country: 'all', zoneId: 'MH', selectedFieldKey: null, locationSearch: '' },
+      { country: 'all', zoneId: 'MH', selectedFieldKey: null, locationSearch: '', structureTypeCode: null, structureTypeCodes: null, activeKpiCardId: null },
       'world-countries',
       new Map([['3', 'Morocco']]),
     )
@@ -27,7 +31,7 @@ describe('filterDevelopEliteMapOverlayGeoJson world-countries', () => {
   it('applies zone filter to zones layer', () => {
     const out = filterDevelopEliteMapOverlayGeoJson(
       fc,
-      { country: 'all', zoneId: 'MH', selectedFieldKey: null, locationSearch: '' },
+      { country: 'all', zoneId: 'MH', selectedFieldKey: null, locationSearch: '', structureTypeCode: null, structureTypeCodes: null, activeKpiCardId: null },
       'zones',
     )
     expect(out.features).toHaveLength(0)
@@ -85,6 +89,35 @@ describe('buildWorldCountryListItems', () => {
       { code: '1', label: 'UAE', count: 1 },
       { code: '3', label: 'Morocco', count: 1 },
     ])
+  })
+})
+
+describe('findWorldCountryFeatureForFilter', () => {
+  const domain = new Map([
+    ['1', 'UAE'],
+    ['3', 'Morocco'],
+  ])
+
+  it('finds polygon by coded country and by ALL_COUNTRY portfolio label', () => {
+    const fc: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { Country: 3, Status: 1 },
+          geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+        },
+        {
+          type: 'Feature',
+          properties: { Country: null, ALL_COUNTRY: 'UAE', Status: 1 },
+          geometry: { type: 'Polygon', coordinates: [[[2, 0], [3, 0], [3, 1], [2, 0]]] },
+        },
+      ],
+    }
+    expect(findWorldCountryFeatureForFilter(fc, '3', domain)?.properties).toMatchObject({ Country: 3 })
+    expect(findWorldCountryFeatureForFilter(fc, '1', domain)?.properties).toMatchObject({
+      ALL_COUNTRY: 'UAE',
+    })
   })
 })
 

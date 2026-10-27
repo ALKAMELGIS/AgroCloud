@@ -45,12 +45,16 @@ import {
   developEliteMapDisplayFilters,
   computeDevelopEliteZoneLayerTotalAreaHa,
   computeSideStructureCounts,
+  dedupeDevelopEliteCropTableRows,
+  developEliteCollectAgriProjectFarmCodes,
   filterCropRowsForChartStats,
   filterCropRowsForStructures,
+  developEliteCropTableRowDedupeKey,
   filterGeoJsonFeaturesByMapView,
   filterScopedTreeFeatures,
   filterStructureFeatures,
   filterStructureFeaturesByMapView,
+  developEliteShouldScopeKpisToMapView,
   normalizeStructureFeatures,
   resolveDevelopEliteCountryFilterLabel,
   type DevelopEliteFilterContext,
@@ -79,6 +83,16 @@ import {
   quantizeDevelopEliteMapView,
   shouldPublishDevelopEliteMapView,
 } from './developEliteMapViewPublish'
+import {
+  developEliteFilterZoneLayerGeoJson,
+  developEliteKpiCardSpatialPatch,
+  developEliteDashboardStructurePool,
+  developEliteStructureFeaturesToCollection,
+  resolveDevelopEliteExtentFlyCollection,
+  developEliteFiltersWithStructureSideType,
+  type DevelopEliteSideStructureKind,
+  DEVELOP_ELITE_SIDE_STRUCTURE_TYPE_CODES,
+} from './developEliteSpatialScope'
 
 export type DevelopEliteChartSlice = { label: string; value: number; color: string }
 
@@ -92,6 +106,9 @@ export function useDevelopEliteDashboardData() {
     zoneId: 'all',
     selectedFieldKey: null,
     locationSearch: '',
+    structureTypeCode: null,
+    structureTypeCodes: null,
+    activeKpiCardId: null,
   })
   const [mapView, setMapView] = useState<DevelopEliteMapView | null>(null)
   const mapViewRef = useRef<DevelopEliteMapView | null>(null)
@@ -178,6 +195,10 @@ export function useDevelopEliteDashboardData() {
   const [mapPopupFieldKey, setMapPopupFieldKey] = useState<string | null>(null)
   const [mapPopupRequest, setMapPopupRequest] = useState(0)
   const [mapCountryFlyRequest, setMapCountryFlyRequest] = useState(0)
+  const [mapExtentFly, setMapExtentFly] = useState<{
+    fc: GeoJSON.FeatureCollection
+    nonce: number
+  } | null>(null)
   const [farmListFlashFieldKey, setFarmListFlashFieldKey] = useState<string | null>(null)
   const [chartCropTypeFilter, setChartCropTypeFilter] = useState<string | null>(null)
   const tableRowsRef = useRef<Record<string, string>[]>([])
@@ -195,6 +216,9 @@ export function useDevelopEliteDashboardData() {
       zoneId: 'all',
       selectedFieldKey: null,
       locationSearch: '',
+      structureTypeCode: null,
+      structureTypeCodes: null,
+      activeKpiCardId: null,
     })
     setReloadToken(t => t + 1)
     dispatchDevelopEliteDashboardRefresh({ resetMapViewport: true })
@@ -397,17 +421,68 @@ export function useDevelopEliteDashboardData() {
       filters.zoneId && filters.zoneId !== 'all'
         ? zoneList.find(z => z.zoneId === filters.zoneId)?.label ?? null
         : null
+    const zoneProjectFarmCodes =
+      filters.zoneId && filters.zoneId !== 'all'
+        ? developEliteCollectAgriProjectFarmCodes(
+            agriLocationFeatures,
+            filters.zoneId,
+            'all',
+            {
+              countryLabels: mergedCountryLabels,
+              worldCountryDomain,
+            },
+          )
+        : null
     return {
       countryLabels: mergedCountryLabels,
       worldCountryDomain,
       activeZoneLabel,
+      zoneProjectFarmCodes:
+        zoneProjectFarmCodes && zoneProjectFarmCodes.size > 0 ? zoneProjectFarmCodes : null,
     }
-  }, [filters.zoneId, mergedCountryLabels, worldCountryDomain, zoneList])
+  }, [
+    agriLocationFeatures,
+    filters.country,
+    filters.zoneId,
+    mergedCountryLabels,
+    worldCountryDomain,
+    zoneList,
+  ])
+
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
+  const filterContextRef = useRef(filterContext)
+  filterContextRef.current = filterContext
+  const zoneLayerStructuresRef = useRef(zoneLayerStructures)
+  zoneLayerStructuresRef.current = zoneLayerStructures
+  const agriLocationFeaturesRef = useRef(agriLocationFeatures)
+  agriLocationFeaturesRef.current = agriLocationFeatures
+  const treeFeaturesRef = useRef(treeFeatures)
+  treeFeaturesRef.current = treeFeatures
+  const agriLocationDrawingInfoRef = useRef(agriLocationDrawingInfo)
+  agriLocationDrawingInfoRef.current = agriLocationDrawingInfo
 
   const scopedFeatures = useMemo(() => {
-    const base = filterStructureFeatures(allFeatures, filters, filterContext)
+    const base = developEliteDashboardStructurePool(
+      allFeatures,
+      filters,
+      filterContext,
+      config,
+      agriLocationFeatures,
+      agriLocationDrawingInfo,
+      treeFeatures,
+    )
     return filterStructureFeaturesByMapView(base, mapView)
-  }, [allFeatures, filters, filterContext, mapView])
+  }, [
+    agriLocationDrawingInfo,
+    agriLocationFeatures,
+    allFeatures,
+    config,
+    filterContext,
+    filters,
+    mapView,
+    treeFeatures,
+  ])
 
   const scopedCropRows = useMemo(
     () =>
@@ -420,43 +495,84 @@ export function useDevelopEliteDashboardData() {
     [cropRows, scopedFeatures, filters, config.cropStructureJoinField],
   )
 
-  const tableScopeFilters = useMemo(
+  /** Pie / bar / crop table: zone + KPI only — sidebar country is map/KPI scope, not chart scope. */
+  const chartStatsFilters = useMemo(
     (): DevelopEliteFilters => ({
-      country: filters.country,
+      country: 'all',
       zoneId: filters.zoneId,
       selectedFieldKey: null,
       locationSearch: filters.locationSearch,
+      structureTypeCode: filters.structureTypeCode,
+      structureTypeCodes: filters.structureTypeCodes,
+      activeKpiCardId: filters.activeKpiCardId,
     }),
-    [filters.country, filters.zoneId, filters.locationSearch],
+    [
+      filters.activeKpiCardId,
+      filters.locationSearch,
+      filters.structureTypeCode,
+      filters.structureTypeCodes,
+      filters.zoneId,
+    ],
   )
 
-  const tableStructurePool = useMemo(() => {
-    const base = filterStructureFeatures(allFeatures, tableScopeFilters, filterContext)
-    return filterStructureFeaturesByMapView(base, mapView)
-  }, [allFeatures, filterContext, mapView, tableScopeFilters])
+  /** Country / zone / KPI scope for pie, bar, and table stats (not clipped to map extent). */
+  const chartStructurePool = useMemo(() => {
+    return developEliteDashboardStructurePool(
+      allFeatures,
+      chartStatsFilters,
+      filterContext,
+      config,
+      agriLocationFeatures,
+      agriLocationDrawingInfo,
+      treeFeatures,
+    )
+  }, [
+    agriLocationDrawingInfo,
+    agriLocationFeatures,
+    allFeatures,
+    config,
+    filterContext,
+    chartStatsFilters,
+    treeFeatures,
+  ])
 
   const tableCropRows = useMemo(
     () =>
-      filterCropRowsForChartStats(
-        cropRows,
-        tableStructurePool,
-        tableScopeFilters,
+      dedupeDevelopEliteCropTableRows(
+        filterCropRowsForChartStats(
+          cropRows,
+          chartStructurePool,
+          chartStatsFilters,
+          config.cropStructureJoinField,
+          filterContext,
+        ),
         config.cropStructureJoinField,
       ),
-    [cropRows, tableStructurePool, tableScopeFilters, config.cropStructureJoinField],
+    [
+      chartStructurePool,
+      cropRows,
+      filterContext,
+      chartStatsFilters,
+      config.cropStructureJoinField,
+    ],
   )
-
-  const scopedTreeCount = useMemo(() => {
-    const scoped = filterScopedTreeFeatures(treeFeatures, scopedFeatures, filters)
-    return filterGeoJsonFeaturesByMapView(scoped, mapView).length
-  }, [treeFeatures, scopedFeatures, filters, mapView])
 
   const agriKpiFilters = useMemo(() => developEliteAgriKpiFilters(filters), [filters])
 
+  /** Country/zone scope for point layers — map extent is applied on the point features, not this pool. */
   const agriKpiStructures = useMemo(() => {
-    const base = filterStructureFeatures(allFeatures, agriKpiFilters, filterContext)
-    return filterStructureFeaturesByMapView(base, mapView)
-  }, [agriKpiFilters, allFeatures, filterContext, mapView])
+    return filterStructureFeatures(allFeatures, agriKpiFilters, filterContext)
+  }, [agriKpiFilters, allFeatures, filterContext])
+
+  const scopedTreeCount = useMemo(() => {
+    const scoped = filterScopedTreeFeatures(
+      treeFeatures,
+      agriKpiStructures,
+      agriKpiFilters,
+      filterContext,
+    )
+    return filterGeoJsonFeaturesByMapView(scoped, mapView).length
+  }, [treeFeatures, agriKpiStructures, agriKpiFilters, filterContext, mapView])
 
   const kpiAgriLocationFeatures = useMemo(
     () => filterGeoJsonFeaturesByMapView(agriLocationFeatures, mapView),
@@ -512,6 +628,7 @@ export function useDevelopEliteDashboardData() {
       filters,
       agriKpiStructures,
       agriKpiFilters,
+      filterContext,
     )
     return {
       ...base,
@@ -527,6 +644,7 @@ export function useDevelopEliteDashboardData() {
     agriLocationDrawingInfo,
     agriKpiFilters,
     agriKpiStructures,
+    filterContext,
     filters,
     heroMapCultivatedAreaHa,
     heroZoneLayerTotalAreaHa,
@@ -538,12 +656,29 @@ export function useDevelopEliteDashboardData() {
       zoneId: filters.zoneId,
       selectedFieldKey: null,
       locationSearch: '',
+      structureTypeCode: filters.structureTypeCode,
+      structureTypeCodes: filters.structureTypeCodes,
+      activeKpiCardId: filters.activeKpiCardId,
     }),
-    [filters.country, filters.zoneId],
+    [
+      filters.activeKpiCardId,
+      filters.country,
+      filters.structureTypeCode,
+      filters.structureTypeCodes,
+      filters.zoneId,
+    ],
   )
 
   const farmList = useMemo(() => {
-    const scoped = filterStructureFeatures(allFeatures, farmListFilters, filterContext)
+    const scoped = developEliteDashboardStructurePool(
+      allFeatures,
+      farmListFilters,
+      filterContext,
+      config,
+      agriLocationFeatures,
+      agriLocationDrawingInfo,
+      treeFeatures,
+    )
     const items = buildFarmListItems(scoped, listContext)
     return sortDevelopEliteListBySearch(
       items,
@@ -551,7 +686,17 @@ export function useDevelopEliteDashboardData() {
       item => `${item.title} ${item.subtitle ?? ''}`,
       compareDevelopEliteFarmListItems,
     )
-  }, [allFeatures, farmListFilters, filterContext, filters.locationSearch, listContext])
+  }, [
+    agriLocationDrawingInfo,
+    agriLocationFeatures,
+    allFeatures,
+    config,
+    farmListFilters,
+    filterContext,
+    filters.locationSearch,
+    listContext,
+    treeFeatures,
+  ])
 
   const countryList = useMemo(() => {
     const fromWorld = buildWorldCountryListItems(worldCountries, worldCountryDomain)
@@ -566,6 +711,9 @@ export function useDevelopEliteDashboardData() {
         zoneId: filters.zoneId,
         selectedFieldKey: null,
         locationSearch: filters.locationSearch,
+        structureTypeCode: null,
+        structureTypeCodes: null,
+        activeKpiCardId: null,
       },
       filterContext,
     )
@@ -698,7 +846,10 @@ export function useDevelopEliteDashboardData() {
       compareDevelopEliteCropTableRows(a, b, joinField),
     )
     return sorted.slice(0, 200).map((row, i) => {
-      const out: Record<string, string> = { _rowId: String(row.OBJECTID ?? row.objectid ?? i) }
+      const dedupeKey = developEliteCropTableRowDedupeKey(row, joinField)
+      const out: Record<string, string> = {
+        _rowId: String(row.OBJECTID ?? row.objectid ?? dedupeKey),
+      }
       const rawFc = readArcGisField(row, joinField)
       const fc = rawFc != null && rawFc !== '' ? normalizeDevelopEliteJoinKey(String(rawFc)) : ''
       let fieldKey = fc ? structureFieldKeyByJoinCode.get(fc) ?? '' : ''
@@ -748,6 +899,31 @@ export function useDevelopEliteDashboardData() {
     return tableRows.filter(row => row.Crop_Type === chartCropTypeFilter)
   }, [chartCropTypeFilter, tableRows])
 
+  const publishMapExtentFly = useCallback((fc: GeoJSON.FeatureCollection) => {
+    if (!fc.features.length) return
+    setMapExtentFly({ fc, nonce: Date.now() })
+  }, [])
+
+  const publishExtentFlyForFilters = useCallback(
+    (scopeFilters: DevelopEliteFilters, preferZoneLayer = false) => {
+      let fc = resolveDevelopEliteExtentFlyCollection(null, {
+        config: configRef.current,
+        scopeFilters,
+        allFeatures: allFeaturesRef.current,
+        ctx: filterContextRef.current,
+        agriLocationFeatures: agriLocationFeaturesRef.current,
+        agriLocationDrawingInfo: agriLocationDrawingInfoRef.current,
+        treeFeatures: treeFeaturesRef.current,
+        zoneLayer: zoneLayerStructuresRef.current,
+      })
+      if (!fc.features.length && preferZoneLayer) {
+        fc = developEliteFilterZoneLayerGeoJson(zoneLayerStructuresRef.current, scopeFilters)
+      }
+      publishMapExtentFly(fc)
+    },
+    [publishMapExtentFly],
+  )
+
   const selectCountry = useCallback((code: string) => {
     setChartCropTypeFilter(null)
     setMapHighlightFieldKey(null)
@@ -756,14 +932,122 @@ export function useDevelopEliteDashboardData() {
       country: code || 'all',
       zoneId: 'all',
       selectedFieldKey: null,
+      structureTypeCode: null,
+      structureTypeCodes: null,
+      activeKpiCardId: null,
     }))
     setMapCountryFlyRequest(n => n + 1)
   }, [])
 
-  const selectZone = useCallback((zoneId: string) => {
+  const selectZone = useCallback(
+    (zoneId: string) => {
+      setMapHighlightFieldKey(null)
+      setChartCropTypeFilter(null)
+      setFilters(f => {
+        const next = { ...f, zoneId: zoneId || 'all', selectedFieldKey: null }
+        queueMicrotask(() => publishExtentFlyForFilters(next))
+        return next
+      })
+    },
+    [publishExtentFlyForFilters],
+  )
+
+  const selectStructureSideType = useCallback(
+    (kind: DevelopEliteSideStructureKind) => {
+      setChartCropTypeFilter(null)
+      setMapHighlightFieldKey(null)
+      setFilters(f => {
+        const next = developEliteFiltersWithStructureSideType(f, DEVELOP_ELITE_SIDE_STRUCTURE_TYPE_CODES[kind])
+        queueMicrotask(() => publishExtentFlyForFilters(next))
+        return next
+      })
+    },
+    [publishExtentFlyForFilters],
+  )
+
+  const activateKpiCard = useCallback(
+    (cardId: string) => {
+      setChartCropTypeFilter(null)
+      setMapHighlightFieldKey(null)
+      const card = configRef.current.kpiCards.find(c => c.id === cardId)
+      if (!card) return
+      const patch = developEliteKpiCardSpatialPatch(card)
+      if (!patch) return
+
+      setFilters(f => {
+        const togglingStructure =
+          patch.structureTypeCode != null &&
+          f.structureTypeCode === patch.structureTypeCode &&
+          !f.structureTypeCodes?.length &&
+          !f.activeKpiCardId
+        const togglingCodes =
+          Boolean(patch.structureTypeCodes?.length) &&
+          Boolean(f.structureTypeCodes?.length) &&
+          patch.structureTypeCodes!.every(c => f.structureTypeCodes!.includes(c)) &&
+          f.structureTypeCodes!.length === patch.structureTypeCodes!.length &&
+          !f.activeKpiCardId
+        const togglingAgri = Boolean(patch.activeKpiCardId) && f.activeKpiCardId === patch.activeKpiCardId
+
+        const cleared: DevelopEliteFilters = {
+          ...f,
+          selectedFieldKey: null,
+          structureTypeCode: null,
+          structureTypeCodes: null,
+          activeKpiCardId: null,
+        }
+        const next =
+          togglingStructure || togglingCodes || togglingAgri
+            ? cleared
+            : { ...cleared, ...patch }
+
+        queueMicrotask(() => {
+          const fc = resolveDevelopEliteExtentFlyCollection(card, {
+            config: configRef.current,
+            scopeFilters: next,
+            allFeatures: allFeaturesRef.current,
+            ctx: filterContextRef.current,
+            agriLocationFeatures: agriLocationFeaturesRef.current,
+            agriLocationDrawingInfo: agriLocationDrawingInfoRef.current,
+            treeFeatures: treeFeaturesRef.current,
+            zoneLayer: zoneLayerStructuresRef.current,
+          })
+          publishMapExtentFly(fc)
+        })
+        return next
+      })
+    },
+    [publishExtentFlyForFilters, publishMapExtentFly],
+  )
+
+  const flyToHeroZoneLayer = useCallback(() => {
+    setChartCropTypeFilter(null)
     setMapHighlightFieldKey(null)
-    setFilters(f => ({ ...f, zoneId: zoneId || 'all' }))
-  }, [])
+    const current = filtersRef.current
+    const zoneFc = developEliteFilterZoneLayerGeoJson(zoneLayerStructuresRef.current, current)
+    if (zoneFc.features.length) publishMapExtentFly(zoneFc)
+    else publishExtentFlyForFilters(current, true)
+  }, [publishExtentFlyForFilters, publishMapExtentFly])
+
+  const flyToHeroCultivatedArea = useCallback(() => {
+    setChartCropTypeFilter(null)
+    setMapHighlightFieldKey(null)
+    const current = filtersRef.current
+    const scope: DevelopEliteFilters = {
+      ...current,
+      selectedFieldKey: null,
+      structureTypeCode: null,
+      structureTypeCodes: null,
+      activeKpiCardId: null,
+    }
+    const structures = filterStructureFeatures(
+      allFeaturesRef.current,
+      scope,
+      filterContextRef.current,
+    )
+    const fc = developEliteStructureFeaturesToCollection(structures)
+    if (fc.features.length) publishMapExtentFly(fc)
+    else publishExtentFlyForFilters(scope)
+  }, [publishExtentFlyForFilters, publishMapExtentFly])
 
   const selectFarm = useCallback((fieldKey: string | null) => {
     setChartCropTypeFilter(null)
@@ -937,6 +1221,7 @@ export function useDevelopEliteDashboardData() {
     zoneList,
     zoneListMapSortFeatures,
     mapView,
+    mapKpisLinkedToView: developEliteShouldScopeKpisToMapView(mapView),
     setMapView: publishMapView,
     countryList,
     sideCounts,
@@ -977,9 +1262,14 @@ export function useDevelopEliteDashboardData() {
     cropTablePopupLink,
     syncTableRowFromMapPopup,
     mapCountryFlyRequest,
+    mapExtentFly,
     activeCountryLabel,
     selectCountry,
     selectZone,
+    selectStructureSideType,
+    activateKpiCard,
+    flyToHeroZoneLayer,
+    flyToHeroCultivatedArea,
     selectFarm,
     focusFarmOnMap,
     farmListFlashFieldKey,

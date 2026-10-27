@@ -16,6 +16,7 @@ export type DevelopEliteMapLayerLiveContextValue = {
   hasDrawnAoiClip: boolean
   onToggleLayerLive: () => void
   activateLayerLive: () => void
+  deactivateLayerLive: () => void
   layerLiveTitle: string
   layerLiveStatus: string
   setLayerLiveStatus: (message: string) => void

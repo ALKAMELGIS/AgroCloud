@@ -169,6 +169,45 @@ function resolveWorldCountryLabel(
 
 
 
+/** World_Countries polygon for sidebar / map country filter (uses same codes as the list). */
+export function findWorldCountryFeatureForFilter(
+  worldCountriesGeojson: GeoJSON.FeatureCollection | null | undefined,
+  countryCode: string,
+  worldCountryDomain?: Map<string, string>,
+): GeoJSON.Feature | null {
+  if (!worldCountriesGeojson?.features?.length) return null
+  const want = countryCode.trim()
+  if (!want || want === 'all') return null
+
+  const wantLabel =
+    worldCountryDomain?.get(want) ?? worldCountryDomain?.get(String(Number(want))) ?? ''
+
+  for (const f of worldCountriesGeojson.features) {
+    if (!f.geometry) continue
+    const props = (f.properties ?? {}) as Record<string, unknown>
+    const resolved = readWorldCountryCode(props, worldCountryDomain)
+    if (!resolved) continue
+    if (resolved === want) return f
+    if (
+      Number.isFinite(Number(want)) &&
+      Number.isFinite(Number(resolved)) &&
+      String(Number(resolved)) === String(Number(want))
+    ) {
+      return f
+    }
+    if (wantLabel) {
+      const portfolio = readPortfolioCountryLabel(props)
+      if (
+        normalizePortfolioLabel(resolved) === normalizePortfolioLabel(wantLabel) ||
+        (portfolio && normalizePortfolioLabel(portfolio) === normalizePortfolioLabel(wantLabel))
+      ) {
+        return f
+      }
+    }
+  }
+  return null
+}
+
 export function filterWorldCountriesForMap(
   features: GeoJSON.Feature[],
   countryDomain?: Map<string, string>,

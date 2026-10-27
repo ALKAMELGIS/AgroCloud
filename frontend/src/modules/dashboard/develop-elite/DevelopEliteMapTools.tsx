@@ -34,7 +34,7 @@ import { DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D } from './developEliteMapViewport'
 import { restoreDevelopElitePortfolioGlobeBasemap } from './developEliteMapLibreGlobeBasemap'
 import {
   developEliteMapLibreFitGeoJson,
-  developEliteMapLibreApplyDefaultPortfolioView,
+  developEliteMapLibreApplyPortfolioHome,
   developEliteMapLibreFlyToFieldKey,
   developEliteMapLibreFlyToGeoJsonFeatureIndex,
   developEliteMapLibreFlyToLatLng,
@@ -501,7 +501,10 @@ export function DevelopEliteMapTools({
               basemapId: activeBasemapId,
               viewMode3d: DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D,
             })
-            developEliteMapLibreApplyDefaultPortfolioView(map, { animate: true, cinematic: false })
+            developEliteMapLibreApplyPortfolioHome(map, {
+              animate: true,
+              worldCountries: worldCountriesGeojson,
+            })
           }
           onPin(null)
           setPanel(null)
@@ -643,7 +646,6 @@ export function DevelopEliteMapTools({
                     className={`develop-elite-map__panel-item develop-elite-map__panel-item--basemap${activeBasemapId === entry.id ? ' is-active' : ''}`}
                     onClick={() => {
                       onBasemapChange(entry.id)
-                      setPanel(null)
                     }}
                   >
                     {entry.label}

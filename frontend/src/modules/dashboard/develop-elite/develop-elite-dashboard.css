@@ -665,6 +665,36 @@ body.develop-elite--widget-dragging {
   -webkit-font-smoothing: antialiased;
 }
 
+.develop-elite__kpi-card--actionable {
+  cursor: pointer;
+}
+
+.develop-elite__kpi-card--actionable:focus-visible {
+  outline: 2px solid var(--de-accent, #3b82f6);
+  outline-offset: 2px;
+}
+
+.develop-elite__kpi-card--active {
+  box-shadow: inset 0 0 0 2px var(--de-accent, #3b82f6);
+}
+
+.develop-elite__kpi-card--map-scoped:not(.develop-elite__kpi-card--active) {
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
+}
+
+.develop-elite__structure-box--actionable {
+  cursor: pointer;
+}
+
+.develop-elite__structure-box--actionable:focus-visible {
+  outline: 2px solid var(--de-accent, #3b82f6);
+  outline-offset: 2px;
+}
+
+.develop-elite__structure-box--active {
+  box-shadow: inset 0 0 0 2px var(--de-accent, #3b82f6);
+}
+
 .develop-elite__kpi-card {
   flex: 1 1 var(--de-kpi-card-w, var(--de-layout-kpi-card-min));
   width: var(--de-kpi-card-w, auto);
@@ -1579,6 +1609,30 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   background: transparent !important;
 }
 
+/* Field zoom (Mercator): hide starfield; opaque fallback while tiles load. */
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space-active) .develop-elite-map__space-starfield,
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space-active) .develop-elite-map__galaxy-backdrop::before,
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space-active).develop-elite-map__viewport--space::before {
+  opacity: 0 !important;
+  transition: none;
+}
+
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space-active) .develop-elite-map__galaxy-backdrop .maplibregl-canvas-container,
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space) .develop-elite-map__galaxy-backdrop .maplibregl-canvas-container {
+  background: #0e1a16 !important;
+}
+
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space) .develop-elite-map__galaxy-backdrop .maplibregl-canvas {
+  background: #0e1a16 !important;
+}
+
+.develop-elite-map--webgl.develop-elite-map--zooming .develop-elite-map__space-starfield,
+.develop-elite-map--webgl.develop-elite-map--zooming .develop-elite-map__galaxy-backdrop::before,
+.develop-elite-map--webgl.develop-elite-map--zooming.develop-elite-map__viewport--space::before {
+  opacity: 0 !important;
+  transition: none;
+}
+
 .develop-elite-map__canvas-tabs {
   position: absolute;
   top: 10px;
@@ -1732,7 +1786,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 .develop-elite-map__insight-tools {
   flex-shrink: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   width: 100%;
   max-width: 100%;
@@ -2083,6 +2137,46 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 .develop-elite-map--webgl .maplibregl-canvas-container.develop-elite-map--interacting .maplibregl-canvas,
 .develop-elite-map--webgl .maplibregl-canvas-container.develop-elite-map--zooming .maplibregl-canvas {
   will-change: transform;
+}
+
+.develop-elite-map--webgl.develop-elite-map--interacting .maplibregl-map {
+  pointer-events: auto;
+}
+
+.develop-elite-map--webgl.develop-elite-map--interacting .develop-elite-map__panel,
+.develop-elite-map--webgl.develop-elite-map--zooming .develop-elite-map__panel {
+  pointer-events: none;
+}
+
+.develop-elite-map--webgl.develop-elite-map--interacting .maplibregl-canvas-container,
+.develop-elite-map--webgl.develop-elite-map--zooming .maplibregl-canvas-container {
+  contain: strict;
+}
+
+/* Grid field map (Mercator): avoid compositor repaints that flash vector tiles. */
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space).develop-elite-map--webgl.develop-elite-map--interacting
+  .maplibregl-canvas-container,
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space).develop-elite-map--webgl.develop-elite-map--zooming
+  .maplibregl-canvas-container {
+  contain: none;
+}
+
+.develop-elite-map__webgl--field {
+  background: #0e1a16;
+}
+
+.develop-elite-map__webgl--field .maplibregl-canvas,
+.develop-elite-map__webgl--field .maplibregl-canvas-container {
+  background: #0e1a16 !important;
+}
+
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space)
+  .maplibregl-canvas-container.develop-elite-map--interacting
+  .maplibregl-canvas,
+.develop-elite-map__viewport:not(.develop-elite-map__viewport--space)
+  .maplibregl-canvas-container.develop-elite-map--zooming
+  .maplibregl-canvas {
+  will-change: auto;
 }
 
 @keyframes develop-elite-structure-flash {
@@ -2613,6 +2707,20 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 .develop-elite-map__panel-meta {
   font-size: 9px;
   color: var(--de-muted);
+}
+
+.develop-elite-map__open-meteo-panel .develop-elite-map__insight-wx {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.develop-elite-map__open-meteo-subtitle {
+  margin-top: -2px !important;
+  margin-bottom: 8px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 9px !important;
+  opacity: 0.85;
 }
 
 .develop-elite-map__panel-title {

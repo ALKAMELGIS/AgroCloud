@@ -9,6 +9,7 @@ import { isDevelopEliteMapLibreStyleReady } from './developEliteMapLibreStyle'
 import type { DevelopEliteMapDataLayerId } from './developEliteDashboardConfig'
 import type { DevelopEliteMapView } from './developEliteKpiEngine'
 import {
+  DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY,
   DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D,
   DEVELOP_ELITE_MAP_VIEWPORT_PRESET_LS_KEY,
   DEVELOP_ELITE_MAP_VIEWPORT_PRESET_VERSION,
@@ -18,13 +19,18 @@ import {
   developEliteDashboardRefreshResetsMapViewport,
 } from './developEliteDashboardEvents'
 import { applyDevelopElitePortfolioMapBrowserLoadDefault } from './developEliteMapLibreGlobeBasemap'
+import { applyDevelopEliteMapLibrePerformanceTuning } from './developEliteMapLibrePerformance'
 import {
   developEliteMapLibreApplyDefaultPortfolioView,
+  developEliteMapLibreApplyPortfolioHome,
+  developEliteMapLibreFitPortfolio,
   developEliteMapLibreFlyToFieldKey,
   developEliteMapLibreFlyToLatLng,
   developEliteMapLibreFitGeoJson,
   developEliteMapLibreReadView,
 } from './developEliteMapLibreNavigation'
+import { structureFeatureMatchesCountryFilter } from './developEliteCountryFilter'
+import { findWorldCountryFeatureForFilter } from './developEliteWorldCountries'
 
 type OverlayProps = {
   geojson: GeoJSON.FeatureCollection
@@ -106,6 +112,7 @@ export function DevelopEliteMapLibreOverlays({
   const onArcgisIconsLoaded = useCallback(() => {
     setIconReloadToken(t => t + 1)
   }, [])
+  const lastGestureOverlayZoomRef = useRef<number | null>(null)
 
   const applyOverlaySync = useCallback(
     (map: NonNullable<typeof mapRef.current>, skipWhileMoving = true) => {
@@ -144,7 +151,8 @@ export function DevelopEliteMapLibreOverlays({
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    applyOverlaySync(map, false)
+    lastGestureOverlayZoomRef.current = null
+    applyOverlaySync(map, true)
   }, [applyOverlaySync, mapReady, mapRef, mapDataLayerOrder, mapLayerVisibility, viewMode3d])
 
   useEffect(() => {
@@ -152,7 +160,9 @@ export function DevelopEliteMapLibreOverlays({
     if (!map || !mapReady) return
 
     let raf = 0
+    let gestureTimer = 0
     const runSync = () => {
+      if (typeof map.isMoving === 'function' && map.isMoving()) return
       applyOverlaySync(map, true)
     }
     const scheduleSync = () => {
@@ -162,19 +172,40 @@ export function DevelopEliteMapLibreOverlays({
         runSync()
       })
     }
-    const onGestureEnd = () => scheduleSync()
+    const onGestureEnd = () => {
+      if (gestureTimer) window.clearTimeout(gestureTimer)
+      gestureTimer = window.setTimeout(() => {
+        gestureTimer = 0
+        scheduleSync()
+      }, DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY ? 320 : 200)
+    }
+    const onGridZoomEnd = () => {
+      const zoomQ = Math.round(map.getZoom() * 2) / 2
+      if (lastGestureOverlayZoomRef.current === zoomQ) return
+      lastGestureOverlayZoomRef.current = zoomQ
+      onGestureEnd()
+    }
 
-    applyOverlaySync(map, false)
+    applyOverlaySync(map, true)
     map.on('style.load', runSync)
     map.on('load', runSync)
-    map.on('zoomend', onGestureEnd)
-    map.on('moveend', onGestureEnd)
+    if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
+      map.on('zoomend', onGridZoomEnd)
+    } else {
+      map.on('zoomend', onGestureEnd)
+      map.on('moveend', onGestureEnd)
+    }
     return () => {
       if (raf) cancelAnimationFrame(raf)
+      if (gestureTimer) window.clearTimeout(gestureTimer)
       map.off('style.load', runSync)
       map.off('load', runSync)
-      map.off('zoomend', onGestureEnd)
-      map.off('moveend', onGestureEnd)
+      if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
+        map.off('zoomend', onGridZoomEnd)
+      } else {
+        map.off('zoomend', onGestureEnd)
+        map.off('moveend', onGestureEnd)
+      }
     }
   }, [
     agriLocationDrawingInfo,
@@ -237,6 +268,7 @@ export function DevelopEliteMapLibreFlyBridge({
   mapFlyToRequest,
   mapFlyToLngLat,
   mapCountryFlyRequest,
+  mapExtentFly,
 }: {
   basemapId: string
   countryFilter: string
@@ -248,6 +280,7 @@ export function DevelopEliteMapLibreFlyBridge({
   mapFlyToRequest?: number
   mapFlyToLngLat?: { lat: number; lng: number; nonce: number } | null
   mapCountryFlyRequest?: number
+  mapExtentFly?: { fc: GeoJSON.FeatureCollection; nonce: number } | null
 }) {
   const { mapRef, mapReady, viewMode3d, setViewMode3d } = useDevelopEliteMapLibre()
 
@@ -256,28 +289,57 @@ export function DevelopEliteMapLibreFlyBridge({
     const map = mapRef.current
     if (!map) return
 
-    if (countryFilter === 'all') {
-      setViewMode3d(DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D)
-      developEliteMapLibreApplyDefaultPortfolioView(map, { animate: true, cinematic: false })
-      return
+    const flyCountry = () => {
+      applyDevelopEliteMapLibrePerformanceTuning(map)
+
+      if (countryFilter === 'all') {
+        setViewMode3d(DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D)
+        developEliteMapLibreApplyPortfolioHome(map, {
+          animate: true,
+          worldCountries: portfolioExtentGeojson ?? worldCountriesGeojson,
+        })
+        return
+      }
+
+      const outline = findWorldCountryFeatureForFilter(
+        worldCountriesGeojson,
+        countryFilter,
+        worldCountryDomain,
+      )
+      if (outline) {
+        developEliteMapLibreFitGeoJson(
+          map,
+          { type: 'FeatureCollection', features: [outline] },
+          { maxZoom: 8 },
+        )
+        return
+      }
+
+      const structHits = geojson.features.filter(f =>
+        structureFeatureMatchesCountryFilter((f.properties ?? {}) as Record<string, unknown>, countryFilter, {
+          worldCountryDomain,
+        }),
+      )
+      if (structHits.length) {
+        developEliteMapLibreFitGeoJson(map, { type: 'FeatureCollection', features: structHits }, { maxZoom: 10 })
+      }
     }
 
-    if (!worldCountriesGeojson?.features?.length) return
-    const code = countryFilter
-    const label = worldCountryDomain?.get(code)
-    const hit = worldCountriesGeojson.features.find(f => {
-      const p = (f.properties ?? {}) as Record<string, unknown>
-      const c = String(p.Country ?? p.COUNTRY ?? p.country ?? '').trim()
-      const n = String(p.Country_Name ?? p.NAME ?? '').trim()
-      return c === code || n === label
-    })
-    if (!hit) return
-    developEliteMapLibreFitGeoJson(map, { type: 'FeatureCollection', features: [hit] }, { maxZoom: 8 })
+    if (!isDevelopEliteMapLibreStyleReady(map)) {
+      const onReady = () => {
+        map.off('idle', onReady)
+        flyCountry()
+      }
+      map.once('idle', onReady)
+      return () => map.off('idle', onReady)
+    }
+    flyCountry()
   }, [
     countryFilter,
     mapCountryFlyRequest,
     mapReady,
     mapRef,
+    geojson,
     portfolioExtentGeojson,
     worldCountriesGeojson,
     worldCountryDomain,
@@ -294,13 +356,27 @@ export function DevelopEliteMapLibreFlyBridge({
     if (!mapReady || !highlightFieldKey || !mapFlyToRequest) return
     const map = mapRef.current
     if (!map) return
-    const flew = developEliteMapLibreFlyToFieldKey(map, geojson, highlightFieldKey, {
-      viewMode3d,
-    })
-    if (flew) {
-      syncDevelopEliteMapLibreStructureHighlight(map, geojson, highlightFieldKey, viewMode3d)
-      pulseDevelopEliteMapLibreStructureHighlight(map)
+    applyDevelopEliteMapLibrePerformanceTuning(map)
+
+    const fly = () => {
+      const flew = developEliteMapLibreFlyToFieldKey(map, geojson, highlightFieldKey, {
+        viewMode3d,
+      })
+      if (flew) {
+        syncDevelopEliteMapLibreStructureHighlight(map, geojson, highlightFieldKey, viewMode3d)
+        pulseDevelopEliteMapLibreStructureHighlight(map)
+      }
     }
+
+    if (!isDevelopEliteMapLibreStyleReady(map)) {
+      const onReady = () => {
+        map.off('idle', onReady)
+        fly()
+      }
+      map.once('idle', onReady)
+      return () => map.off('idle', onReady)
+    }
+    fly()
   }, [geojson, highlightFieldKey, mapFlyToRequest, mapReady, mapRef, viewMode3d])
 
   useEffect(() => {
@@ -311,12 +387,78 @@ export function DevelopEliteMapLibreFlyBridge({
   }, [mapFlyToLngLat?.lat, mapFlyToLngLat?.lng, mapFlyToLngLat?.nonce, mapReady, mapRef, viewMode3d])
 
   useEffect(() => {
+    if (!mapReady || !mapExtentFly?.nonce) return
+    const map = mapRef.current
+    if (!map) return
+    const fly = () => {
+      applyDevelopEliteMapLibrePerformanceTuning(map)
+      developEliteMapLibreFitGeoJson(map, mapExtentFly.fc, { maxZoom: 16, viewMode3d })
+    }
+    if (isDevelopEliteMapLibreStyleReady(map)) {
+      fly()
+      return
+    }
+    const onReady = () => {
+      map.off('idle', onReady)
+      fly()
+    }
+    map.once('idle', onReady)
+    return () => map.off('idle', onReady)
+  }, [mapExtentFly?.fc, mapExtentFly?.nonce, mapReady, mapRef, viewMode3d])
+
+  const portfolioBasemapAppliedRef = useRef<string | null>(null)
+  const gridPortfolioFitRef = useRef(false)
+
+  useEffect(() => {
     if (!mapReady) return
     const map = mapRef.current
     if (!map) return
+    applyDevelopEliteMapLibrePerformanceTuning(map)
+
+    if (portfolioBasemapAppliedRef.current === basemapId) return
+
+    const pendingNavigation =
+      mapFlyToRequest > 0 ||
+      mapCountryFlyRequest > 0 ||
+      Boolean(mapFlyToLngLat?.nonce) ||
+      Boolean(mapExtentFly?.nonce) ||
+      Boolean(highlightFieldKey?.trim())
+
+    if (portfolioBasemapAppliedRef.current === null && pendingNavigation) {
+      portfolioBasemapAppliedRef.current = basemapId
+      return
+    }
+
+    portfolioBasemapAppliedRef.current = basemapId
     setViewMode3d(DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D)
-    applyDevelopElitePortfolioMapBrowserLoadDefault(map, basemapId)
-  }, [basemapId, mapReady, mapRef, setViewMode3d])
+    const portfolioFc = portfolioExtentGeojson ?? worldCountriesGeojson
+    applyDevelopElitePortfolioMapBrowserLoadDefault(map, basemapId, { worldCountries: portfolioFc })
+    if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY && portfolioFc?.features?.length) {
+      gridPortfolioFitRef.current = true
+    }
+  }, [
+    basemapId,
+    highlightFieldKey,
+    mapCountryFlyRequest,
+    mapExtentFly?.nonce,
+    mapFlyToLngLat?.nonce,
+    mapFlyToRequest,
+    mapReady,
+    mapRef,
+    portfolioExtentGeojson,
+    setViewMode3d,
+    worldCountriesGeojson,
+  ])
+
+  useEffect(() => {
+    if (!mapReady || !DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY || gridPortfolioFitRef.current) return
+    const portfolioFc = portfolioExtentGeojson ?? worldCountriesGeojson
+    if (!portfolioFc?.features?.length) return
+    const map = mapRef.current
+    if (!map) return
+    gridPortfolioFitRef.current = true
+    developEliteMapLibreFitPortfolio(map, portfolioFc, { animate: false })
+  }, [mapReady, mapRef, portfolioExtentGeojson, worldCountriesGeojson])
 
   useEffect(() => {
     if (!mapReady) return
@@ -329,6 +471,11 @@ export function DevelopEliteMapLibreFlyBridge({
       stored = 0
     }
     if (stored >= DEVELOP_ELITE_MAP_VIEWPORT_PRESET_VERSION) return
+    const portfolioFc = portfolioExtentGeojson ?? worldCountriesGeojson
+    developEliteMapLibreApplyPortfolioHome(map, { animate: false, worldCountries: portfolioFc })
+    if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY && portfolioFc?.features?.length) {
+      gridPortfolioFitRef.current = true
+    }
     try {
       window.localStorage.setItem(
         DEVELOP_ELITE_MAP_VIEWPORT_PRESET_LS_KEY,
@@ -337,7 +484,7 @@ export function DevelopEliteMapLibreFlyBridge({
     } catch {
       /* ignore */
     }
-  }, [basemapId, mapReady, mapRef, setViewMode3d])
+  }, [basemapId, mapReady, mapRef, portfolioExtentGeojson, worldCountriesGeojson])
 
   useEffect(() => {
     if (!mapReady) return
@@ -346,10 +493,11 @@ export function DevelopEliteMapLibreFlyBridge({
     const onDashboardRefresh = (event: Event) => {
       if (!developEliteDashboardRefreshResetsMapViewport(event)) return
       setViewMode3d(DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D)
-      applyDevelopElitePortfolioMapBrowserLoadDefault(map, basemapId)
+      const portfolioFc = portfolioExtentGeojson ?? worldCountriesGeojson
+      applyDevelopElitePortfolioMapBrowserLoadDefault(map, basemapId, { worldCountries: portfolioFc })
     }
     window.addEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, onDashboardRefresh)
     return () => window.removeEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, onDashboardRefresh)
-  }, [basemapId, mapReady, mapRef, setViewMode3d])
+  }, [basemapId, mapReady, mapRef, portfolioExtentGeojson, setViewMode3d, worldCountriesGeojson])
   return null
 }

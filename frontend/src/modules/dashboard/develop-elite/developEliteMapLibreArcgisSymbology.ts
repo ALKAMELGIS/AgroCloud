@@ -16,7 +16,10 @@ import {
 } from '@/modules/gis/layers/arcgisPointSymbolMapbox'
 import { sanitizeMapboxPaint } from '@/modules/gis/layers/mapboxPaintSanitize'
 import type { Map as MaplibreMap } from 'maplibre-gl'
-import { developEliteMapPointZoomScale } from './developEliteMapGeoJsonGeometry'
+import {
+  developEliteAgriLocationPointZoomScale,
+  developEliteMapPointZoomScale,
+} from './developEliteMapGeoJsonGeometry'
 import { AGRO_STRUCTURES_STRUCTURE_TYPE_CATALOG } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 
 export const DE_MAPLIBRE_POINT_FILTER = [
@@ -43,8 +46,35 @@ export const DE_MAPLIBRE_POLY_LINE_FILTER = [
   ['literal', ['Polygon', 'MultiPolygon', 'LineString', 'MultiLineString']],
 ] as const
 
-const DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE = 1.42
-const DEVELOP_ELITE_IRRIGATION_VALVES_POINT_SCALE = 1.45
+/** Picture / simple marker scale on the MapLibre canvas (legend rail uses separate swatches). */
+const DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE = 2.35
+const DEVELOP_ELITE_IRRIGATION_VALVES_POINT_SCALE = 1.55
+
+/** Extra boost for point symbols inside the grid-dashboard map widget only. */
+export const DEVELOP_ELITE_GRID_MAP_CANVAS_SYMBOL_SCALE = 1.52
+
+export function developEliteMapLibreMapCanvasPointScale(map: MaplibreMap | null | undefined): number {
+  if (!map) return 1
+  try {
+    return map.getContainer()?.closest('.develop-elite-grid-widget--map')
+      ? DEVELOP_ELITE_GRID_MAP_CANVAS_SYMBOL_SCALE
+      : 1
+  } catch {
+    return 1
+  }
+}
+
+function scaleMapLibreCircleRadiusPaint(
+  paint: Record<string, unknown>,
+  scale: number,
+): Record<string, unknown> {
+  if (!Number.isFinite(scale) || scale <= 1.001) return paint
+  const radius = paint['circle-radius']
+  if (typeof radius === 'number' && Number.isFinite(radius)) {
+    return { ...paint, 'circle-radius': radius * scale }
+  }
+  return paint
+}
 
 /** Extruded Agro Structures footprint height in 3D terrain view (meters). */
 export const DE_AGRO_STRUCTURE_EXTRUSION_HEIGHT_M = 7
@@ -258,6 +288,7 @@ export type DevelopElitePointIconLayerKey = 'trees' | 'irrigation-valves' | 'agr
 export function developEliteMapLibrePointIconScale(
   layerKey: DevelopElitePointIconLayerKey,
   mapZoom: number,
+  canvasScale = 1,
 ): number {
   const base =
     layerKey === 'agri-location'
@@ -265,7 +296,13 @@ export function developEliteMapLibrePointIconScale(
       : layerKey === 'irrigation-valves'
         ? DEVELOP_ELITE_IRRIGATION_VALVES_POINT_SCALE
         : 1
-  return base * developEliteMapPointZoomScale(mapZoom)
+  const canvas =
+    layerKey === 'agri-location' && Number.isFinite(canvasScale) && canvasScale > 0 ? canvasScale : 1
+  const zoomScale =
+    layerKey === 'agri-location'
+      ? developEliteAgriLocationPointZoomScale(mapZoom)
+      : developEliteMapPointZoomScale(mapZoom)
+  return base * zoomScale * canvas
 }
 
 export function developEliteMapLibrePreparePointIcons(
@@ -275,12 +312,24 @@ export function developEliteMapLibrePreparePointIcons(
   layerKey: DevelopElitePointIconLayerKey,
   mapZoom: number,
   onIconsLoaded: () => void,
+  canvasScale = 1,
 ): { spec: ArcgisPointIconLayerSpec | null; iconsReady: boolean; iconSize: number } {
   const spec = buildArcgisPointIconLayerSpec(drawingInfo, layerSafeId)
   if (!spec) return { spec: null, iconsReady: false, iconSize: 1 }
   const iconsReady = ensureArcgisPointIconImages(map, spec, onIconsLoaded)
-  const iconSize = spec.iconSize * developEliteMapLibrePointIconScale(layerKey, mapZoom)
+  const iconSize = spec.iconSize * developEliteMapLibrePointIconScale(layerKey, mapZoom, canvasScale)
   return { spec, iconsReady, iconSize }
+}
+
+/** esriSMS / circle markers on the map canvas — AgroLocation only; legend unchanged. */
+export function developEliteMapLibreAgriLocationCirclePaint(
+  drawingInfo: Record<string, unknown> | null | undefined,
+  fallback: { color: string; stroke: string; radius: number },
+  map: MaplibreMap,
+): Record<string, unknown> {
+  const symScale = DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE * developEliteMapLibreMapCanvasPointScale(map)
+  const paint = developEliteMapLibrePointCirclePaint(drawingInfo, fallback)
+  return scaleMapLibreCircleRadiusPaint(paint, symScale)
 }
 
 export function developEliteMapLibrePointIconLayout(

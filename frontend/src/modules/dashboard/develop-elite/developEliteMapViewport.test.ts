@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEVELOP_ELITE_GRID_MAP_DEFAULT_VIEW,
   DEVELOP_ELITE_MAP_DEFAULT_VIEW,
   DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D,
   DEVELOP_ELITE_PORTFOLIO_MAX_ZOOM,
   isDevelopEliteMapPortfolio3dActive,
+  resolveDevelopEliteMapDefaultView,
   resolveDevelopElitePortfolioBounds,
 } from './developEliteMapViewport'
 
@@ -20,6 +22,9 @@ describe('developEliteMapViewport', () => {
     expect(DEVELOP_ELITE_MAP_DEFAULT_VIEW.zoom).toBe(1.9)
     expect(DEVELOP_ELITE_MAP_DEFAULT_VIEW.center).toEqual([2.5, 17.5])
     expect(DEVELOP_ELITE_MAP_DEFAULT_VIEW.pitch).toBe(0)
+    expect(DEVELOP_ELITE_GRID_MAP_DEFAULT_VIEW.zoom).toBe(2)
+    expect(DEVELOP_ELITE_GRID_MAP_DEFAULT_VIEW.center).toEqual([2.5, 17.5])
+    expect(resolveDevelopEliteMapDefaultView()).toEqual(DEVELOP_ELITE_GRID_MAP_DEFAULT_VIEW)
   })
 
   it('does not enable 3D Topographic on browser refresh by default', () => {

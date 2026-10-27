@@ -4,6 +4,10 @@ import { isLeafletSketchInteractionLocked } from '@/modules/gis/editing/leafletM
 
 const INTEL_PICK_IGNORE_SELECTOR = [
   '.develop-elite-map__insight-panel',
+  '.develop-elite-map__panel',
+  '.develop-elite-map__map-chrome',
+  '.develop-elite-map__tools',
+  '.develop-elite-map__tool',
   '.develop-elite-map__insight-tools',
   '.develop-elite-map__insight-btn',
   '.develop-elite-map__legend-rail',

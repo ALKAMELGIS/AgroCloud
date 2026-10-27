@@ -8,6 +8,8 @@ import {
   mapboxGlStyleForEntry,
   resolveBasemapId,
 } from '@/modules/gis/map/basemapCatalog'
+import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
+import { listDevelopEliteBasemapEntries } from '@/modules/gis/map/BasemapGallery'
 import {
   agroCloudMapboxTransformRequest,
   cancelAgroCloudTerrainSync,
@@ -16,7 +18,6 @@ import {
 import {
   AGRO_CLOUD_MAP_MAX_PITCH,
   bindAgroCloudMapGoogleEarthMouseHandlers,
-  bindAgroCloudMapViewportTileWarmup,
 } from '@/modules/gis/map/agroCloudMapNavigation'
 import {
   DEVELOP_ELITE_ORBIT_SENSITIVITY,
@@ -24,13 +25,14 @@ import {
 } from './developEliteMapLibreOrbit'
 import {
   applyDevelopEliteMapLibrePerformanceTuning,
+  bindDevelopEliteMapLibreGestureTileWarmup,
   DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS,
-  DEVELOP_ELITE_MAPLIBRE_WHEEL_ZOOM_RATE,
 } from './developEliteMapLibrePerformance'
 import { ensureRasterStyleMaxNativeZoom } from '@/modules/gis/layers/raster/rasterTileZoom'
 import {
-  DEVELOP_ELITE_MAP_DEFAULT_VIEW,
+  resolveDevelopEliteMapDefaultView,
   DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D,
+  DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY,
   DEVELOP_ELITE_MAP_MIN_ZOOM,
   DEVELOP_ELITE_MAP_PORTFOLIO_GLOBE_PRESENTATION,
 } from './developEliteMapViewport'
@@ -47,10 +49,9 @@ import {
   restoreDevelopElitePortfolioGlobeBasemap,
   syncDevelopEliteMapLibreViewportEnvironment,
 } from './developEliteMapLibreGlobeBasemap'
-import {
-  bindSiMapboxGlobeCanvasBoot,
-  nudgeSiMapboxGlobeCanvas,
-} from '@/modules/gis/map/siGlobeCockpit'
+import { developEliteMapLibreTrySwapRasterBasemap } from './developEliteMapLibreRasterBasemapSwap'
+import { bindSiMapboxGlobeCanvasBoot } from '@/modules/gis/map/siGlobeCockpit'
+import { nudgeDevelopEliteMapLibreCanvas } from './developEliteMapLibreCanvasNudge'
 import {
   applyDevelopEliteMapSpaceEnvironment,
   bindDevelopEliteMapSpaceEnvironment,
@@ -61,19 +62,27 @@ type Props = {
   shellRef: React.RefObject<HTMLDivElement | null>
 }
 
+const developEliteMapStyleCache = new Map<string, StyleSpecification>()
+
 function resolveDevelopEliteMapStyle(basemapId: string): StyleSpecification {
-  const catalog = buildBasemapCatalog('')
   const resolved = resolveBasemapId(basemapId)
+  const cached = developEliteMapStyleCache.get(resolved)
+  if (cached) return cached
+
+  const catalog = buildBasemapCatalog(getMapboxAccessToken())
   const entry =
     catalogEntryById(catalog, resolved) ?? catalogEntryById(catalog, DEFAULT_BASEMAP_ID)
   const style = entry ? mapboxGlStyleForEntry(entry) : mapboxGlStyleForEntry(catalog[0]!)
   const raw = typeof style === 'string' ? JSON.parse(style) : style
-  return ensureRasterStyleMaxNativeZoom(raw as Record<string, unknown>) as StyleSpecification
+  const normalized = ensureRasterStyleMaxNativeZoom(raw as Record<string, unknown>) as StyleSpecification
+  developEliteMapStyleCache.set(resolved, normalized)
+  return normalized
 }
 
 export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const { mapRef, registerMap, viewMode3d, setViewMode3d } = useDevelopEliteMapLibre()
+  const { mapRef, mapReady, registerMap, viewMode3d, setViewMode3d } = useDevelopEliteMapLibre()
+  const appliedBasemapRef = useRef<string | null>(null)
   const [mapInstance, setMapInstance] = useState<MaplibreMap | null>(null)
   const flatBasemapId = resolveBasemapId(basemapId)
   const basemapRef = useRef(flatBasemapId)
@@ -91,8 +100,8 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
     basemapId: flatBasemapId,
     viewMode3d,
     setViewMode3d,
-    /** Develop Elite portfolio: always globe — no Mercator flat fallback at field zoom. */
-    forceGlobeProjection: true,
+    lockMercatorProjection: DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY,
+    forceGlobeProjection: false,
     portfolioGlobeShell3d: DEVELOP_ELITE_MAP_PORTFOLIO_GLOBE_PRESENTATION,
     terrainLayerEnabled: viewMode3d,
     terrainExplicitToolbarGate: true,
@@ -133,15 +142,30 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
 
   const applyStyle = useCallback(
     (map: MaplibreMap, id: string) => {
+      const resolved = resolveBasemapId(id)
+      if (appliedBasemapRef.current === resolved) return
+      appliedBasemapRef.current = resolved
       cancelAgroCloudTerrainSync(map as never)
-      const onStyleReady = () => {
-        map.off('style.load', onStyleReady)
-        restoreGlobeBasemap(map)
+      applyDevelopEliteMapLibrePerformanceTuning(map)
+
+      const nextStyle = resolveDevelopEliteMapStyle(resolved)
+      if (developEliteMapLibreTrySwapRasterBasemap(map, nextStyle)) {
+        nudgeDevelopEliteMapLibreCanvas(map, containerRef.current, viewportEnvOpts())
+        return
       }
-      map.on('style.load', onStyleReady)
-      map.setStyle(resolveDevelopEliteMapStyle(id))
+
+      const onStyleReady = () => {
+        applyDevelopEliteMapLibrePerformanceTuning(map)
+        restoreGlobeBasemap(map)
+        nudgeDevelopEliteMapLibreCanvas(map, containerRef.current, viewportEnvOpts())
+        if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
+          applyDevelopEliteMapSpaceEnvironment(map, shellRef.current)
+        }
+      }
+      map.once('style.load', onStyleReady)
+      map.setStyle(nextStyle, { diff: false })
     },
-    [restoreGlobeBasemap],
+    [restoreGlobeBasemap, shellRef, viewportEnvOpts],
   )
 
   useEffect(() => {
@@ -150,19 +174,24 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
 
     ensureDevelopEliteLayerLiveMaplibreProtocol()
 
+    const initialView = resolveDevelopEliteMapDefaultView()
     const map = new maplibregl.Map({
       container: el,
-      canvasContextAttributes: { alpha: true, antialias: true },
+      canvasContextAttributes: {
+        alpha: !DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY,
+        antialias: false,
+        desynchronized: !DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY,
+        powerPreference: 'high-performance',
+      },
       style: resolveDevelopEliteMapStyle(basemapRef.current),
-      center: [
-        DEVELOP_ELITE_MAP_DEFAULT_VIEW.center[1],
-        DEVELOP_ELITE_MAP_DEFAULT_VIEW.center[0],
-      ],
-      zoom: DEVELOP_ELITE_MAP_DEFAULT_VIEW.zoom,
-      pitch: DEVELOP_ELITE_MAP_DEFAULT_VIEW.pitch,
-      bearing: DEVELOP_ELITE_MAP_DEFAULT_VIEW.bearing,
+      center: [initialView.center[1], initialView.center[0]],
+      zoom: initialView.zoom,
+      pitch: initialView.pitch,
+      bearing: initialView.bearing,
       maxPitch: AGRO_CLOUD_MAP_MAX_PITCH,
-      projection: { type: 'globe' },
+      projection: DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY
+        ? { type: 'mercator' }
+        : { type: 'globe' },
       attributionControl: false,
       fadeDuration: 0,
       dragRotate: false,
@@ -188,6 +217,7 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       registerMap(map)
       setMapInstance(map)
     }
+    appliedBasemapRef.current = basemapRef.current
     if (map.loaded()) markMapReady()
     else map.once('load', markMapReady)
     applyDevelopEliteMapLibrePerformanceTuning(map)
@@ -196,35 +226,41 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       basemapId: basemapRef.current,
       viewMode3d: DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D,
     })
-    const unbindGlobeCanvasBoot = bindSiMapboxGlobeCanvasBoot(() => map, () => el)
-    const unbindSpaceEnvironment = bindDevelopEliteMapSpaceEnvironment(map, shellRef.current)
+    const unbindGlobeCanvasBoot = DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY
+      ? () => {}
+      : bindSiMapboxGlobeCanvasBoot(() => map, () => el)
+    const unbindSpaceEnvironment = DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY
+      ? () => {}
+      : bindDevelopEliteMapSpaceEnvironment(map, shellRef.current)
     const reapplyAfterStyle = () => {
       applyDevelopEliteMapLibrePerformanceTuning(map)
       restoreGlobeBasemap(map)
-      nudgeSiMapboxGlobeCanvas(map, el)
-      applyDevelopEliteMapSpaceEnvironment(map, shellRef.current)
+      nudgeDevelopEliteMapLibreCanvas(map, el, viewportEnvOpts())
     }
-    let viewportEnvRaf = 0
+    let viewportEnvTimer = 0
     const scheduleViewportEnvironment = () => {
-      if (viewportEnvRaf) cancelAnimationFrame(viewportEnvRaf)
-      viewportEnvRaf = requestAnimationFrame(() => {
-        viewportEnvRaf = 0
+      if (viewportEnvTimer) window.clearTimeout(viewportEnvTimer)
+      viewportEnvTimer = window.setTimeout(() => {
+        viewportEnvTimer = 0
+        if (typeof map.isMoving === 'function' && map.isMoving()) return
         syncViewportEnvironment(map)
-        applyDevelopEliteMapSpaceEnvironment(map, shellRef.current)
-      })
+      }, 420)
     }
     map.on('load', reapplyAfterStyle)
     map.on('style.load', reapplyAfterStyle)
-    map.on('zoomend', scheduleViewportEnvironment)
-    map.on('moveend', scheduleViewportEnvironment)
-    const unbindTileWarmup = bindAgroCloudMapViewportTileWarmup(map as never, {
-      performance: { ...DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS },
-      repaintOnInteractionEnd: false,
-      wheelZoomRate: DEVELOP_ELITE_MAPLIBRE_WHEEL_ZOOM_RATE,
-    })
+    if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
+      map.on('zoomend', scheduleViewportEnvironment)
+      map.on('moveend', scheduleViewportEnvironment)
+    }
+    const unbindTileWarmup = bindDevelopEliteMapLibreGestureTileWarmup(map)
 
+    let canvasResizeTimer = 0
     const ro = new ResizeObserver(() => {
-      requestAnimationFrame(() => map.resize())
+      if (canvasResizeTimer) window.clearTimeout(canvasResizeTimer)
+      canvasResizeTimer = window.setTimeout(() => {
+        canvasResizeTimer = 0
+        requestAnimationFrame(() => map.resize())
+      }, 100)
     })
     ro.observe(el)
     if (shellRef.current) ro.observe(shellRef.current)
@@ -233,9 +269,12 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       map.off('load', markMapReady)
       map.off('load', reapplyAfterStyle)
       map.off('style.load', reapplyAfterStyle)
-      if (viewportEnvRaf) cancelAnimationFrame(viewportEnvRaf)
-      map.off('zoomend', scheduleViewportEnvironment)
-      map.off('moveend', scheduleViewportEnvironment)
+      if (viewportEnvTimer) window.clearTimeout(viewportEnvTimer)
+      if (canvasResizeTimer) window.clearTimeout(canvasResizeTimer)
+      if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
+        map.off('zoomend', scheduleViewportEnvironment)
+        map.off('moveend', scheduleViewportEnvironment)
+      }
       unbindEarthMouse()
       unbindTileWarmup()
       unbindGlobeCanvasBoot()
@@ -249,9 +288,21 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
   }, [registerMap, restoreGlobeBasemap, shellRef, syncViewportEnvironment])
 
   useEffect(() => {
+    for (const entry of listDevelopEliteBasemapEntries()) {
+      resolveDevelopEliteMapStyle(entry.id)
+    }
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    if (appliedBasemapRef.current === flatBasemapId) return
+    applyStyle(map, flatBasemapId)
+  }, [applyStyle, flatBasemapId, mapReady, mapRef])
+
+  useEffect(() => {
     if (viewMode3d) prefetchTerrainApiAvailability()
   }, [viewMode3d])
-
 
   useEffect(() => {
     shellRef.current?.classList.toggle('develop-elite-map__viewport--3d', viewMode3d)
@@ -260,7 +311,7 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
 
   return (
     <div
-      className="develop-elite-map__webgl develop-elite-map__galaxy-backdrop"
+      className={`develop-elite-map__webgl${DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY ? ' develop-elite-map__webgl--field' : ' develop-elite-map__galaxy-backdrop'}`}
       ref={containerRef}
       aria-label="Develop Elite map"
     />

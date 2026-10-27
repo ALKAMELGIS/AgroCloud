@@ -8,8 +8,9 @@ import {
   setMapLibreGlobeProjection,
 } from '@/modules/gis/map/maplibreGlobeEnvironment'
 import {
+  DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY,
   DEVELOP_ELITE_MAP_DEFAULT_PORTFOLIO_PITCH,
-  DEVELOP_ELITE_MAP_DEFAULT_VIEW,
+  resolveDevelopEliteMapDefaultView,
 } from './developEliteMapViewport'
 
 export type DevelopEliteMapLibreCinematicFlyOpts = {
@@ -108,8 +109,10 @@ export function developEliteMapLibreCinematicFlyToBbox(
 
 /** Product home globe — fixed center/zoom/pitch from {@link DEVELOP_ELITE_MAP_DEFAULT_VIEW}. */
 export function developEliteMapLibreCinematicFlyToPortfolioHome(map: MaplibreMap): boolean {
-  const view = DEVELOP_ELITE_MAP_DEFAULT_VIEW
-  setMapLibreGlobeProjection(map)
+  const view = resolveDevelopEliteMapDefaultView()
+  if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
+    setMapLibreGlobeProjection(map)
+  }
   beginCinematicFlyChrome(map)
   const ok = flyToLikeGoogleEarth(map, {
     lng: view.center[1],
@@ -119,6 +122,8 @@ export function developEliteMapLibreCinematicFlyToPortfolioHome(map: MaplibreMap
     bearing: view.bearing,
     preferTilt: false,
   })
-  applyMapLibreGlobeGalaxySky(map)
+  if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
+    applyMapLibreGlobeGalaxySky(map)
+  }
   return ok
 }

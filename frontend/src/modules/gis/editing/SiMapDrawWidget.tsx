@@ -9,6 +9,7 @@ export type SiMapDrawWidgetProps = {
   onToolChange: (tool: RemoteSensingDrawingTool | null) => void
   hasClearableDrawing: boolean
   onClearDrawing: () => void
+  clearDrawingTitle?: string
   /** Deactivate drawing (turns the widget off — activation lives in the Main Toolbox). */
   onDeactivate: () => void
   /** Map-navigation tools (Pan / Move-lock) surfaced inside the Edit tools. */
@@ -34,6 +35,7 @@ export function SiMapDrawWidget({
   onToolChange,
   hasClearableDrawing,
   onClearDrawing,
+  clearDrawingTitle = 'Clear AOI sketch (analysis layers stay on map)',
   onDeactivate,
   panActive,
   panLocked,
@@ -109,7 +111,7 @@ export function SiMapDrawWidget({
         type="button"
         className="si-map-draw-widget__tool si-map-draw-widget__tool--clear"
         disabled={!hasClearableDrawing}
-        title="Clear AOI sketch (analysis layers stay on map)"
+        title={clearDrawingTitle}
         aria-label="Clear drawing"
         onClick={onClearDrawing}
       >

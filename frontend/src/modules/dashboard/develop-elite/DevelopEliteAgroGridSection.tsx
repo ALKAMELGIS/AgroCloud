@@ -8,6 +8,10 @@ import { DevelopEliteResizeHandle, DevelopEliteResizeHost } from './DevelopElite
 import { buildDefaultDevelopEliteGridLayouts, syncDevelopEliteGridLayoutsForWidgets } from './developEliteGridLayout'
 import type { DevelopEliteLayoutConfig } from './developEliteLayoutConfig'
 import type { DevelopEliteKpiCardConfig } from './developEliteDashboardConfig'
+import {
+  developEliteKpiCardIsActive,
+  developEliteStructureSideTypeIsActive,
+} from './developEliteSpatialScope'
 import type { useDevelopEliteDashboardData } from './useDevelopEliteDashboardData'
 import { DevelopEliteCountryListPanel } from './DevelopEliteCountryListPanel'
 import { DevelopEliteFarmListPanel } from './DevelopEliteFarmListPanel'
@@ -17,6 +21,54 @@ import {
 } from './developEliteCompactViewport'
 
 type DashboardData = ReturnType<typeof useDevelopEliteDashboardData>
+
+function DevelopEliteAgroGridMapWidget({ data }: { data: DashboardData }) {
+  return (
+    <DevelopEliteGridWidget className="develop-elite-grid-widget--map">
+      <DevelopEliteResizeHost className="develop-elite__map-wrap develop-elite__map-wrap--in-grid">
+        <DevelopEliteMap
+          geojson={data.mapGeoJson}
+          treesGeojson={data.mapTreesGeoJson}
+          treesDrawingInfo={data.treesDrawingInfo}
+          agriLocationGeojson={data.mapAgriLocationGeoJson}
+          agriLocationDrawingInfo={data.agriLocationDrawingInfo}
+          irrigationValvesGeojson={data.mapIrrigationValvesGeoJson}
+          irrigationValvesDrawingInfo={data.irrigationValvesDrawingInfo}
+          irrigationMainPipeGeojson={data.mapIrrigationMainPipeGeoJson}
+          irrigationMainPipeDrawingInfo={data.irrigationMainPipeDrawingInfo}
+          mapLayerVisibility={data.mapLayerVisibility}
+          mapDataLayerOrder={data.mapDataLayerOrder}
+          mapDataLayerOpacity={data.mapDataLayerOpacity}
+          dashboardConfig={data.config}
+          onMapLayerVisibilityChange={data.setMapLayerVisible}
+          onMapDataLayerOrderChange={data.setMapDataLayerOrder}
+          onMapDataLayerOpacityChange={data.setMapDataLayerOpacity}
+          worldCountriesGeojson={data.mapWorldCountriesGeoJson}
+          worldCountriesPortfolioExtentGeojson={data.mapWorldCountriesPortfolioExtentGeoJson}
+          worldCountriesDrawingInfo={data.worldCountriesDrawingInfo}
+          basemapId={data.config.basemapId}
+          highlightFieldKey={data.mapFieldHighlightKey}
+          mapFlyToRequest={data.mapFlyToRequest}
+          mapFlyToLngLat={data.mapFlyToLngLat}
+          mapTableIdentifyRequest={data.mapTableIdentifyRequest}
+          mapCountryFlyRequest={data.mapCountryFlyRequest}
+          mapExtentFly={data.mapExtentFly}
+          mapPopupFieldKey={data.mapPopupFieldKey}
+          mapPopupRequest={data.mapPopupRequest}
+          cropTablePopupLink={data.cropTablePopupLink}
+          onFocusCropTableRowId={data.syncTableRowFromMapPopup}
+          drawingInfo={data.structuresDrawingInfo}
+          countryLabels={data.countryLabels}
+          worldCountryDomain={data.worldCountryDomain}
+          countryFilter={data.filters.country}
+          onBasemapChange={id => data.patchConfig({ basemapId: id })}
+          onSelectFieldKey={key => (key ? data.focusFarmOnMap(key) : data.selectFarm(null))}
+          onViewportChange={data.setMapView}
+        />
+      </DevelopEliteResizeHost>
+    </DevelopEliteGridWidget>
+  )
+}
 
 type Props = {
   layout: DevelopEliteLayoutConfig
@@ -105,93 +157,28 @@ export function DevelopEliteAgroGridSection({
     ],
   )
 
-  const mapWidget = useMemo(
-    () => (
-      <DevelopEliteGridWidget className="develop-elite-grid-widget--map">
-        <DevelopEliteResizeHost className="develop-elite__map-wrap develop-elite__map-wrap--in-grid">
-          <DevelopEliteMap
-            geojson={data.mapGeoJson}
-            treesGeojson={data.mapTreesGeoJson}
-            treesDrawingInfo={data.treesDrawingInfo}
-            agriLocationGeojson={data.mapAgriLocationGeoJson}
-            agriLocationDrawingInfo={data.agriLocationDrawingInfo}
-            irrigationValvesGeojson={data.mapIrrigationValvesGeoJson}
-            irrigationValvesDrawingInfo={data.irrigationValvesDrawingInfo}
-            irrigationMainPipeGeojson={data.mapIrrigationMainPipeGeoJson}
-            irrigationMainPipeDrawingInfo={data.irrigationMainPipeDrawingInfo}
-            mapLayerVisibility={data.mapLayerVisibility}
-            mapDataLayerOrder={data.mapDataLayerOrder}
-            mapDataLayerOpacity={data.mapDataLayerOpacity}
-            dashboardConfig={data.config}
-            onMapLayerVisibilityChange={data.setMapLayerVisible}
-            onMapDataLayerOrderChange={data.setMapDataLayerOrder}
-            onMapDataLayerOpacityChange={data.setMapDataLayerOpacity}
-            worldCountriesGeojson={data.mapWorldCountriesGeoJson}
-            worldCountriesPortfolioExtentGeojson={data.mapWorldCountriesPortfolioExtentGeoJson}
-            worldCountriesDrawingInfo={data.worldCountriesDrawingInfo}
-            basemapId={data.config.basemapId}
-            highlightFieldKey={data.mapFieldHighlightKey}
-            mapFlyToRequest={data.mapFlyToRequest}
-            mapFlyToLngLat={data.mapFlyToLngLat}
-            mapTableIdentifyRequest={data.mapTableIdentifyRequest}
-            mapCountryFlyRequest={data.mapCountryFlyRequest}
-            mapPopupFieldKey={data.mapPopupFieldKey}
-            mapPopupRequest={data.mapPopupRequest}
-            cropTablePopupLink={data.cropTablePopupLink}
-            onFocusCropTableRowId={data.syncTableRowFromMapPopup}
-            drawingInfo={data.structuresDrawingInfo}
-            countryLabels={data.countryLabels}
-            worldCountryDomain={data.worldCountryDomain}
-            countryFilter={data.filters.country}
-            onBasemapChange={id => data.patchConfig({ basemapId: id })}
-            onSelectFieldKey={key => (key ? data.focusFarmOnMap(key) : data.selectFarm(null))}
-            onViewportChange={data.setMapView}
-          />
-        </DevelopEliteResizeHost>
-      </DevelopEliteGridWidget>
-    ),
-    [
-      data.mapGeoJson,
-      data.mapTreesGeoJson,
-      data.treesDrawingInfo,
-      data.mapAgriLocationGeoJson,
-      data.agriLocationDrawingInfo,
-      data.mapIrrigationValvesGeoJson,
-      data.irrigationValvesDrawingInfo,
-      data.mapIrrigationMainPipeGeoJson,
-      data.irrigationMainPipeDrawingInfo,
-      data.mapLayerVisibility,
-      data.mapDataLayerOrder,
-      data.setMapLayerVisible,
-      data.setMapDataLayerOrder,
-      data.mapWorldCountriesGeoJson,
-      data.mapWorldCountriesPortfolioExtentGeoJson,
-      data.worldCountriesDrawingInfo,
-      data.config.basemapId,
-      data.mapFieldHighlightKey,
-      data.mapFlyToRequest,
-      data.mapFlyToLngLat,
-      data.mapTableIdentifyRequest,
-      data.mapCountryFlyRequest,
-      data.mapPopupFieldKey,
-      data.mapPopupRequest,
-      data.cropTablePopupLink,
-      data.syncTableRowFromMapPopup,
-      data.structuresDrawingInfo,
-      data.countryLabels,
-      data.worldCountryDomain,
-      data.filters.country,
-      data.patchConfig,
-      data.selectFarm,
-      data.setMapView,
-    ],
-  )
+  const mapScopedKpiTitle = data.mapKpisLinkedToView
+    ? 'Counts reflect the visible map extent · click to fly'
+    : 'Filter dashboard and fly to map extent'
 
   const widgets = useMemo(() => {
+    const mapScopedClass = data.mapKpisLinkedToView ? ' develop-elite__kpi-card--map-scoped' : ''
     const map: Record<string, ReactNode> = {
       'kpi-hero-zone': (
         <DevelopEliteGridWidget className="develop-elite-grid-widget--kpi">
-          <article className="develop-elite__kpi-card develop-elite__kpi-card--hero develop-elite__kpi-card--hero-only develop-elite-resize-host">
+          <article
+            className={`develop-elite__kpi-card develop-elite__kpi-card--hero develop-elite__kpi-card--hero-only develop-elite__kpi-card--actionable${mapScopedClass} develop-elite-resize-host`}
+            role="button"
+            tabIndex={0}
+            title={data.mapKpisLinkedToView ? 'Zone area in map view · click to fly' : 'Fly to zone extent on map'}
+            onClick={() => data.flyToHeroZoneLayer()}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                data.flyToHeroZoneLayer()
+              }
+            }}
+          >
             <span className="develop-elite__kpi-title develop-elite__kpi-title--area">Zone area (ha)</span>
             <div className="develop-elite__kpi-metric develop-elite__kpi-metric--hero">
               <i className="fa-solid fa-draw-polygon develop-elite__kpi-icon develop-elite__kpi-icon--hero" aria-hidden />
@@ -204,7 +191,21 @@ export function DevelopEliteAgroGridSection({
       ),
       'kpi-hero': (
         <DevelopEliteGridWidget className="develop-elite-grid-widget--kpi">
-          <article className="develop-elite__kpi-card develop-elite__kpi-card--hero develop-elite__kpi-card--hero-only develop-elite-resize-host">
+          <article
+            className={`develop-elite__kpi-card develop-elite__kpi-card--hero develop-elite__kpi-card--hero-only develop-elite__kpi-card--actionable${mapScopedClass} develop-elite-resize-host`}
+            role="button"
+            tabIndex={0}
+            title={
+              data.mapKpisLinkedToView ? 'Cultivated area in map view · click to fly' : 'Fly to cultivated area on map'
+            }
+            onClick={() => data.flyToHeroCultivatedArea()}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                data.flyToHeroCultivatedArea()
+              }
+            }}
+          >
             <span className="develop-elite__kpi-title develop-elite__kpi-title--area">Cultivated Area (HA)</span>
             <div className="develop-elite__kpi-metric develop-elite__kpi-metric--hero">
               <i className="fa-solid fa-leaf develop-elite__kpi-icon develop-elite__kpi-icon--hero" aria-hidden />
@@ -268,21 +269,57 @@ export function DevelopEliteAgroGridSection({
       structures: (
         <DevelopEliteGridWidget className="develop-elite-grid-widget--structures">
           <DevelopEliteResizeHost className="develop-elite__structure-stack develop-elite__structure-stack--in-grid" aria-label="Structure counts">
-            <DevelopEliteResizeHost className="develop-elite__structure-box develop-elite__structure-box--glasshouse">
+            <DevelopEliteResizeHost
+              className={`develop-elite__structure-box develop-elite__structure-box--glasshouse develop-elite__structure-box--actionable${developEliteStructureSideTypeIsActive('glasshouse', data.filters) ? ' develop-elite__structure-box--active' : ''}`}
+              role="button"
+              tabIndex={0}
+              title="Filter dashboard and fly to glasshouse structures"
+              onClick={() => data.selectStructureSideType('glasshouse')}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  data.selectStructureSideType('glasshouse')
+                }
+              }}
+            >
               <span className="develop-elite__structure-label">Glasshouse</span>
               <div className="develop-elite__structure-metric">
                 <i className="fa-solid fa-house develop-elite__structure-icon" aria-hidden />
                 <strong>{data.sideCounts.glasshouse}</strong>
               </div>
             </DevelopEliteResizeHost>
-            <DevelopEliteResizeHost className="develop-elite__structure-box develop-elite__structure-box--nethouse">
+            <DevelopEliteResizeHost
+              className={`develop-elite__structure-box develop-elite__structure-box--nethouse develop-elite__structure-box--actionable${developEliteStructureSideTypeIsActive('nethouse', data.filters) ? ' develop-elite__structure-box--active' : ''}`}
+              role="button"
+              tabIndex={0}
+              title="Filter dashboard and fly to nethouse structures"
+              onClick={() => data.selectStructureSideType('nethouse')}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  data.selectStructureSideType('nethouse')
+                }
+              }}
+            >
               <span className="develop-elite__structure-label">Nethouse</span>
               <div className="develop-elite__structure-metric">
                 <i className="fa-solid fa-house develop-elite__structure-icon" aria-hidden />
                 <strong>{data.sideCounts.nethouse}</strong>
               </div>
             </DevelopEliteResizeHost>
-            <div className="develop-elite__structure-box develop-elite__structure-box--greenhouse">
+            <div
+              className={`develop-elite__structure-box develop-elite__structure-box--greenhouse develop-elite__structure-box--actionable${developEliteStructureSideTypeIsActive('greenhouse', data.filters) ? ' develop-elite__structure-box--active' : ''}`}
+              role="button"
+              tabIndex={0}
+              title="Filter dashboard and fly to greenhouse structures"
+              onClick={() => data.selectStructureSideType('greenhouse')}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  data.selectStructureSideType('greenhouse')
+                }
+              }}
+            >
               <span className="develop-elite__structure-label">Greenhouse</span>
               <div className="develop-elite__structure-metric">
                 <i className="fa-solid fa-house develop-elite__structure-icon" aria-hidden />
@@ -292,7 +329,7 @@ export function DevelopEliteAgroGridSection({
           </DevelopEliteResizeHost>
         </DevelopEliteGridWidget>
       ),
-      map: mapWidget,
+      map: <DevelopEliteAgroGridMapWidget data={data} />,
       'chart-pie': (
         <DevelopEliteGridWidget className="develop-elite-grid-widget--chart">
           <DevelopEliteCharts {...chartProps} part="pie" />
@@ -314,7 +351,17 @@ export function DevelopEliteAgroGridSection({
       map[`kpi-${card.id}`] = (
         <DevelopEliteGridWidget key={card.id} className="develop-elite-grid-widget--kpi">
           <article
-            className={`develop-elite__kpi-card develop-elite__kpi-card--${card.id} develop-elite-resize-host`}
+            className={`develop-elite__kpi-card develop-elite__kpi-card--${card.id} develop-elite__kpi-card--actionable${developEliteKpiCardIsActive(card, data.filters) ? ' develop-elite__kpi-card--active' : ''}${mapScopedClass} develop-elite-resize-host`}
+            role="button"
+            tabIndex={0}
+            title={mapScopedKpiTitle}
+            onClick={() => data.activateKpiCard(card.id)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                data.activateKpiCard(card.id)
+              }
+            }}
           >
             <span className="develop-elite__kpi-title">{card.title}</span>
             <div className="develop-elite__kpi-metric">
@@ -333,12 +380,20 @@ export function DevelopEliteAgroGridSection({
   }, [
     chartProps,
     countrySearch,
+    data,
     data.farmList,
     data.filters.country,
     data.filters.locationSearch,
     data.filters.selectedFieldKey,
     data.filters.zoneId,
     data.kpis,
+    data.mapCountryFlyRequest,
+    data.mapFieldHighlightKey,
+    data.mapFlyToLngLat,
+    data.mapFlyToRequest,
+    data.mapPopupFieldKey,
+    data.mapPopupRequest,
+    data.mapTableIdentifyRequest,
     data.patchConfig,
     data.selectCountry,
     data.selectFarm,
@@ -347,7 +402,6 @@ export function DevelopEliteAgroGridSection({
     data.sideCounts,
     filteredCountries,
     formatHeroArea,
-    mapWidget,
     commitLayoutPatch,
     nudgeLayout,
     persistLayout,

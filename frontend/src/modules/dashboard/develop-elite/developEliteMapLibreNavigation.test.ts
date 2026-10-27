@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEVELOP_ELITE_MAP_DEFAULT_VIEW } from './developEliteMapViewport'
+import { resolveDevelopEliteMapDefaultView } from './developEliteMapViewport'
 import { developEliteMapLibreApplyDefaultPortfolioView } from './developEliteMapLibreNavigation'
 
 vi.mock('@/modules/gis/map/maplibreGlobeEnvironment', () => ({
@@ -12,9 +12,10 @@ describe('developEliteMapLibreApplyDefaultPortfolioView', () => {
     const easeTo = vi.fn()
     const map = { easeTo, flyTo: vi.fn(), getPitch: () => 0, getBearing: () => 0 }
     developEliteMapLibreApplyDefaultPortfolioView(map as never, { animate: false })
+    const view = resolveDevelopEliteMapDefaultView()
     expect(easeTo).toHaveBeenCalledWith({
-      center: [DEVELOP_ELITE_MAP_DEFAULT_VIEW.center[1], DEVELOP_ELITE_MAP_DEFAULT_VIEW.center[0]],
-      zoom: DEVELOP_ELITE_MAP_DEFAULT_VIEW.zoom,
+      center: [view.center[1], view.center[0]],
+      zoom: view.zoom,
       pitch: 0,
       bearing: 0,
       duration: 0,

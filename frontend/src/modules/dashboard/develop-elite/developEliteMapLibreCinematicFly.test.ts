@@ -3,7 +3,7 @@ import {
   developEliteMapLibreCinematicFlyToLngLat,
   developEliteMapLibreCinematicFlyToPortfolioHome,
 } from './developEliteMapLibreCinematicFly'
-import { DEVELOP_ELITE_MAP_DEFAULT_VIEW } from './developEliteMapViewport'
+import { resolveDevelopEliteMapDefaultView } from './developEliteMapViewport'
 
 vi.mock('@/modules/gis/map/maplibreGlobeEnvironment', () => ({
   setMapLibreGlobeProjection: vi.fn(),
@@ -63,12 +63,10 @@ describe('developEliteMapLibreCinematicFlyToPortfolioHome', () => {
 
     developEliteMapLibreCinematicFlyToPortfolioHome(map as never)
 
+    const view = resolveDevelopEliteMapDefaultView()
     const opts = flyTo.mock.calls[0][0]
-    expect(opts.center).toEqual([
-      DEVELOP_ELITE_MAP_DEFAULT_VIEW.center[1],
-      DEVELOP_ELITE_MAP_DEFAULT_VIEW.center[0],
-    ])
-    expect(opts.zoom).toBe(DEVELOP_ELITE_MAP_DEFAULT_VIEW.zoom)
-    expect(opts.pitch).toBe(DEVELOP_ELITE_MAP_DEFAULT_VIEW.pitch)
+    expect(opts.center).toEqual([view.center[1], view.center[0]])
+    expect(opts.zoom).toBe(view.zoom)
+    expect(opts.pitch).toBe(view.pitch)
   })
 })
