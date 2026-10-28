@@ -264,7 +264,11 @@ export function DevelopEliteMapLibreLayerLiveEngine() {
     }
 
     sync()
+    map.on('style.load', sync)
+    map.on('load', sync)
     return () => {
+      map.off('style.load', sync)
+      map.off('load', sync)
       clearDevelopEliteLayerLiveMaplibre(map)
     }
   }, [

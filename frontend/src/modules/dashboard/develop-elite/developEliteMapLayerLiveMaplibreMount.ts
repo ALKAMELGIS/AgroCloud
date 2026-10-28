@@ -71,6 +71,29 @@ function lngLatBoxToImageCoords(box: [number, number, number, number]): [
   return [[w, n], [e, n], [e, s], [w, s]]
 }
 
+/** First vector overlay layer when present — Layer Live rasters sit just below data overlays. */
+const DE_VECTOR_OVERLAY_ANCHOR_LAYERS = [
+  'de-world-countries-line',
+  'de-agro-structures-fill',
+  'de-trees-circle',
+  'de-irrigation-valves-circle',
+  'de-agri-location-circle',
+] as const
+
+/** Keep Sentinel rasters above Esri/Mapbox basemap tiles and under vector overlays. */
+export function positionDevelopEliteLayerLiveRasters(map: MaplibreMap): void {
+  const beforeVector = DE_VECTOR_OVERLAY_ANCHOR_LAYERS.find(id => developEliteMapLibreHasLayer(map, id))
+  for (const id of DE_MAPLIBRE_LAYER_LIVE_RASTER_LAYER_IDS) {
+    if (!developEliteMapLibreHasLayer(map, id)) continue
+    try {
+      if (beforeVector) map.moveLayer(id, beforeVector)
+      else map.moveLayer(id)
+    } catch {
+      /* style swap race */
+    }
+  }
+}
+
 export function clearDevelopEliteLayerLiveMaplibre(map: MaplibreMap): void {
   try {
     if (!isDevelopEliteMapLibreStyleReady(map)) return
@@ -170,6 +193,7 @@ export function syncDevelopEliteLayerLiveMaplibre(
     imageUrl: useAoiImage && aoiBounds ? resolveDevelopEliteLayerLiveAoiImageUrl(plans[0]!.url, aoiBounds) : null,
     tileTemplate,
   }
+  positionDevelopEliteLayerLiveRasters(map)
   })
   return result
 }

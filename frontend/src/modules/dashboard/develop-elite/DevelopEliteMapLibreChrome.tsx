@@ -152,7 +152,7 @@ export function DevelopEliteMapLibreOverlays({
     const map = mapRef.current
     if (!map || !mapReady) return
     lastGestureOverlayZoomRef.current = null
-    applyOverlaySync(map, true)
+    applyOverlaySync(map, false)
   }, [applyOverlaySync, mapReady, mapRef, mapDataLayerOrder, mapLayerVisibility, viewMode3d])
 
   useEffect(() => {
@@ -162,8 +162,7 @@ export function DevelopEliteMapLibreOverlays({
     let raf = 0
     let gestureTimer = 0
     const runSync = () => {
-      if (typeof map.isMoving === 'function' && map.isMoving()) return
-      applyOverlaySync(map, true)
+      applyOverlaySync(map, false)
     }
     const scheduleSync = () => {
       if (raf) cancelAnimationFrame(raf)
@@ -186,11 +185,12 @@ export function DevelopEliteMapLibreOverlays({
       onGestureEnd()
     }
 
-    applyOverlaySync(map, true)
+    applyOverlaySync(map, false)
     map.on('style.load', runSync)
     map.on('load', runSync)
     if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
       map.on('zoomend', onGridZoomEnd)
+      map.on('moveend', onGestureEnd)
     } else {
       map.on('zoomend', onGestureEnd)
       map.on('moveend', onGestureEnd)
@@ -202,6 +202,7 @@ export function DevelopEliteMapLibreOverlays({
       map.off('load', runSync)
       if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
         map.off('zoomend', onGridZoomEnd)
+        map.off('moveend', onGestureEnd)
       } else {
         map.off('zoomend', onGestureEnd)
         map.off('moveend', onGestureEnd)

@@ -31,6 +31,7 @@ import {
   LAYER_IRRIGATION_MAIN_PIPE_ARROWS,
   syncDevelopEliteMainPipeArrowLayer,
 } from './developEliteMapLibreIrrigationMainPipe'
+import { positionDevelopEliteLayerLiveRasters } from './developEliteMapLayerLiveMaplibreMount'
 import {
   developEliteMapLibreHasLayer,
   developEliteMapLibreRunIfStyleReady,
@@ -653,6 +654,7 @@ export function syncDevelopEliteMapLibreOverlays(map: MaplibreMap, opts: Develop
   })
 
   applyDataLayerZOrder(map, opts.mapDataLayerOrder)
+  positionDevelopEliteLayerLiveRasters(map)
   })
 }
 
