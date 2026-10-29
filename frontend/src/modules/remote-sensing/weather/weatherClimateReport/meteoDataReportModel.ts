@@ -3,13 +3,14 @@
  * Columns and sections mirror Somaliland-RhodesGrass-MeteoDataReport layout.
  */
 import type { OpenMeteoHourlyPoint } from '../openMeteoWeather'
+import { windDirectionLabel } from '../openMeteoWeather'
 import {
   formatImageryTimePeriodLabel,
   imageryTimePeriodKey,
   type ImageryTimeAggregation,
 } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type { ClimateExportAggregation } from './weatherClimateReportTypes'
-import { climateAggregationLabel } from './weatherClimateAnalysisEngine'
+import { climateAggregationLabel, meanWindDirectionDeg } from './weatherClimateAnalysisEngine'
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
 
@@ -18,9 +19,48 @@ export const METEO_HOURLY_CHART_CAP = 800
 
 export type MeteoDiurnalPoint = { hour: number; meanTempC: number | null }
 
+/** Diurnal profile for Hourly Analysis sheet (mean of all days by hour). */
+export type MeteoDiurnalAnalysisRow = {
+  hour: number
+  meanTempC: number | null
+  meanRhPct: number | null
+  meanWindKmh: number | null
+  meanEt0MmH: number | null
+}
+
+/** One hourly observation row (Abu Dhabi Hourly Data layout). */
+export type MeteoHourlyObservation = {
+  timeIso: string
+  hour: number
+  temperatureC: number | null
+  rainfallMmH: number | null
+  et0Mm: number | null
+  waterDeficitM3Ha: number | null
+  windKmh: number | null
+  windDirectionLabel: string | null
+  sunlightWm2: number | null
+  gustKmh: number | null
+  rhPct: number | null
+}
+
+export type MeteoRainfallHourRow = {
+  timeIso: string
+  rainfallMmH: number | null
+}
+
+export type MeteoOverviewStats = {
+  daysOfRecord: number
+  highestTmaxC: number | null
+  lowestTminC: number | null
+  totalRainfallMm: number | null
+  wetHourCount: number
+}
+
 export type MeteoClimateRow = {
   period: string
   periodLabel: string
+  /** Calendar months only — number of years pooled for normals. */
+  yearsAveraged?: number | null
   tmaxC: number | null
   tminC: number | null
   tavgC: number | null
@@ -30,6 +70,9 @@ export type MeteoClimateRow = {
   waterDeficitM3Ha: number | null
   sunshineHPerDay: number | null
   daylightHPerDay: number | null
+  windDirectionLabel: string | null
+  windMeanKmh: number | null
+  sunlightWm2: number | null
   windMaxKmh: number | null
   maxGustKmh: number | null
   rhPct: number | null
@@ -74,10 +117,17 @@ export type MeteoDataReportModel = {
   monthlyNormals: MeteoClimateRow[]
   /** One row per calendar day — always present for the Data Daily sheet. */
   dailySeries: MeteoClimateRow[]
-  /** One row per hour of raw record — always present for the Data Hourly sheet. */
+  /** One row per hour of raw record — legacy climate table (charts). */
   hourlySeries: MeteoClimateRow[]
+  /** Hourly observations — Abu Dhabi Hourly Data sheet. */
+  hourlyObservations: MeteoHourlyObservation[]
   /** Mean temperature by hour of day (0–23) for the diurnal profile chart. */
   diurnalProfile: MeteoDiurnalPoint[]
+  /** Diurnal means incl. RH, wind, ET0 for Hourly Analysis. */
+  diurnalAnalysis: MeteoDiurnalAnalysisRow[]
+  /** Wet hours for Hourly Analysis rainfall table. */
+  rainfallHours: MeteoRainfallHourRow[]
+  overview: MeteoOverviewStats
   yearMatrices: MeteoYearMatrix[]
   annualSummary: MeteoAnnualSummaryRow[]
   riskRows: MeteoRiskRow[]
@@ -100,8 +150,11 @@ type DailyBundle = {
   et0Mm: number
   sunshineH: number
   daylightH: number
+  windMeanKmh: number | null
+  windDirectionDeg: number | null
   windMaxKmh: number | null
   maxGustKmh: number | null
+  sunlightWm2: number | null
   rhPct: number | null
   heat35: number
   heat40: number
@@ -217,6 +270,8 @@ export function buildMeteoDailyBundles(
       const rains = finite(rows.map(r => r.precipitationMm))
       const et0s = finite(rows.map(r => r.et0Mm))
       const winds = finite(rows.map(r => r.windSpeedKmh))
+      const windDirs = finite(rows.map(r => r.windDirectionDeg))
+      const shortwaves = finite(rows.map(r => r.shortwaveRadiationWm2))
       const rhs = finite(rows.map(r => r.humidityPct))
       const sunshineH = rows.filter(
         r => r.shortwaveRadiationWm2 != null && r.shortwaveRadiationWm2 > 120,
@@ -224,6 +279,8 @@ export function buildMeteoDailyBundles(
       const tmax = temps.length ? Math.max(...temps) : null
       const tmin = temps.length ? Math.min(...temps) : null
       const windMax = winds.length ? Math.max(...winds) : null
+      const windMean = mean(winds)
+      const meanDir = meanWindDirectionDeg(windDirs)
       const gustMax = estimatedGustKmh(windMax)
       const year = Number(date.slice(0, 4))
       const month = Number(date.slice(5, 7))
@@ -238,8 +295,11 @@ export function buildMeteoDailyBundles(
         et0Mm: sum(et0s),
         sunshineH,
         daylightH: approximateDaylightHours(lat, date),
+        windMeanKmh: windMean,
+        windDirectionDeg: meanDir,
         windMaxKmh: windMax,
         maxGustKmh: gustMax,
+        sunlightWm2: mean(shortwaves),
         rhPct: mean(rhs),
         heat35: tmax != null && tmax > 35 ? 1 : 0,
         heat40: tmax != null && tmax > 40 ? 1 : 0,
@@ -265,10 +325,14 @@ function mergeDailyToRow(
   const rain = sum(days.map(d => d.rainfallMm))
   const et0 = sum(days.map(d => d.et0Mm))
   const wind = finite(days.map(d => d.windMaxKmh))
+  const windMean = finite(days.map(d => d.windMeanKmh))
+  const windDirs = finite(days.map(d => d.windDirectionDeg))
   const gust = finite(days.map(d => d.maxGustKmh))
   const rh = finite(days.map(d => d.rhPct))
+  const sunlight = finite(days.map(d => d.sunlightWm2))
   const sunshineMean = mean(days.map(d => d.sunshineH))
   const daylightMean = mean(days.map(d => d.daylightH))
+  const meanDir = meanWindDirectionDeg(windDirs)
   // Hourly table: expose values for that hour's parent day metrics where relevant —
   // sunshine/daylight stay as daily means for context.
   if (aggregation === 'hour' && days.length === 1) {
@@ -285,6 +349,9 @@ function mergeDailyToRow(
     waterDeficitM3Ha: waterDeficitM3Ha(et0, rain),
     sunshineHPerDay: round(sunshineMean, 1),
     daylightHPerDay: round(daylightMean, 1),
+    windDirectionLabel: meanDir != null ? windDirectionLabel(meanDir) : null,
+    windMeanKmh: round(mean(windMean), 1),
+    sunlightWm2: round(mean(sunlight), 0),
     windMaxKmh: round(wind.length ? Math.max(...wind) : null, 1),
     maxGustKmh: round(gust.length ? Math.max(...gust) : null, 1),
     rhPct: round(mean(rh), 0),
@@ -304,6 +371,7 @@ function buildNormalsFromDaily(
         return {
           period: String(month).padStart(2, '0'),
           periodLabel: label,
+          yearsAveraged: 0,
           tmaxC: null,
           tminC: null,
           tavgC: null,
@@ -312,6 +380,9 @@ function buildNormalsFromDaily(
           waterDeficitM3Ha: null,
           sunshineHPerDay: null,
           daylightHPerDay: null,
+          windDirectionLabel: null,
+          windMeanKmh: null,
+          sunlightWm2: null,
           windMaxKmh: null,
           maxGustKmh: null,
           rhPct: null,
@@ -325,9 +396,12 @@ function buildNormalsFromDaily(
         byYear.set(d.year, arr)
       })
       const yearRows = [...byYear.values()].map(yd => mergeDailyToRow('', '', yd, 'month'))
+      const monthDirs = finite(days.map(d => d.windDirectionDeg))
+      const monthMeanDir = meanWindDirectionDeg(monthDirs)
       return {
         period: String(month).padStart(2, '0'),
         periodLabel: label,
+        yearsAveraged: byYear.size,
         tmaxC: round(mean(finite(yearRows.map(r => r.tmaxC))), 1),
         tminC: round(mean(finite(yearRows.map(r => r.tminC))), 1),
         tavgC: round(mean(finite(yearRows.map(r => r.tavgC))), 1),
@@ -336,6 +410,9 @@ function buildNormalsFromDaily(
         waterDeficitM3Ha: round(mean(finite(yearRows.map(r => r.waterDeficitM3Ha))), 0),
         sunshineHPerDay: round(mean(finite(yearRows.map(r => r.sunshineHPerDay))), 1),
         daylightHPerDay: round(mean(finite(yearRows.map(r => r.daylightHPerDay))), 1),
+        windDirectionLabel: monthMeanDir != null ? windDirectionLabel(monthMeanDir) : null,
+        windMeanKmh: round(mean(finite(yearRows.map(r => r.windMeanKmh))), 1),
+        sunlightWm2: round(mean(finite(yearRows.map(r => r.sunlightWm2))), 0),
         windMaxKmh: round(mean(finite(yearRows.map(r => r.windMaxKmh))), 1),
         maxGustKmh: round(mean(finite(yearRows.map(r => r.maxGustKmh))), 1),
         rhPct: round(mean(finite(yearRows.map(r => r.rhPct))), 0),
@@ -371,6 +448,7 @@ function buildHourlyNormals(points: OpenMeteoHourlyPoint[], daily: DailyBundle[]
       const et0 = p.et0Mm
       const wind = p.windSpeedKmh
       const gust = estimatedGustKmh(wind)
+      const dir = p.windDirectionDeg
       return {
         period: key,
         periodLabel: periodLabelForKey(key, 'hour'),
@@ -382,6 +460,9 @@ function buildHourlyNormals(points: OpenMeteoHourlyPoint[], daily: DailyBundle[]
         waterDeficitM3Ha: waterDeficitM3Ha(et0, rain),
         sunshineHPerDay: day ? round(day.sunshineH, 1) : null,
         daylightHPerDay: day ? round(day.daylightH, 1) : null,
+        windDirectionLabel: dir != null ? windDirectionLabel(dir) : null,
+        windMeanKmh: round(wind, 1),
+        sunlightWm2: round(p.shortwaveRadiationWm2, 0),
         windMaxKmh: round(wind, 1),
         maxGustKmh: gust,
         rhPct: round(p.humidityPct, 0),
@@ -402,6 +483,10 @@ function dailyBundleToRow(d: DailyBundle): MeteoClimateRow {
     waterDeficitM3Ha: waterDeficitM3Ha(d.et0Mm, d.rainfallMm),
     sunshineHPerDay: round(d.sunshineH, 1),
     daylightHPerDay: round(d.daylightH, 1),
+    windDirectionLabel:
+      d.windDirectionDeg != null ? windDirectionLabel(d.windDirectionDeg) : null,
+    windMeanKmh: round(d.windMeanKmh, 1),
+    sunlightWm2: round(d.sunlightWm2, 0),
     windMaxKmh: round(d.windMaxKmh, 1),
     maxGustKmh: round(d.maxGustKmh, 1),
     rhPct: round(d.rhPct, 0),
@@ -422,6 +507,116 @@ function buildDiurnalProfile(points: OpenMeteoHourlyPoint[]): MeteoDiurnalPoint[
     hour,
     meanTempC: round(mean(byHour.get(hour) ?? []), 1),
   }))
+}
+
+function buildDiurnalAnalysis(points: OpenMeteoHourlyPoint[]): MeteoDiurnalAnalysisRow[] {
+  const temps = new Map<number, number[]>()
+  const rhs = new Map<number, number[]>()
+  const winds = new Map<number, number[]>()
+  const et0s = new Map<number, number[]>()
+  points.forEach(p => {
+    const hour = Number(p.time.slice(11, 13))
+    if (!Number.isFinite(hour)) return
+    if (p.temperatureC != null && Number.isFinite(p.temperatureC)) {
+      const arr = temps.get(hour) ?? []
+      arr.push(p.temperatureC)
+      temps.set(hour, arr)
+    }
+    if (p.humidityPct != null && Number.isFinite(p.humidityPct)) {
+      const arr = rhs.get(hour) ?? []
+      arr.push(p.humidityPct)
+      rhs.set(hour, arr)
+    }
+    if (p.windSpeedKmh != null && Number.isFinite(p.windSpeedKmh)) {
+      const arr = winds.get(hour) ?? []
+      arr.push(p.windSpeedKmh)
+      winds.set(hour, arr)
+    }
+    if (p.et0Mm != null && Number.isFinite(p.et0Mm)) {
+      const arr = et0s.get(hour) ?? []
+      arr.push(p.et0Mm)
+      et0s.set(hour, arr)
+    }
+  })
+  return Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    meanTempC: round(mean(temps.get(hour) ?? []), 1),
+    meanRhPct: round(mean(rhs.get(hour) ?? []), 0),
+    meanWindKmh: round(mean(winds.get(hour) ?? []), 1),
+    meanEt0MmH: round(mean(et0s.get(hour) ?? []), 3),
+  }))
+}
+
+function buildHourlyObservations(points: OpenMeteoHourlyPoint[]): MeteoHourlyObservation[] {
+  return points
+    .slice()
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .map(p => {
+      const hour = Number(p.time.slice(11, 13))
+      const rain = p.precipitationMm
+      const et0 = p.et0Mm
+      const wind = p.windSpeedKmh
+      return {
+        timeIso: p.time,
+        hour: Number.isFinite(hour) ? hour : 0,
+        temperatureC: round(p.temperatureC, 1),
+        rainfallMmH: round(rain, 2),
+        et0Mm: round(et0, 3),
+        waterDeficitM3Ha: waterDeficitM3Ha(et0, rain),
+        windKmh: round(wind, 1),
+        windDirectionLabel:
+          p.windDirectionDeg != null ? windDirectionLabel(p.windDirectionDeg) : null,
+        sunlightWm2: round(p.shortwaveRadiationWm2, 0),
+        gustKmh: estimatedGustKmh(wind),
+        rhPct: round(p.humidityPct, 0),
+      }
+    })
+}
+
+function buildRainfallHours(points: OpenMeteoHourlyPoint[]): MeteoRainfallHourRow[] {
+  return buildHourlyObservations(points)
+    .filter(r => (r.rainfallMmH ?? 0) > 0)
+    .map(r => ({ timeIso: r.timeIso, rainfallMmH: r.rainfallMmH }))
+}
+
+function buildOverviewStats(daily: DailyBundle[], hourly: OpenMeteoHourlyPoint[]): MeteoOverviewStats {
+  const tmax = finite(daily.map(d => d.tmaxC))
+  const tmin = finite(daily.map(d => d.tminC))
+  const wetHourCount = hourly.filter(p => (p.precipitationMm ?? 0) > 0).length
+  return {
+    daysOfRecord: daily.length,
+    highestTmaxC: tmax.length ? round(Math.max(...tmax), 1) : null,
+    lowestTminC: tmin.length ? round(Math.min(...tmin), 1) : null,
+    totalRainfallMm: round(sum(daily.map(d => d.rainfallMm)), 1),
+    wetHourCount,
+  }
+}
+
+function formatReportPeriod(start: string, end: string): string {
+  const fmt = (iso: string) => {
+    const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`)
+    if (Number.isNaN(d.getTime())) return iso
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+  }
+  return `${fmt(start)} – ${fmt(end)}`
+}
+
+export function formatMeteoReportLocationLine(
+  aoiName: string,
+  aoiLocation: string,
+  lat: number,
+  lng: number,
+  aggregationLabel?: string,
+): string {
+  const coords = formatDms(lat, lng)
+  const place =
+    aoiLocation && aoiLocation !== aoiName ? `${aoiName}, ${aoiLocation}` : aoiName
+  const agg = aggregationLabel ? `  ·  ${aggregationLabel}` : ''
+  return `${place}  ·  ${coords}${agg}`
+}
+
+export function formatMeteoReportSourceLine(analysisStart: string, analysisEnd: string): string {
+  return `Source: Open-Meteo.com (https://open-meteo.com/), ERA5 reanalysis archive · Period ${formatReportPeriod(analysisStart, analysisEnd)}`
 }
 
 function buildYearMatrices(daily: DailyBundle[]): MeteoYearMatrix[] {
@@ -667,15 +862,19 @@ export function buildMeteoDataReportModel(input: BuildMeteoDataReportInput): Met
       ? buildHourlyNormals(input.hourlyRecords, daily)
       : buildNormalsFromDaily(daily, aggregation)
 
-  const locationHint =
-    input.aoiLocation && input.aoiLocation !== input.aoiName
-      ? `${formatDms(input.lat, input.lng)} (${input.aoiLocation})`
-      : formatDms(input.lat, input.lng)
+  const locationHint = formatMeteoReportLocationLine(
+    input.aoiName,
+    input.aoiLocation,
+    input.lat,
+    input.lng,
+  )
+  const sourceLine = formatMeteoReportSourceLine(input.analysisStart, input.analysisEnd)
+  const hourlyObservations = buildHourlyObservations(input.hourlyRecords)
 
   return {
-    title: `Meteo Data Report — ${input.aoiName}`,
+    title: 'Meteorological Data Report',
     locationLine: locationHint,
-    sourceLine: `Weather data by Open-Meteo.com (https://open-meteo.com/), ERA5 archive dataset, period ${input.analysisStart}–${input.analysisEnd}, aggregation ${climateAggregationLabel(aggregation)}.`,
+    sourceLine,
     aggregation,
     aggregationLabel: climateAggregationLabel(aggregation),
     normalsTitle: normalsTitle(aggregation),
@@ -683,7 +882,11 @@ export function buildMeteoDataReportModel(input: BuildMeteoDataReportInput): Met
     monthlyNormals: buildNormalsFromDaily(daily, 'month'),
     dailySeries: daily.map(dailyBundleToRow),
     hourlySeries: buildHourlyNormals(input.hourlyRecords, daily),
+    hourlyObservations,
     diurnalProfile: buildDiurnalProfile(input.hourlyRecords),
+    diurnalAnalysis: buildDiurnalAnalysis(input.hourlyRecords),
+    rainfallHours: buildRainfallHours(input.hourlyRecords),
+    overview: buildOverviewStats(daily, input.hourlyRecords),
     yearMatrices: buildYearMatrices(daily),
     annualSummary: buildAnnualSummary(daily),
     riskRows: buildRiskRows(daily, aggregation),

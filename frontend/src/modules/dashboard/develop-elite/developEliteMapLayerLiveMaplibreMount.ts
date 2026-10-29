@@ -19,6 +19,10 @@ export const DE_MAPLIBRE_LAYER_LIVE_RASTER_LAYER_IDS = [LAYER_IMAGE, LAYER_TILES
 
 const layerLiveVisibilityBeforePause = new WeakMap<MaplibreMap, Map<string, string>>()
 
+export function clearDevelopEliteLayerLiveMaplibreInteractionPaused(map: MaplibreMap): void {
+  layerLiveVisibilityBeforePause.delete(map)
+}
+
 export function setDevelopEliteLayerLiveMaplibreInteractionPaused(
   map: MaplibreMap,
   paused: boolean,
@@ -154,6 +158,11 @@ export function syncDevelopEliteLayerLiveMaplibre(
     } else {
       map.setPaintProperty(LAYER_IMAGE, 'raster-opacity', opacity)
     }
+    try {
+      map.setLayerZoomRange(LAYER_IMAGE, 0, 24)
+    } catch {
+      /* ignore */
+    }
   } else if (developEliteMapLibreHasLayer(map, LAYER_IMAGE)) {
     map.removeLayer(LAYER_IMAGE)
     if (map.getSource(SRC_IMAGE)) map.removeSource(SRC_IMAGE)
@@ -183,6 +192,11 @@ export function syncDevelopEliteLayerLiveMaplibre(
       })
     } else {
       map.setPaintProperty(LAYER_TILES, 'raster-opacity', opacity)
+    }
+    try {
+      map.setLayerZoomRange(LAYER_TILES, 0, 24)
+    } catch {
+      /* ignore */
     }
   } else {
     if (developEliteMapLibreHasLayer(map, LAYER_TILES)) map.removeLayer(LAYER_TILES)

@@ -2,6 +2,8 @@
  * Statistical analysis + native chart specs for Weather Intelligence DOCX (selected date range only).
  */
 import type { OpenMeteoHourlyPoint } from '../openMeteoWeather'
+import { windDirectionLabel } from '../openMeteoWeather'
+import { meanWindDirectionDeg } from './weatherClimateAnalysisEngine'
 import {
   buildWeatherNativeChartSpecs,
   type DocxNativeChartSpec,
@@ -19,6 +21,9 @@ import type { WeatherClimateReportPayload, WeatherDailyRecord } from './weatherC
 export type DailyWeatherRhRich = DailyWeatherRich & {
   humidityMinPct: number | null
   humidityMaxPct: number | null
+  windSpeedKmh: number | null
+  windDirectionDeg: number | null
+  solarRadiationWm2: number | null
 }
 
 export type ClimateVariableStatRow = {
@@ -131,13 +136,18 @@ export function buildDailyRhRich(
       }
     }
     const base = buildDailyWeatherRichFromHourly(filteredHourly)
+    const dailyByDate = new Map(filterDailyToRange(dailyRecords, rangeStart, rangeEnd).map(d => [d.date, d]))
     return base.map(row => {
       const bucket = byDate.get(row.date)
       const humids = bucket?.humids ?? []
+      const src = dailyByDate.get(row.date)
       return {
         ...row,
         humidityMinPct: humids.length ? round(Math.min(...humids), 1) : null,
         humidityMaxPct: humids.length ? round(Math.max(...humids), 1) : null,
+        windSpeedKmh: src?.windSpeedKmh ?? (row.windSpeedMs != null ? round(row.windSpeedMs * 3.6, 1) : null),
+        windDirectionDeg: src?.windDirectionDeg ?? null,
+        solarRadiationWm2: src?.solarRadiationWm2 ?? null,
       }
     })
   }
@@ -152,6 +162,9 @@ export function buildDailyRhRich(
     humidityMaxPct: round(d.humidityPct, 1),
     rainfallMm: round(d.rainfallMm, 2),
     windSpeedMs: d.windSpeedKmh != null ? round(d.windSpeedKmh / 3.6, 2) : null,
+    windSpeedKmh: round(d.windSpeedKmh, 1),
+    windDirectionDeg: d.windDirectionDeg ?? null,
+    solarRadiationWm2: round(d.solarRadiationWm2, 0),
   }))
 }
 
@@ -163,10 +176,16 @@ function buildVariableStats(daily: DailyWeatherRhRich[], calendarDays: number): 
   const rhMin = finite(daily.map(d => d.humidityMinPct))
   const rhMax = finite(daily.map(d => d.humidityMaxPct))
   const rain = finite(daily.map(d => d.rainfallMm))
+  const windKmh = finite(daily.map(d => d.windSpeedKmh))
+  const windDir = finite(daily.map(d => d.windDirectionDeg))
+  const solar = finite(daily.map(d => d.solarRadiationWm2))
 
   const obsTemp = daily.filter(d => d.tempMeanC != null || d.tempMaxC != null || d.tempMinC != null).length
   const obsRh = daily.filter(d => d.humidityPct != null).length
   const obsRain = daily.filter(d => d.rainfallMm != null).length
+  const obsWind = daily.filter(d => d.windSpeedKmh != null).length
+  const obsSolar = daily.filter(d => d.solarRadiationWm2 != null).length
+  const meanDir = meanWindDirectionDeg(windDir)
 
   return [
     {
@@ -199,10 +218,44 @@ function buildVariableStats(daily: DailyWeatherRhRich[], calendarDays: number): 
       observations: String(obsRain),
       missing: String(Math.max(0, calendarDays - obsRain)),
     },
+    {
+      variable: 'Wind speed (km/h)',
+      minimum: fmtCell(windKmh.length ? Math.min(...windKmh) : null, 1),
+      maximum: fmtCell(windKmh.length ? Math.max(...windKmh) : null, 1),
+      average: fmtCell(mean(windKmh), 1),
+      total: '—',
+      stdDev: fmtCell(stdDev(windKmh), 2),
+      observations: String(obsWind),
+      missing: String(Math.max(0, calendarDays - obsWind)),
+    },
+    {
+      variable: 'Wind direction',
+      minimum: '—',
+      maximum: '—',
+      average:
+        meanDir != null
+          ? `${windDirectionLabel(meanDir)} (${Math.round(meanDir)}°)`
+          : '—',
+      total: '—',
+      stdDev: '—',
+      observations: String(windDir.length),
+      missing: String(Math.max(0, calendarDays - windDir.length)),
+    },
+    {
+      variable: 'Sunlight (mean shortwave, W/m²)',
+      minimum: fmtCell(solar.length ? Math.min(...solar) : null, 0),
+      maximum: fmtCell(solar.length ? Math.max(...solar) : null, 0),
+      average: fmtCell(mean(solar), 0),
+      total: '—',
+      stdDev: fmtCell(stdDev(solar), 1),
+      observations: String(obsSolar),
+      missing: String(Math.max(0, calendarDays - obsSolar)),
+    },
   ]
 }
 
 type MonthlyRhRow = {
+  monthKey: string
   label: string
   tempMeanC: number | null
   tempMinC: number | null
@@ -227,6 +280,7 @@ function buildMonthlyRhRows(daily: DailyWeatherRhRich[]): MonthlyRhRow[] {
   return monthly.map(m => {
     const b = buckets.get(m.monthKey)
     return {
+      monthKey: m.monthKey,
       label: m.label,
       tempMeanC: m.tempMeanC,
       tempMinC: m.tempMinC,
@@ -453,7 +507,13 @@ function buildPeriodTrendTable(
     'RH min (%)',
     'RH max (%)',
     'Rainfall (mm)',
+    'Wind (km/h)',
+    'Wind direction',
+    'Sunlight (W/m²)',
   ]
+
+  const fmtDir = (deg: number | null | undefined) =>
+    deg != null && Number.isFinite(deg) ? `${windDirectionLabel(deg)} (${Math.round(deg)}°)` : '—'
 
   if (trendResolution === 'daily') {
     const rows = daily.map(d => [
@@ -465,20 +525,46 @@ function buildPeriodTrendTable(
       fmtCell(d.humidityMinPct, 0),
       fmtCell(d.humidityMaxPct, 0),
       fmtCell(d.rainfallMm, 2),
+      fmtCell(d.windSpeedKmh, 1),
+      fmtDir(d.windDirectionDeg),
+      fmtCell(d.solarRadiationWm2, 0),
     ])
     return { headers, rows }
   }
 
-  const rows = monthlyRh.map(m => [
-    m.label,
-    fmtCell(m.tempMaxC, 1),
-    fmtCell(m.tempMeanC, 1),
-    fmtCell(m.tempMinC, 1),
-    fmtCell(m.humidityPct, 0),
-    fmtCell(m.humidityMinPct, 0),
-    fmtCell(m.humidityMaxPct, 0),
-    fmtCell(m.rainfallMm, 1),
-  ])
+  const monthWindSolar = new Map<
+    string,
+    { wind: number[]; dirs: number[]; solar: number[] }
+  >()
+  for (const d of daily) {
+    const key = d.date.slice(0, 7)
+    if (!/^\d{4}-\d{2}$/.test(key)) continue
+    if (!monthWindSolar.has(key)) monthWindSolar.set(key, { wind: [], dirs: [], solar: [] })
+    const b = monthWindSolar.get(key)!
+    if (d.windSpeedKmh != null) b.wind.push(d.windSpeedKmh)
+    if (d.windDirectionDeg != null) b.dirs.push(d.windDirectionDeg)
+    if (d.solarRadiationWm2 != null) b.solar.push(d.solarRadiationWm2)
+  }
+
+  const rows = monthlyRh.map(m => {
+    const bucket = monthWindSolar.get(m.monthKey)
+    const avgWind = bucket?.wind.length ? mean(bucket.wind) : null
+    const avgDir = bucket?.dirs.length ? meanWindDirectionDeg(bucket.dirs) : null
+    const avgSolar = bucket?.solar.length ? mean(bucket.solar) : null
+    return [
+      m.label,
+      fmtCell(m.tempMaxC, 1),
+      fmtCell(m.tempMeanC, 1),
+      fmtCell(m.tempMinC, 1),
+      fmtCell(m.humidityPct, 0),
+      fmtCell(m.humidityMinPct, 0),
+      fmtCell(m.humidityMaxPct, 0),
+      fmtCell(m.rainfallMm, 1),
+      fmtCell(avgWind, 1),
+      fmtDir(avgDir),
+      fmtCell(avgSolar, 0),
+    ]
+  })
   return { headers, rows }
 }
 

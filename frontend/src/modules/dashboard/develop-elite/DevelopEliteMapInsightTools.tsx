@@ -22,6 +22,8 @@ import { developEliteLayerLiveHasDrawnAoiClip } from './developEliteMapLayerLive
 import { SI_IMAGERY_COMMITTED_AOI_KEY } from '@/modules/remote-sensing/temporal-analysis/siImageryTimeSeriesFields'
 import { prefetchDevelopEliteImageryTimeSeriesPanel } from './developElitePrefetchImageryTimeSeries'
 import { registerDevelopEliteMapIntelPick } from './developEliteMapIntelPick'
+import { developEliteMapIntelSeedLatLng } from './developEliteMapIntelSeed'
+import { DEVELOP_ELITE_GRID_MAP_DEFAULT_VIEW } from './developEliteMapViewport'
 
 type ToolId = 'intel' | 'swipe'
 
@@ -69,6 +71,13 @@ export function DevelopEliteMapInsightProvider({
   const toggleTool = useCallback((id: ToolId) => {
     setTool(current => {
       const next = current === id ? null : id
+      if (next === 'intel') {
+        const [lat, lng] = DEVELOP_ELITE_GRID_MAP_DEFAULT_VIEW.center
+        setPointState({ lat, lng })
+        setSnapshot(null)
+        setWeatherStatus('loading')
+        setWeatherError('')
+      }
       if (current === 'intel' && next !== 'intel') {
         setPointState(null)
         setSnapshot(null)
@@ -219,9 +228,11 @@ export function DevelopEliteMapInsightWeatherPanel({ insight }: { insight: Insig
       onDoubleClick={stopInsightPanelMapEvent}
     >
       <p className="develop-elite-map__insight-panel-title">Weather</p>
-      {!insight.point ? <p>Click the map to read weather at that point.</p> : null}
-      {insight.weatherStatus === 'loading' ? <p>Loading forecast…</p> : null}
+      {insight.weatherStatus === 'loading' ? <p>Loading Open-Meteo…</p> : null}
       {insight.weatherStatus === 'error' ? <p>{insight.weatherError}</p> : null}
+      {!insight.snapshot && insight.weatherStatus !== 'loading' && insight.weatherStatus !== 'error' ? (
+        <p>Click the map to read weather at another point.</p>
+      ) : null}
       {insight.snapshot ? (
         <div className="develop-elite-map__insight-wx">
           <i className={wmoWeatherIconClass(insight.snapshot.weatherCode)} aria-hidden />
@@ -268,6 +279,12 @@ export function DevelopEliteMapInsightEngine() {
     return registerDevelopEliteMapIntelPick(map, setPoint)
   }, [map, setPoint, tool])
 
+  useEffect(() => {
+    if (tool !== 'intel' || !setPoint) return
+    const { lat, lng } = developEliteMapIntelSeedLatLng(map)
+    setPoint(lat, lng)
+  }, [map, setPoint, tool])
+
   if (!insight || !host) return null
 
   return (
@@ -307,7 +324,7 @@ export function DevelopEliteMapInsightToolbar({
     {
       id: 'intel',
       icon: 'fa-cloud-sun',
-      label: 'Weather — click the map for Open-Meteo at that point',
+      label: 'Weather — Open-Meteo at map center; click to pick another point',
     },
     { id: 'swipe', icon: 'fa-left-right', label: swipeLabel, disabled: !hasSwipeAoi },
   ]

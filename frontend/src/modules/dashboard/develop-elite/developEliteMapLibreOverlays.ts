@@ -19,6 +19,7 @@ import {
   developEliteMapLibrePointCirclePaint,
   developEliteMapLibrePointIconLayout,
   developEliteMapLibrePreparePointIcons,
+  developEliteMapLibreScaleLineWidthForZoom,
   developEliteMapLibreScalePaintOpacity,
   developEliteMapLibreStructuresExtrusionPaint,
   developEliteMapLibreStructuresPaint,
@@ -31,7 +32,6 @@ import {
   LAYER_IRRIGATION_MAIN_PIPE_ARROWS,
   syncDevelopEliteMainPipeArrowLayer,
 } from './developEliteMapLibreIrrigationMainPipe'
-import { positionDevelopEliteLayerLiveRasters } from './developEliteMapLayerLiveMaplibreMount'
 import {
   developEliteMapLibreHasLayer,
   developEliteMapLibreRunIfStyleReady,
@@ -41,6 +41,7 @@ import {
   buildDevelopEliteTreeExtrusionGeoJson,
   developEliteMapLibreTreeExtrusionPaint,
 } from './developEliteMapLibreTreeExtrusion'
+import { positionDevelopEliteLayerLiveRasters } from './developEliteMapLayerLiveMaplibreMount'
 
 const SRC_WORLD = 'de-world-countries'
 const LAYER_WORLD_LINE = 'de-world-countries-line'
@@ -99,6 +100,11 @@ export const DE_MAPLIBRE_OVERLAY_LAYER_IDS = [
 
 const overlayVisibilityBeforePause = new WeakMap<MaplibreMap, Map<string, string>>()
 let overlayPauseRaf = 0
+
+/** Drop gesture-hide snapshot (e.g. before `setStyle` wipes layers). */
+export function clearDevelopEliteMapLibreOverlaysInteractionPaused(map: MaplibreMap): void {
+  overlayVisibilityBeforePause.delete(map)
+}
 
 export function developEliteMapLibreOverlaysGesturePaused(map: MaplibreMap): boolean {
   return overlayVisibilityBeforePause.has(map)
@@ -331,6 +337,23 @@ function ensureSymbolLayer(
 }
 
 const dataLayerZOrderSigByMap = new WeakMap<MaplibreMap, string>()
+const overlayZoomRangeAppliedByMap = new WeakMap<MaplibreMap, Set<string>>()
+
+function ensureDevelopEliteOverlayLayerZoomRange(map: MaplibreMap, layerId: string): void {
+  if (!developEliteMapLibreHasLayer(map, layerId)) return
+  let applied = overlayZoomRangeAppliedByMap.get(map)
+  if (!applied) {
+    applied = new Set()
+    overlayZoomRangeAppliedByMap.set(map, applied)
+  }
+  if (applied.has(layerId)) return
+  applied.add(layerId)
+  try {
+    map.setLayerZoomRange(layerId, 0, 24)
+  } catch {
+    applied.delete(layerId)
+  }
+}
 
 /** Panel order is top → bottom; bottom layers are stacked first, then each `moveLayer` to top. */
 function applyDataLayerZOrder(map: MaplibreMap, mapDataLayerOrder: DevelopEliteMapDataLayerId[]) {
@@ -422,12 +445,27 @@ function syncArcgisPointLayer(
       const { layout, paint } = developEliteMapLibrePointIconLayout(spec!, iconSize, opts.visible, layerOpacity)
       ensureSymbolLayer(map, opts.iconLayerId, opts.sourceId, layout, paint, DE_MAPLIBRE_POINT_FILTER)
       map.setLayoutProperty(opts.iconLayerId, 'visibility', opts.visible ? 'visible' : 'none')
+      ensureDevelopEliteOverlayLayerZoomRange(map, opts.circleLayerId)
+      ensureDevelopEliteOverlayLayerZoomRange(map, opts.iconLayerId)
       return
     }
 
+    const pendingCirclePaint =
+      opts.layerKey === 'agri-location'
+        ? developEliteMapLibreAgriLocationCirclePaint(opts.drawingInfo, opts.fallback, map)
+        : developEliteMapLibrePointCirclePaint(opts.drawingInfo, opts.fallback)
+    ensureCircleLayer(
+      map,
+      opts.circleLayerId,
+      opts.sourceId,
+      developEliteMapLibreScalePaintOpacity(pendingCirclePaint, userScale),
+      DE_MAPLIBRE_POINT_FILTER,
+    )
+    map.setLayoutProperty(opts.circleLayerId, 'visibility', opts.visible ? 'visible' : 'none')
     if (developEliteMapLibreHasLayer(map, opts.iconLayerId)) {
       map.setLayoutProperty(opts.iconLayerId, 'visibility', 'none')
     }
+    ensureDevelopEliteOverlayLayerZoomRange(map, opts.circleLayerId)
     return
   }
 
@@ -457,6 +495,7 @@ function syncArcgisPointLayer(
   if (developEliteMapLibreHasLayer(map, opts.iconLayerId)) {
     map.setLayoutProperty(opts.iconLayerId, 'visibility', 'none')
   }
+  ensureDevelopEliteOverlayLayerZoomRange(map, opts.circleLayerId)
 }
 
 export { isDevelopEliteMapLibreStyleReady } from './developEliteMapLibreStyle'
@@ -485,7 +524,11 @@ export type DevelopEliteMapLibreOverlaySyncOpts = {
 
 export function syncDevelopEliteMapLibreOverlays(map: MaplibreMap, opts: DevelopEliteMapLibreOverlaySyncOpts): void {
   developEliteMapLibreRunIfStyleReady(map, map => {
-  if (developEliteMapLibreOverlaysGesturePaused(map)) return
+  if (developEliteMapLibreOverlaysGesturePaused(map)) {
+    const anyOverlayPresent = DE_MAPLIBRE_OVERLAY_LAYER_IDS.some(id => developEliteMapLibreHasLayer(map, id))
+    if (anyOverlayPresent) return
+    clearDevelopEliteMapLibreOverlaysInteractionPaused(map)
+  }
   const showWorld = isDevelopEliteMapDataLayerVisible(opts.mapLayerVisibility, 'world-countries')
   const showStructures = isDevelopEliteMapDataLayerVisible(opts.mapLayerVisibility, 'agro-structures')
   const showTrees = isDevelopEliteMapDataLayerVisible(opts.mapLayerVisibility, 'trees')
@@ -505,9 +548,12 @@ export function syncDevelopEliteMapLibreOverlays(map: MaplibreMap, opts: Develop
     map,
     LAYER_WORLD_LINE,
     SRC_WORLD,
-    developEliteMapLibreScalePaintOpacity(
-      developEliteMapLibreWorldCountriesLinePaint(opts.worldCountriesDrawingInfo),
-      layerUserOpacity('world-countries'),
+    developEliteMapLibreScaleLineWidthForZoom(
+      developEliteMapLibreScalePaintOpacity(
+        developEliteMapLibreWorldCountriesLinePaint(opts.worldCountriesDrawingInfo),
+        layerUserOpacity('world-countries'),
+      ),
+      opts.mapZoom,
     ),
     DE_MAPLIBRE_POLY_LINE_FILTER,
   )
@@ -539,7 +585,13 @@ export function syncDevelopEliteMapLibreOverlays(map: MaplibreMap, opts: Develop
       DE_MAPLIBRE_POLY_FILTER,
     )
   }
-  ensureLineLayer(map, LAYER_STRUCTURES_LINE, SRC_STRUCTURES, structuresPaint.line, DE_MAPLIBRE_POLY_LINE_FILTER)
+  ensureLineLayer(
+    map,
+    LAYER_STRUCTURES_LINE,
+    SRC_STRUCTURES,
+    developEliteMapLibreScaleLineWidthForZoom(structuresPaint.line, opts.mapZoom),
+    DE_MAPLIBRE_POLY_LINE_FILTER,
+  )
   const structuresFillPaint =
     showStructures && structures3d
       ? developEliteMapLibreHiddenHitFillPaint(structuresPaint.fill)
@@ -655,6 +707,9 @@ export function syncDevelopEliteMapLibreOverlays(map: MaplibreMap, opts: Develop
 
   applyDataLayerZOrder(map, opts.mapDataLayerOrder)
   positionDevelopEliteLayerLiveRasters(map)
+  for (const id of DE_MAPLIBRE_OVERLAY_LAYER_IDS) {
+    ensureDevelopEliteOverlayLayerZoomRange(map, id)
+  }
   })
 }
 

@@ -5,7 +5,7 @@ type RasterSourceSpec = {
   tiles?: string[]
 }
 
-/** Swap single-layer raster basemaps without `setStyle` (keeps GIS overlays mounted). */
+/** Swap raster basemap tile URLs without `setStyle` when layer/source layout matches (keeps GIS overlays). */
 export function developEliteMapLibreTrySwapRasterBasemap(
   map: MaplibreMap,
   style: StyleSpecification,
@@ -14,17 +14,27 @@ export function developEliteMapLibreTrySwapRasterBasemap(
 
   const sources = style.sources as Record<string, RasterSourceSpec> | undefined
   const layers = style.layers as Array<{ type?: string; source?: string }> | undefined
-  const incoming = sources?.r0
-  if (!incoming || incoming.type !== 'raster' || !incoming.tiles?.length) return false
+  const rasterLayers = (layers ?? []).filter(l => l.type === 'raster' && l.source)
+  if (!rasterLayers.length) return false
 
-  const rasterLayers = (layers ?? []).filter(l => l.type === 'raster')
-  if (rasterLayers.length !== 1) return false
+  const existingRasterLayers = (map.getStyle()?.layers ?? []).filter(l => l.type === 'raster')
+  if (existingRasterLayers.length !== rasterLayers.length) return false
 
-  const source = map.getSource('r0') as RasterTileSource | undefined
-  if (!source || typeof source.setTiles !== 'function') return false
+  for (const layer of rasterLayers) {
+    const sid = layer.source!
+    const incoming = sources?.[sid]
+    if (!incoming || incoming.type !== 'raster' || !incoming.tiles?.length) return false
+    const source = map.getSource(sid) as RasterTileSource | undefined
+    if (!source || typeof source.setTiles !== 'function') return false
+  }
 
   try {
-    source.setTiles(incoming.tiles)
+    for (const layer of rasterLayers) {
+      const sid = layer.source!
+      const incoming = sources![sid]!
+      const source = map.getSource(sid) as RasterTileSource
+      source.setTiles(incoming.tiles!)
+    }
     map.triggerRepaint?.()
     return true
   } catch {

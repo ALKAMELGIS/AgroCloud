@@ -1,5 +1,6 @@
 import type { WeatherClimateReportPayload, WeatherDailyRecord } from './weatherClimateReportTypes'
 import { climateAggregationLabel } from './weatherClimateAnalysisEngine'
+import { windDirectionLabel } from '../openMeteoWeather'
 
 export type WeatherRiskBand = 'Excellent' | 'Good' | 'Moderate Risk' | 'High Risk' | 'Critical'
 
@@ -283,6 +284,7 @@ export function buildWeatherIntelligenceExecutive(
   ]
 
   const lastDay = daily[daily.length - 1]
+  const lastWindDir = lastDay?.windDirectionDeg
   const currentConditions: Array<[string, string]> = [
     ['Location', `${payload.aoiName} · ${payload.aoiLocation}`],
     ['Coordinates', `${payload.lat.toFixed(5)}, ${payload.lng.toFixed(5)}`],
@@ -291,8 +293,14 @@ export function buildWeatherIntelligenceExecutive(
     ['Temperature (avg)', fmt(lastDay?.tempAvgC, 1, ' °C')],
     ['Rainfall (day)', fmt(lastDay?.rainfallMm, 1, ' mm')],
     ['Humidity', fmt(lastDay?.humidityPct, 0, ' %')],
-    ['Wind', fmt(lastDay?.windSpeedKmh, 1, ' km/h')],
-    ['Solar radiation', fmt(lastDay?.solarRadiationWm2, 0, ' W/m²')],
+    ['Wind speed', fmt(lastDay?.windSpeedKmh, 1, ' km/h')],
+    [
+      'Wind direction',
+      lastWindDir != null && Number.isFinite(lastWindDir)
+        ? `${windDirectionLabel(lastWindDir)} (${Math.round(lastWindDir)}°)`
+        : '—',
+    ],
+    ['Sunlight (shortwave)', fmt(lastDay?.solarRadiationWm2, 0, ' W/m²')],
     ['ET₀ (day)', fmt(lastDay?.et0Mm, 1, ' mm')],
   ]
 

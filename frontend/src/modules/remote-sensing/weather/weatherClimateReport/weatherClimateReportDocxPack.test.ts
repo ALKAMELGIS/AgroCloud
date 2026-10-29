@@ -72,6 +72,15 @@ describe('weatherClimateReportDocxPack', () => {
 
     const { model } = await buildWeatherIntelligenceDocxModel(payload)
     const docXml = buildWeatherIntelligenceDocxDocumentXml(model)
+    expect(docXml).toContain('Executive Summary')
+    expect(docXml).toContain('Key Insights &amp; Decision Support')
+    expect(docXml.indexOf('AI Weather Risk Dashboard')).toBeLessThan(
+      docXml.indexOf('Statistical Analysis'),
+    )
+    expect(docXml.indexOf('Agricultural Impact Assessment')).toBeLessThan(
+      docXml.indexOf('Weather Risk Alerts'),
+    )
+    expect(docXml).toContain('WEATHER INTELLIGENCE SERIES')
     const rIdsInDoc = [...docXml.matchAll(/r:id="(rIdChart\d+)"/g)].map(m => m[1])
     const chartRIds = model.nativeCharts.map(c => c.rId)
     expect(rIdsInDoc.sort()).toEqual(chartRIds.sort())

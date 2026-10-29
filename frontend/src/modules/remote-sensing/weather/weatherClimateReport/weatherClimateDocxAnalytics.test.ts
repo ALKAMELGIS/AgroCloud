@@ -18,6 +18,7 @@ function minimalPayload(overrides: Partial<WeatherClimateReportPayload> = {}): W
       rainfallMm: i % 3 === 0 ? 2.5 : 0,
       humidityPct: 55 + i,
       windSpeedKmh: 12,
+      windDirectionDeg: 180,
       solarRadiationWm2: 200,
       et0Mm: 3,
       pressureHpa: 1010,
@@ -30,6 +31,7 @@ function minimalPayload(overrides: Partial<WeatherClimateReportPayload> = {}): W
       precipitationMm: (d.rainfallMm ?? 0) / 4,
       humidityPct: (d.humidityPct ?? 50) + (h - 1.5),
       windSpeedKmh: 12,
+      windDirectionDeg: 180,
       shortwaveRadiationWm2: 200,
       et0Mm: 0.5,
       pressureHpa: 1010,
@@ -73,7 +75,7 @@ describe('weatherClimateDocxAnalytics', () => {
     const analytics = buildWeatherClimateDocxAnalytics(minimalPayload())
     expect(analytics.calendarDays).toBe(10)
     expect(analytics.trendResolution).toBe('daily')
-    expect(analytics.variableStats).toHaveLength(3)
+    expect(analytics.variableStats).toHaveLength(6)
     const temp = analytics.variableStats[0]!
     expect(temp.observations).toBe('10')
     expect(temp.missing).toBe('0')

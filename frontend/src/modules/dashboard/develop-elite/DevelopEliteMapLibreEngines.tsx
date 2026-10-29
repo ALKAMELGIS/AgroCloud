@@ -4,6 +4,7 @@ import maplibregl from 'maplibre-gl'
 import { DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT } from '@/modules/gis/editing/leafletMapSketchInteraction'
 import { useDevelopEliteMapLibre } from './developEliteMapLibreContext'
 import { registerDevelopEliteMapLibreIntelPick } from './developEliteMapLibreIntelPick'
+import { developEliteMapIntelSeedLatLng } from './developEliteMapIntelSeed'
 import {
   DevelopEliteMapInsightWeatherPanel,
   useDevelopEliteMapInsight,
@@ -20,10 +21,11 @@ import {
   syncDevelopEliteLayerLiveMaplibre,
 } from './developEliteMapLayerLiveMaplibreMount'
 import { DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT } from './developEliteDashboardEvents'
+import { DEVELOP_ELITE_MAP_BASEMAP_APPLIED_EVENT } from './developEliteMapLibreBasemapOverlayRestore'
 import { isDevelopEliteMapLibreStyleReady } from './developEliteMapLibreStyle'
 import { applyDevelopEliteMapLibrePerformanceTuning } from './developEliteMapLibrePerformance'
 import { setDevelopEliteMapLibreOverlaysInteractionPaused } from './developEliteMapLibreOverlays'
-import { DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY } from './developEliteMapViewport'
+import { setDevelopEliteLayerLiveMaplibreInteractionPaused } from './developEliteMapLayerLiveMaplibreMount'
 
 export function DevelopEliteMapLibreInteractionTune() {
   const { mapRef, mapReady } = useDevelopEliteMapLibre()
@@ -31,7 +33,6 @@ export function DevelopEliteMapLibreInteractionTune() {
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) return
     const container = map.getContainer()
     const mapShell = container.closest<HTMLElement>('.develop-elite-map')
     let interacting = 0
@@ -43,8 +44,8 @@ export function DevelopEliteMapLibreInteractionTune() {
       interacting > 0 || container.classList.contains('develop-elite-map--zooming')
 
     const setOverlaysPaused = (paused: boolean) => {
-      if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) return
       setDevelopEliteMapLibreOverlaysInteractionPaused(map, paused)
+      setDevelopEliteLayerLiveMaplibreInteractionPaused(map, paused)
     }
     let overlayRestoreTimer = 0
     const scheduleOverlayRestore = () => {
@@ -266,9 +267,11 @@ export function DevelopEliteMapLibreLayerLiveEngine() {
     sync()
     map.on('style.load', sync)
     map.on('load', sync)
+    window.addEventListener(DEVELOP_ELITE_MAP_BASEMAP_APPLIED_EVENT, sync)
     return () => {
       map.off('style.load', sync)
       map.off('load', sync)
+      window.removeEventListener(DEVELOP_ELITE_MAP_BASEMAP_APPLIED_EVENT, sync)
       clearDevelopEliteLayerLiveMaplibre(map)
     }
   }, [
@@ -306,6 +309,13 @@ export function DevelopEliteMapLibreInsightEngine() {
     const map = mapRef.current
     if (!map || !mapReady || insight?.tool !== 'intel' || !insight.setPoint) return
     return registerDevelopEliteMapLibreIntelPick(map, (lat, lng) => insight.setPoint(lat, lng))
+  }, [insight?.setPoint, insight?.tool, mapReady, mapRef])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady || insight?.tool !== 'intel' || !insight.setPoint) return
+    const { lat, lng } = developEliteMapIntelSeedLatLng(map)
+    insight.setPoint(lat, lng)
   }, [insight?.setPoint, insight?.tool, mapReady, mapRef])
 
   useEffect(() => {

@@ -113,6 +113,20 @@ function riskFromScore(score: number): ClimateRiskLevel {
   return 'Low'
 }
 
+/** Circular mean of wind directions (degrees). */
+export function meanWindDirectionDeg(degs: number[]): number | null {
+  if (!degs.length) return null
+  let sx = 0
+  let sy = 0
+  for (const d of degs) {
+    const r = (d * Math.PI) / 180
+    sx += Math.sin(r)
+    sy += Math.cos(r)
+  }
+  const ang = (Math.atan2(sx / degs.length, sy / degs.length) * 180) / Math.PI
+  return (ang + 360) % 360
+}
+
 export function aggregateDailyFromHourly(points: OpenMeteoHourlyPoint[]): WeatherDailyRecord[] {
   const byDate = new Map<string, OpenMeteoHourlyPoint[]>()
   points.forEach(p => {
@@ -128,6 +142,7 @@ export function aggregateDailyFromHourly(points: OpenMeteoHourlyPoint[]): Weathe
       const rain = finite(rows.map(r => r.precipitationMm))
       const humid = finite(rows.map(r => r.humidityPct))
       const wind = finite(rows.map(r => r.windSpeedKmh))
+      const windDirs = finite(rows.map(r => r.windDirectionDeg))
       const solar = finite(rows.map(r => r.shortwaveRadiationWm2))
       const et0 = finite(rows.map(r => r.et0Mm))
       const press = finite(rows.map(r => r.pressureHpa))
@@ -141,6 +156,7 @@ export function aggregateDailyFromHourly(points: OpenMeteoHourlyPoint[]): Weathe
         rainfallMm: rain.length ? sum(rain) : null,
         humidityPct: mean(humid),
         windSpeedKmh: mean(wind),
+        windDirectionDeg: meanWindDirectionDeg(windDirs),
         solarRadiationWm2: solar.length ? mean(solar) : null,
         et0Mm: et0.length ? sum(et0) : null,
         pressureHpa: mean(press),
@@ -155,6 +171,7 @@ function mergeDailyBucket(rows: WeatherDailyRecord[]): Omit<WeatherDailyRecord, 
   const rains = finite(rows.map(r => r.rainfallMm))
   const humid = finite(rows.map(r => r.humidityPct))
   const wind = finite(rows.map(r => r.windSpeedKmh))
+  const windDirs = finite(rows.map(r => r.windDirectionDeg))
   const solar = finite(rows.map(r => r.solarRadiationWm2))
   const et0 = finite(rows.map(r => r.et0Mm))
   const press = finite(rows.map(r => r.pressureHpa))
@@ -165,6 +182,7 @@ function mergeDailyBucket(rows: WeatherDailyRecord[]): Omit<WeatherDailyRecord, 
     rainfallMm: rains.length ? sum(rains) : null,
     humidityPct: mean(humid),
     windSpeedKmh: mean(wind),
+    windDirectionDeg: meanWindDirectionDeg(windDirs),
     solarRadiationWm2: mean(solar),
     et0Mm: et0.length ? sum(et0) : null,
     pressureHpa: mean(press),

@@ -255,7 +255,7 @@ export async function exportWeatherIntelligenceExcel(input: WeatherExcelExportIn
   const withCharts = await injectNativeMeteoCharts(
     raw as ArrayBuffer,
     specs,
-    wb.__chartsSheetName ?? 'Chart Monthly',
+    wb.__chartsSheetName ?? 'Monthly Charts',
   )
   const blob = new Blob([withCharts as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -263,7 +263,7 @@ export async function exportWeatherIntelligenceExcel(input: WeatherExcelExportIn
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = meteoDataReportFilename(input.locationLabel, input.timeAggregation)
+  a.download = meteoDataReportFilename(input.locationLabel, input.startDate, input.endDate)
   a.click()
   URL.revokeObjectURL(url)
 }

@@ -1,5 +1,4 @@
 import type { Map as MaplibreMap } from 'maplibre-gl'
-import { DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY } from './developEliteMapViewport'
 import {
   applyAgroCloudMapGoogleEarthMouseHandlers,
   applyAgroCloudMapPerformanceTuning,
@@ -13,8 +12,8 @@ export const DEVELOP_ELITE_MAPLIBRE_WHEEL_ZOOM_RATE = 1 / 115
 /** Light tile work while panning/zooming the dashboard grid map. */
 export const DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS = {
   prefetchZoomDelta: 0,
-  maxParallelImageRequests: 4,
-  tileCacheMb: 96,
+  maxParallelImageRequests: 3,
+  tileCacheMb: 64,
 } as const
 
 export type DevelopEliteMapLibrePerformanceOptions = typeof DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS
@@ -35,7 +34,6 @@ export function bindDevelopEliteMapLibreGestureTileWarmup(
     ensureAgroCloudMapScrollZoom(nav, DEVELOP_ELITE_MAPLIBRE_WHEEL_ZOOM_RATE)
   }
   applyDevelopEliteMapLibrePerformanceTuning(map)
-  if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) return () => {}
   map.on('moveend', onEnd)
   map.on('zoomend', onEnd)
   return () => {

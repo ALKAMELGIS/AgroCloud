@@ -89,7 +89,8 @@ export function DevelopEliteMapLibreFeaturePopupBridge({
     ],
   )
 
-  const identifyEnabled = mapReady && insight?.tool !== 'swipe' && !draw?.drawingActive
+  const identifyEnabled =
+    mapReady && insight?.tool !== 'swipe' && insight?.tool !== 'intel' && !draw?.drawingActive
 
   useEffect(() => {
     const map = mapRef.current

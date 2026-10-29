@@ -21,6 +21,10 @@ import {
 import { applyDevelopElitePortfolioMapBrowserLoadDefault } from './developEliteMapLibreGlobeBasemap'
 import { applyDevelopEliteMapLibrePerformanceTuning } from './developEliteMapLibrePerformance'
 import {
+  DEVELOP_ELITE_MAP_BASEMAP_APPLIED_EVENT,
+  scheduleDevelopEliteMapLibreOverlayResyncAfterBasemap,
+} from './developEliteMapLibreBasemapOverlayRestore'
+import {
   developEliteMapLibreApplyDefaultPortfolioView,
   developEliteMapLibreApplyPortfolioHome,
   developEliteMapLibreFitPortfolio,
@@ -112,7 +116,6 @@ export function DevelopEliteMapLibreOverlays({
   const onArcgisIconsLoaded = useCallback(() => {
     setIconReloadToken(t => t + 1)
   }, [])
-  const lastGestureOverlayZoomRef = useRef<number | null>(null)
 
   const applyOverlaySync = useCallback(
     (map: NonNullable<typeof mapRef.current>, skipWhileMoving = true) => {
@@ -151,7 +154,6 @@ export function DevelopEliteMapLibreOverlays({
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    lastGestureOverlayZoomRef.current = null
     applyOverlaySync(map, false)
   }, [applyOverlaySync, mapReady, mapRef, mapDataLayerOrder, mapLayerVisibility, viewMode3d])
 
@@ -163,6 +165,9 @@ export function DevelopEliteMapLibreOverlays({
     let gestureTimer = 0
     const runSync = () => {
       applyOverlaySync(map, false)
+    }
+    const onBasemapApplied = () => {
+      scheduleDevelopEliteMapLibreOverlayResyncAfterBasemap(map, () => applyOverlaySync(map, false))
     }
     const scheduleSync = () => {
       if (raf) cancelAnimationFrame(raf)
@@ -176,21 +181,15 @@ export function DevelopEliteMapLibreOverlays({
       gestureTimer = window.setTimeout(() => {
         gestureTimer = 0
         scheduleSync()
-      }, DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY ? 320 : 200)
-    }
-    const onGridZoomEnd = () => {
-      const zoomQ = Math.round(map.getZoom() * 2) / 2
-      if (lastGestureOverlayZoomRef.current === zoomQ) return
-      lastGestureOverlayZoomRef.current = zoomQ
-      onGestureEnd()
+      }, DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY ? 420 : 220)
     }
 
     applyOverlaySync(map, false)
     map.on('style.load', runSync)
     map.on('load', runSync)
+    window.addEventListener(DEVELOP_ELITE_MAP_BASEMAP_APPLIED_EVENT, onBasemapApplied)
     if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
-      map.on('zoomend', onGridZoomEnd)
-      map.on('moveend', onGestureEnd)
+      map.on('zoomend', onGestureEnd)
     } else {
       map.on('zoomend', onGestureEnd)
       map.on('moveend', onGestureEnd)
@@ -200,11 +199,9 @@ export function DevelopEliteMapLibreOverlays({
       if (gestureTimer) window.clearTimeout(gestureTimer)
       map.off('style.load', runSync)
       map.off('load', runSync)
-      if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
-        map.off('zoomend', onGridZoomEnd)
-        map.off('moveend', onGestureEnd)
-      } else {
-        map.off('zoomend', onGestureEnd)
+      window.removeEventListener(DEVELOP_ELITE_MAP_BASEMAP_APPLIED_EVENT, onBasemapApplied)
+      map.off('zoomend', onGestureEnd)
+      if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
         map.off('moveend', onGestureEnd)
       }
     }

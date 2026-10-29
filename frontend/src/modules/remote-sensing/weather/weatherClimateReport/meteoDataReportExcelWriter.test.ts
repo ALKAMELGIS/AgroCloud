@@ -51,12 +51,15 @@ describe('meteoDataReportExcelWriter', () => {
 
     const wb = await buildMeteoDataReportWorkbook(payload)
     expect(wb.worksheets.map(w => w.name)).toEqual([
+      METEO_SHEET.overview,
       METEO_SHEET.dataMonthly,
       METEO_SHEET.chartMonthly,
       METEO_SHEET.dataDaily,
       METEO_SHEET.chartsDaily,
       METEO_SHEET.dataHourly,
+      METEO_SHEET.hourlyAnalysis,
       METEO_SHEET.chartsHourly,
+      METEO_SHEET.notes,
     ])
 
     const specs = wb.__meteoChartSpecs ?? []

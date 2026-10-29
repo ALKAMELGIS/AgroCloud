@@ -22321,6 +22321,8 @@ export default function SatelliteIntelligence() {
   const mapboxAccessTokenForMap = getMapboxGlRendererToken();
 
   const siBasemapSwapRef = useRef(activeBasemapId);
+  /** True while a user basemap change is rebuilding the Mapbox style (suppresses load-retry zoom reset). */
+  const siIntentionalBasemapSwapRef = useRef(false);
   /** How many raster layers the currently-applied basemap style has. */
   const siBasemapLayerCountRef = useRef(activeBasemapRasterSpecs.length);
   /** Native max-zoom signature of the applied basemap — `setTiles` can't change `maxzoom`, so a change forces a rebuild. */
@@ -22344,9 +22346,7 @@ export default function SatelliteIntelligence() {
     const sameStructure =
       specs.length > 0 &&
       specs.length === siBasemapLayerCountRef.current &&
-      // `setTiles` keeps the old source's maxzoom, so only fast-swap when the
-      // native max-zoom is unchanged — otherwise rebuild so over-zoom caps apply.
-      nextMaxZoomKey === siBasemapMaxZoomKeyRef.current &&
+      // Tile URL swap only — maxzoom may differ between catalog entries; keep camera/zoom stable.
       specs.every((_, i) => {
         try {
           const src = map.getSource?.(`${SI_BASE_SOURCE_PREFIX}${i}`);
@@ -22394,7 +22394,8 @@ export default function SatelliteIntelligence() {
       }
     }
 
-    // â”€â”€ Fallback path: structural change â†’ rebuild style, preserve camera â”€â”€â”€â”€
+    // ── Fallback path: structural change → rebuild style, preserve camera ──
+    siIntentionalBasemapSwapRef.current = true;
     siBasemapSwapRef.current = activeBasemapId;
     siBasemapLayerCountRef.current = specs.length;
     siBasemapMaxZoomKeyRef.current = nextMaxZoomKey;
@@ -22403,28 +22404,54 @@ export default function SatelliteIntelligence() {
     cancelAgroCloudTerrainSync(map);
     // Preserve the exact camera (center/zoom/bearing/pitch) across the basemap
     // swap so the viewport never resets or re-zooms when the base layer changes.
-    let preservedCamera: { center: [number, number]; zoom: number; bearing: number; pitch: number } | null = null;
+    const live = viewStateLiveRef.current;
+    let preservedCamera: { center: [number, number]; zoom: number; bearing: number; pitch: number } | null =
+      null;
     try {
       const c = map.getCenter?.();
-      if (c) {
-        preservedCamera = {
-          center: [c.lng, c.lat],
-          zoom: map.getZoom?.() ?? viewStateLiveRef.current.zoom,
-          bearing: map.getBearing?.() ?? 0,
-          pitch: map.getPitch?.() ?? 0,
-        };
-      }
+      preservedCamera = {
+        center: [c?.lng ?? live.longitude, c?.lat ?? live.latitude],
+        zoom: map.getZoom?.() ?? live.zoom,
+        bearing: map.getBearing?.() ?? live.bearing ?? 0,
+        pitch: map.getPitch?.() ?? live.pitch ?? 0,
+      };
     } catch {
-      preservedCamera = null;
+      preservedCamera = {
+        center: [live.longitude, live.latitude],
+        zoom: live.zoom,
+        bearing: live.bearing ?? 0,
+        pitch: live.pitch ?? 0,
+      };
     }
+    const syncPreservedCameraToReact = () => {
+      if (!preservedCamera) return;
+      viewStateLiveRef.current = {
+        ...viewStateLiveRef.current,
+        longitude: preservedCamera.center[0],
+        latitude: preservedCamera.center[1],
+        zoom: preservedCamera.zoom,
+        bearing: preservedCamera.bearing,
+        pitch: preservedCamera.pitch,
+      };
+      skipMapCameraSyncRef.current = true;
+      setViewState(prev => ({
+        ...prev,
+        longitude: preservedCamera!.center[0],
+        latitude: preservedCamera!.center[1],
+        zoom: preservedCamera!.zoom,
+        bearing: preservedCamera!.bearing,
+        pitch: preservedCamera!.pitch,
+      }));
+    };
     const restoreCamera = () => {
       if (!preservedCamera) return;
       try {
-        // jumpTo is instantaneous â€” restores the viewport with no animation or reload.
+        // jumpTo is instantaneous — restores the viewport with no animation or reload.
         map.jumpTo?.(preservedCamera);
       } catch {
         /* ignore */
       }
+      syncPreservedCameraToReact();
     };
     let done = false;
     const finish = () => {
@@ -22432,6 +22459,7 @@ export default function SatelliteIntelligence() {
       done = true;
       window.clearTimeout(safety);
       restoreCamera();
+      siIntentionalBasemapSwapRef.current = false;
       setIsMapStyleReady(true);
       siEnsureGlobeProjection();
       warmAgroCloudTerrainDemSource(map);
@@ -22460,6 +22488,7 @@ export default function SatelliteIntelligence() {
     return () => {
       done = true;
       window.clearTimeout(safety);
+      siIntentionalBasemapSwapRef.current = false;
       try {
         map.off('style.load', finish);
       } catch {
@@ -22661,12 +22690,13 @@ export default function SatelliteIntelligence() {
       siMapLoadRetryRef.current = 0;
       return;
     }
+    if (siIntentionalBasemapSwapRef.current) return;
     const MAX_RETRIES = 6;
     const firstDelayMs = siBrowserReportsMicrosoftEdge() ? 900 : 1400;
     let timer: number | null = null;
 
     const attempt = () => {
-      if (isMapStyleReady) {
+      if (isMapStyleReady || siIntentionalBasemapSwapRef.current) {
         siMapLoadRetryRef.current = 0;
         return;
       }
@@ -22676,7 +22706,8 @@ export default function SatelliteIntelligence() {
       siEnsureGlobeProjection();
       nudgeSiMapboxGlobeCanvas(map, siMapContainerRef.current);
       applySiGlobeCockpitFog(map);
-      syncAgroCloudMapboxCamera(map, SI_GLOBE_COCKPIT_2D_VIEW);
+      const cameraView = isMapLoaded ? viewStateLiveRef.current : SI_GLOBE_COCKPIT_2D_VIEW;
+      syncAgroCloudMapboxCamera(map, cameraView);
 
       // After a couple of soft retries, force a full style rebuild to recover a
       // canvas that initialised into a blank/black state.
@@ -22709,7 +22740,7 @@ export default function SatelliteIntelligence() {
     return () => {
       if (timer != null) window.clearTimeout(timer);
     };
-  }, [isMapStyleReady, siEnsureGlobeProjection, effectiveMapStyle]);
+  }, [isMapStyleReady, siEnsureGlobeProjection, effectiveMapStyle, isMapLoaded]);
 
   useEffect(() => {
     if (!isMapStyleReady) return;

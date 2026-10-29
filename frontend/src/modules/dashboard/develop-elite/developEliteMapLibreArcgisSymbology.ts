@@ -18,6 +18,7 @@ import { sanitizeMapboxPaint } from '@/modules/gis/layers/mapboxPaintSanitize'
 import type { Map as MaplibreMap } from 'maplibre-gl'
 import {
   developEliteAgriLocationPointZoomScale,
+  developEliteMapLineWidthZoomScale,
   developEliteMapPointZoomScale,
 } from './developEliteMapGeoJsonGeometry'
 import { AGRO_STRUCTURES_STRUCTURE_TYPE_CATALOG } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
@@ -114,6 +115,16 @@ function buildAgroStructureExtrusionHeightFallbackExpression(): unknown[] {
   }
   heightExpr.push(0)
   return heightExpr
+}
+
+export function developEliteMapLibreScaleLineWidthForZoom(
+  paint: Record<string, unknown>,
+  mapZoom: number,
+): Record<string, unknown> {
+  const width = paint['line-width']
+  const factor = developEliteMapLineWidthZoomScale(mapZoom)
+  if (!(factor > 1.001) || typeof width !== 'number' || !Number.isFinite(width)) return paint
+  return { ...paint, 'line-width': Math.min(24, width * factor) }
 }
 
 export function developEliteMapLibreScalePaintOpacity(

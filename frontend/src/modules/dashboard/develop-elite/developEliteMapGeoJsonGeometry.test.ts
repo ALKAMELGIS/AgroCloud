@@ -23,7 +23,8 @@ describe('isDevelopElitePointOnlyArcgisGeoJson', () => {
 })
 
 describe('developEliteMapPointZoomScale', () => {
-  it('is smaller when zoomed out', () => {
+  it('is smaller when zoomed out but stays readable at portfolio zoom', () => {
     expect(developEliteMapPointZoomScale(6)).toBeLessThan(developEliteMapPointZoomScale(16))
+    expect(developEliteMapPointZoomScale(2)).toBeGreaterThanOrEqual(0.8)
   })
 })

@@ -50,6 +50,10 @@ import {
   syncDevelopEliteMapLibreViewportEnvironment,
 } from './developEliteMapLibreGlobeBasemap'
 import { developEliteMapLibreTrySwapRasterBasemap } from './developEliteMapLibreRasterBasemapSwap'
+import {
+  dispatchDevelopEliteMapBasemapApplied,
+  prepareDevelopEliteMapLibreForBasemapChange,
+} from './developEliteMapLibreBasemapOverlayRestore'
 import { bindSiMapboxGlobeCanvasBoot } from '@/modules/gis/map/siGlobeCockpit'
 import { nudgeDevelopEliteMapLibreCanvas } from './developEliteMapLibreCanvasNudge'
 import {
@@ -147,10 +151,15 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       appliedBasemapRef.current = resolved
       cancelAgroCloudTerrainSync(map as never)
       applyDevelopEliteMapLibrePerformanceTuning(map)
+      prepareDevelopEliteMapLibreForBasemapChange(map)
 
       const nextStyle = resolveDevelopEliteMapStyle(resolved)
+      const notifyBasemapApplied = () => {
+        dispatchDevelopEliteMapBasemapApplied(resolved)
+      }
       if (developEliteMapLibreTrySwapRasterBasemap(map, nextStyle)) {
         nudgeDevelopEliteMapLibreCanvas(map, containerRef.current, viewportEnvOpts())
+        notifyBasemapApplied()
         return
       }
 
@@ -161,6 +170,7 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
         if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
           applyDevelopEliteMapSpaceEnvironment(map, shellRef.current)
         }
+        notifyBasemapApplied()
       }
       map.once('style.load', onStyleReady)
       map.setStyle(nextStyle, { diff: false })

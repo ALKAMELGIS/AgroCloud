@@ -24,20 +24,30 @@ export function isDevelopElitePointOnlyArcgisGeoJson(features: GeoJSON.Feature[]
   return hasPoint
 }
 
-/** Slightly boost marker size when zoomed out so portfolio view still shows points. */
+/** Boost marker size when zoomed out so portfolio / continental view still shows points. */
 export function developEliteMapPointZoomScale(zoom: number): number {
   if (!Number.isFinite(zoom)) return 1
   if (zoom >= 15) return 1
-  if (zoom >= 11) return 0.78 + (zoom - 11) * 0.055
-  if (zoom >= 8) return 0.58 + (zoom - 8) * 0.067
-  return Math.max(0.48, 0.34 + zoom * 0.04)
+  if (zoom >= 11) return 0.88 + (zoom - 11) * 0.03
+  if (zoom >= 8) return 0.78 + (zoom - 8) * 0.033
+  if (zoom >= 4) return 0.72 + (zoom - 4) * 0.015
+  return Math.max(0.82, 0.62 + zoom * 0.05)
 }
 
 /** AgroLocation PMS symbols — stay readable on the grid map canvas when zoomed out. */
 export function developEliteAgriLocationPointZoomScale(zoom: number): number {
   if (!Number.isFinite(zoom)) return 1
   if (zoom >= 14) return 1
-  if (zoom >= 10) return 0.88 + (zoom - 10) * 0.03
-  if (zoom >= 6) return 0.72 + (zoom - 6) * 0.04
-  return Math.max(0.68, 0.52 + zoom * 0.05)
+  if (zoom >= 10) return 0.92 + (zoom - 10) * 0.02
+  if (zoom >= 6) return 0.84 + (zoom - 6) * 0.02
+  return Math.max(0.88, 0.68 + zoom * 0.05)
+}
+
+/** Line / outline weight multiplier so vector overlays stay visible at low zoom. */
+export function developEliteMapLineWidthZoomScale(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 1
+  if (zoom >= 12) return 1
+  if (zoom >= 8) return 1 + (12 - zoom) * 0.14
+  if (zoom >= 4) return 1.56 + (8 - zoom) * 0.18
+  return Math.max(2.4, 2.9 - zoom * 0.12)
 }

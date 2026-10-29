@@ -6,6 +6,9 @@ describe('developEliteMapLibreTrySwapRasterBasemap', () => {
     const setTiles = vi.fn()
     const map = {
       isStyleLoaded: () => true,
+      getStyle: () => ({
+        layers: [{ id: 'layer-0', type: 'raster', source: 'r0' }],
+      }),
       getSource: () => ({ setTiles }),
       triggerRepaint: vi.fn(),
     }

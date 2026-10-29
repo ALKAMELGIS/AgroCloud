@@ -14,6 +14,7 @@ export type WeatherDailyRecord = {
   rainfallMm: number | null
   humidityPct: number | null
   windSpeedKmh: number | null
+  windDirectionDeg?: number | null
   solarRadiationWm2: number | null
   et0Mm: number | null
   pressureHpa: number | null
