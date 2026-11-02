@@ -7,16 +7,39 @@ import {
 } from '../api/identityApi'
 import { hasPermission as legacyHasPermission, normalizeRole, readCurrentUser } from '@/core/auth/auth'
 
-export function useIdentityAvailable() {
+/**
+ * Identity service status probe.
+ * `checked` flips true once the first probe settles so pages can show a loading state
+ * instead of flashing "unavailable"; `recheck` re-runs the probe (used by Retry actions).
+ */
+export function useIdentityStatus() {
   const [available, setAvailable] = useState(false)
+  const [checked, setChecked] = useState(false)
+  const [nonce, setNonce] = useState(0)
   useEffect(() => {
-    fetchIdentityStatus().then(setAvailable)
+    let alive = true
+    fetchIdentityStatus().then((ok) => {
+      if (!alive) return
+      setAvailable(ok)
+      setChecked(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [nonce])
+  const recheck = useCallback(() => {
+    setChecked(false)
+    setNonce((n) => n + 1)
   }, [])
-  return available
+  return { available, checked, recheck }
+}
+
+export function useIdentityAvailable() {
+  return useIdentityStatus().available
 }
 
 export function useAuthorization() {
-  const identityAvailable = useIdentityAvailable()
+  const { available: identityAvailable, checked: identityChecked, recheck: recheckIdentity } = useIdentityStatus()
   const [permissions, setPermissions] = useState<string[]>(() => readIdentityPermissions())
   const [loading, setLoading] = useState(identityAvailable)
 
@@ -45,5 +68,5 @@ export function useAuthorization() {
     [identityAvailable, permissions],
   )
 
-  return { can, permissions, identityAvailable, loading }
+  return { can, permissions, identityAvailable, identityChecked, recheckIdentity, loading }
 }

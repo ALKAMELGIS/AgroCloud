@@ -18,9 +18,15 @@ import { clearCustomUserApiTokenEverywhere } from './browserApiSecretsVault'
 import { getUserApiTokenValue, persistUserApiTokenValue } from './customUserApiTokens'
 import type { CustomApiTokenSlot, CustomPageRecord, SystemSettingsPersistedV1 } from '../types/systemSettings'
 import './system-settings.css'
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
+import { PageContainer, PageHeader, StatePanel } from '@/components'
 import { NavGroupEditor } from './system-settings/NavGroupEditor'
 import { createPageLinkRecord } from './system-settings/LinkManagementSection'
 import { EmbeddedPagesSettingsSection } from './system-settings/EmbeddedPagesSettingsSection'
+import { ThemeSettingsSection } from './system-settings/ThemeSettingsSection'
+import { LogoSettingsSection } from './system-settings/LogoSettingsSection'
+import { ResetDefaultsDialog } from './system-settings/ResetDefaultsDialog'
 import {
   getArcgisPortalTokenBrowserOverride,
   persistArcgisPortalTokenInBrowser,
@@ -367,10 +373,18 @@ export default function SystemSettings() {
 
   if (!allowed) {
     return (
-      <div className="gis-page-padding" style={{ padding: 24 }}>
-        <h1>Access denied</h1>
-        <p>{language === 'ar' ? 'تحتاج صلاحيات المدير لعرض إعدادات النظام.' : 'You need administrator access to manage system settings.'}</p>
-      </div>
+      <PageContainer>
+        <PageHeader
+          title={language === 'ar' ? 'إعدادات النظام' : 'System settings'}
+          icon={<TuneOutlinedIcon />}
+        />
+        <StatePanel
+          tone="error"
+          icon={<LockOutlinedIcon />}
+          title={language === 'ar' ? 'تم رفض الوصول' : 'Access denied'}
+          description={language === 'ar' ? 'تحتاج صلاحيات المدير لعرض إعدادات النظام.' : 'You need administrator access to manage system settings.'}
+        />
+      </PageContainer>
     )
   }
 
@@ -543,6 +557,17 @@ export default function SystemSettings() {
   return (
     <div className="gis-page-padding sys-settings">
       <div className="sys-settings-shell">
+        <div className="sys-settings-page-header">
+          <PageHeader
+            title={language === 'ar' ? 'إعدادات النظام' : 'System settings'}
+            description={
+              language === 'ar'
+                ? 'السمة والشعارات وقائمة التنقل والصفحات المضمنة وأدوار التسجيل ورموز API لكل المستخدمين.'
+                : 'Theme, logos, navigation menu, embedded pages, sign-up roles and API tokens for every user.'
+            }
+            icon={<TuneOutlinedIcon />}
+          />
+        </div>
         <div className="sys-settings-tabs" role="tablist" aria-label="Settings sections">
           {SETTINGS_TABS.map(({ id, label, icon }) => (
             <button
@@ -568,210 +593,14 @@ export default function SystemSettings() {
       <section className="sys-settings-panel sys-settings-panel--unified">
       {tab === 'theme' ? (
         <div className="sys-settings-tab-pane">
-          <div className="sys-settings-panel__head">
-            <h2 className="sys-settings-panel__title">
-              <i className="fa-solid fa-brush" aria-hidden />
-              Appearance
-            </h2>
-            <p className="sys-settings-panel__desc">
-              Choose a base theme. Custom applies your brand color across buttons and accents while keeping a light shell.
-            </p>
-          </div>
-
-          <span className="sys-field-label">Mode</span>
-          <div className="sys-theme-picks" role="radiogroup" aria-label="Theme mode">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={draft.themeMode === 'system'}
-              className={`sys-theme-pick ${draft.themeMode === 'system' ? 'sys-theme-pick--active' : ''}`}
-              onClick={() => setDraft(d => ({ ...d, themeMode: 'system' }))}
-            >
-              <span className="sys-theme-pick__icon">
-                <i className="fa-solid fa-desktop" />
-              </span>
-              System
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={draft.themeMode === 'light'}
-              className={`sys-theme-pick ${draft.themeMode === 'light' ? 'sys-theme-pick--active' : ''}`}
-              onClick={() => setDraft(d => ({ ...d, themeMode: 'light' }))}
-            >
-              <span className="sys-theme-pick__icon">
-                <i className="fa-solid fa-sun" />
-              </span>
-              Light
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={draft.themeMode === 'dark'}
-              className={`sys-theme-pick ${draft.themeMode === 'dark' ? 'sys-theme-pick--active' : ''}`}
-              onClick={() => setDraft(d => ({ ...d, themeMode: 'dark' }))}
-            >
-              <span className="sys-theme-pick__icon">
-                <i className="fa-solid fa-moon" />
-              </span>
-              Dark
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={draft.themeMode === 'custom'}
-              className={`sys-theme-pick ${draft.themeMode === 'custom' ? 'sys-theme-pick--active' : ''}`}
-              onClick={() => setDraft(d => ({ ...d, themeMode: 'custom' }))}
-            >
-              <span className="sys-theme-pick__icon">
-                <i className="fa-solid fa-droplet" />
-              </span>
-              Custom
-            </button>
-          </div>
-
-          {draft.themeMode === 'custom' ? (
-            <div className="sys-color-editor">
-              <span className="sys-field-label">Primary brand color</span>
-              <div className="sys-color-row">
-                <div className="sys-color-swatch" title="Pick color">
-                  <input
-                    type="color"
-                    value={draft.customPrimaryHex.match(/^#[0-9A-Fa-f]{6}$/) ? draft.customPrimaryHex : '#047857'}
-                    onChange={e => setDraft(d => ({ ...d, customPrimaryHex: e.target.value }))}
-                    aria-label="Pick primary color"
-                  />
-                </div>
-                <div className="sys-color-hex">
-                  <label htmlFor="sys-theme-hex" className="sys-field-label">
-                    Hex value
-                  </label>
-                  <input
-                    id="sys-theme-hex"
-                    className="gis-input"
-                    value={draft.customPrimaryHex}
-                    onChange={e => setDraft(d => ({ ...d, customPrimaryHex: e.target.value }))}
-                    placeholder="#047857"
-                    spellCheck={false}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : null}
+          <ThemeSettingsSection draft={draft} setDraft={setDraft} />
           {inlineSettingsActions}
         </div>
       ) : null}
 
       {tab === 'logos' ? (
         <div className="sys-settings-tab-pane">
-          <div className="sys-settings-panel__head">
-            <h2 className="sys-settings-panel__title">
-              <i className="fa-solid fa-images" aria-hidden />
-              Logo management
-            </h2>
-            <p className="sys-settings-panel__desc">
-              PNG or SVG recommended. Files are stored locally in your browser as Data URLs — ideal for branded headers.
-            </p>
-          </div>
-
-          <div className="sys-logo-grid">
-            <div>
-              <span className="sys-field-label">App logo icon</span>
-              <label className="sys-logo-zone">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sys-logo-zone__input"
-                  onChange={e => void onLogoUpload('logoIcon', e.target.files?.[0])}
-                />
-                <span className="sys-logo-zone__inner">
-                  {draft.logoIcon ? (
-                    <>
-                      <img src={draft.logoIcon} alt="" className="sys-logo-zone__preview" />
-                      <span className="sys-logo-zone__hint">Click to replace</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="sys-logo-zone__icon">
-                        <i className="fa-solid fa-leaf" />
-                      </div>
-                      <div className="sys-logo-zone__title">Upload icon</div>
-                      <div className="sys-logo-zone__hint">Used in header logo icon area</div>
-                    </>
-                  )}
-                </span>
-              </label>
-              <div className="sys-logo-zone__actions">
-                <button type="button" className="gis-btn gis-btn-outline" onClick={() => setDraft(d => ({ ...d, logoIcon: '' }))}>
-                  Clear
-                </button>
-              </div>
-            </div>
-            <div>
-              <span className="sys-field-label">Light theme header</span>
-              <label className="sys-logo-zone">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sys-logo-zone__input"
-                  onChange={e => void onLogoUpload('logoLight', e.target.files?.[0])}
-                />
-                <span className="sys-logo-zone__inner">
-                  {draft.logoLight ? (
-                    <>
-                      <img src={draft.logoLight} alt="" className="sys-logo-zone__preview" />
-                      <span className="sys-logo-zone__hint">Click to replace</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="sys-logo-zone__icon">
-                        <i className="fa-solid fa-cloud-arrow-up" />
-                      </div>
-                      <div className="sys-logo-zone__title">Upload logo</div>
-                      <div className="sys-logo-zone__hint">Click or tap to choose a file</div>
-                    </>
-                  )}
-                </span>
-              </label>
-              <div className="sys-logo-zone__actions">
-                <button type="button" className="gis-btn gis-btn-outline" onClick={() => setDraft(d => ({ ...d, logoLight: '' }))}>
-                  Clear
-                </button>
-              </div>
-            </div>
-            <div>
-              <span className="sys-field-label">Dark theme header</span>
-              <label className="sys-logo-zone">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sys-logo-zone__input"
-                  onChange={e => void onLogoUpload('logoDark', e.target.files?.[0])}
-                />
-                <span className="sys-logo-zone__inner">
-                  {draft.logoDark ? (
-                    <>
-                      <img src={draft.logoDark} alt="" className="sys-logo-zone__preview" />
-                      <span className="sys-logo-zone__hint">Click to replace</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="sys-logo-zone__icon">
-                        <i className="fa-solid fa-cloud-arrow-up" />
-                      </div>
-                      <div className="sys-logo-zone__title">Upload logo</div>
-                      <div className="sys-logo-zone__hint">Often a lighter mark on dark chrome</div>
-                    </>
-                  )}
-                </span>
-              </label>
-              <div className="sys-logo-zone__actions">
-                <button type="button" className="gis-btn gis-btn-outline" onClick={() => setDraft(d => ({ ...d, logoDark: '' }))}>
-                  Clear
-                </button>
-              </div>
-            </div>
-          </div>
+          <LogoSettingsSection draft={draft} setDraft={setDraft} onLogoUpload={onLogoUpload} />
           {inlineSettingsActions}
         </div>
       ) : null}
@@ -1876,7 +1705,7 @@ export default function SystemSettings() {
               >
                 {language === 'ar' ? 'إلغاء' : 'Cancel'}
               </button>
-              <button type="button" className="gis-btn" style={{ background: 'var(--ds-color-primary)', color: '#fff' }} onClick={submitAddApiToken}>
+              <button type="button" className="gis-btn gis-btn-primary" onClick={submitAddApiToken}>
                 {language === 'ar' ? 'إضافة' : 'Add'}
               </button>
             </div>
@@ -1884,41 +1713,15 @@ export default function SystemSettings() {
         </div>
       ) : null}
 
-      {confirmReset ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,23,42,0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100000,
-          }}
-        >
-          <div style={{ background: 'var(--ds-color-surface)', padding: 24, borderRadius: 12, maxWidth: 400 }}>
-            <p>Reset all system settings to factory defaults?</p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button type="button" className="gis-btn" onClick={() => setConfirmReset(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="gis-btn"
-                style={{ background: 'var(--ds-color-danger)', color: '#fff' }}
-                onClick={() => {
-                  resetToDefaults()
-                  setConfirmReset(false)
-                }}
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ResetDefaultsDialog
+        open={confirmReset}
+        language={language}
+        onCancel={() => setConfirmReset(false)}
+        onConfirm={() => {
+          resetToDefaults()
+          setConfirmReset(false)
+        }}
+      />
     </div>
   )
 }

@@ -313,7 +313,9 @@ table .cell-secondary {
 .app-layout
   button:not(.ds-btn-primary):not(.ec-btn-primary):not(.ds-btn-danger):not(.ec-btn-danger):not(
     [class*='badge']
-  ):not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(.geo-ai-agent-panel *):not(
+  ):not(.MuiButton-contained):not(.MuiFab-root):not(.MuiToggleButton-root.Mui-selected):not(
+    [class*='btn-primary']
+  ):not([class*='btn--primary']):not([class*='btn-danger']):not([class*='btn--danger']):not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(.geo-ai-agent-panel *):not(
     .si-layer-live-float *
   ):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *):not(
     .si-map-swipe-panel *

@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { DataSourceFieldsPanel, type DataSourceFormState } from '@/modules/forms/components/datasourcefieldspanel'
 import '@/modules/operations/fertigation/EC.css'
+import './Settings.css'
+import { Alert, Box, Button, Card, CardContent, IconButton, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { PageContainer, PageHeader } from '@/components'
 import { canManageDataSourceSettings } from '../auth'
 import { useCommonText } from '../../localization/i18n'
 
@@ -89,7 +92,7 @@ export default function Settings() {
   const text = useCommonText()
   const qs = useMemo(() => new URLSearchParams(location.search), [location.search])
   const defaultForm = (qs.get('form') || '').trim()
-  const [activeForm, setActiveForm] = useState<FormKey>(() => (FORM_KEYS.includes(defaultForm as any) ? (defaultForm as FormKey) : 'EC'))
+  const [activeForm, setActiveForm] = useState<FormKey>(() => ((FORM_KEYS as readonly string[]).includes(defaultForm) ? (defaultForm as FormKey) : 'EC'))
   const [ready, setReady] = useState(false)
 
   const currentUser = useMemo(() => readCurrentUser(), [])
@@ -97,7 +100,7 @@ export default function Settings() {
 
   useEffect(() => {
     const next = (qs.get('form') || '').trim()
-    if (FORM_KEYS.includes(next as any)) setActiveForm(next as FormKey)
+    if ((FORM_KEYS as readonly string[]).includes(next)) setActiveForm(next as FormKey)
   }, [qs])
 
   useEffect(() => {
@@ -135,102 +138,104 @@ export default function Settings() {
   }
 
   return (
-    <div className="ec-page settings-page">
-      <div className="ec-container ec-container-wide ec-animate-in">
-        <h1 className="sr-only">{text.workflowDataSources}</h1>
+    <div className="settings-page account-settings-page">
+      <PageContainer width="wide">
+        <PageHeader
+          title={text.workflowDataSources}
+          description={text.dataSource}
+          icon={<i className="fa-solid fa-database" aria-hidden />}
+          actions={
+            <>
+              <Button variant="text" onClick={goBackPage} startIcon={<i className="fa-solid fa-arrow-left-long account-settings-back-icon" aria-hidden />}>
+                {text.backPage}
+              </Button>
+              {canManageSettings ? (
+                <Button
+                  variant="contained"
+                  onClick={openConfigureFields}
+                  startIcon={<i className="fa-solid fa-sliders" aria-hidden />}
+                >
+                  {text.configureFields}
+                </Button>
+              ) : null}
+            </>
+          }
+        />
 
         {!ready ? (
-          <div className="ec-card">
-            <div className="ec-card-body" style={{ color: '#64748b', fontSize: 14 }}>
-              {text.loadingSettings}
-            </div>
-          </div>
+          <Card variant="outlined">
+            <CardContent>
+              <Typography variant="body2" color="text.secondary" role="status">
+                {text.loadingSettings}
+              </Typography>
+            </CardContent>
+          </Card>
         ) : (
-          <>
-            <div className="settings-data-source-wrap">
-              <div className="ec-card ec-animate-in" id="data-source-settings">
-                <div className="ec-card-header settings-datasource-header">
-                  <button type="button" className="settings-header-back" onClick={goBackPage} aria-label={text.backPage} title={text.backPage}>
-                    <i className="fa-solid fa-arrow-left-long" aria-hidden />
-                  </button>
-                  <div className="settings-datasource-header-title">
-                    <div className="ec-card-title">
-                      <i className="fa-solid fa-database" style={{ color: 'var(--secondary)' }}></i>
-                      {text.dataSource}
-                    </div>
-                  </div>
-                  <div className="ec-card-header-actions settings-card-header-actions">
-                    <button
-                      type="button"
-                      className="settings-header-icon-btn settings-header-icon-btn--primary"
-                      aria-label={text.configureFields}
-                      title={text.configureFields}
-                      onClick={openConfigureFields}
-                    >
-                      <i className="fa-solid fa-sliders" aria-hidden />
-                    </button>
-                    <button
-                      type="button"
-                      className="settings-header-icon-btn settings-header-icon-btn--ghost"
-                      aria-label={text.jumpToSection}
-                      title={text.jumpToSection}
-                      onClick={scrollToDataSourceCard}
-                    >
-                      <i className="fa-solid fa-arrow-down-long" aria-hidden />
-                    </button>
-                  </div>
-                </div>
+          <Card variant="outlined" className="account-settings-card" id="data-source-settings">
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'flex-end' }} justifyContent="space-between">
+                <TextField
+                  select
+                  id="account-settings-workflow"
+                  label={text.selectWorkflow}
+                  value={activeForm}
+                  onChange={e => setActiveForm(e.target.value as FormKey)}
+                  sx={{ minWidth: { sm: 280 }, maxWidth: { sm: 380 } }}
+                  fullWidth
+                >
+                  {FORM_KEYS.map(k => (
+                    <MenuItem key={k} value={k}>
+                      {k}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <IconButton
+                  aria-label={text.jumpToSection}
+                  title={text.jumpToSection}
+                  onClick={scrollToDataSourceCard}
+                  sx={{ alignSelf: { xs: 'flex-end', sm: 'center' }, border: 1, borderColor: 'divider' }}
+                >
+                  <i className="fa-solid fa-arrow-down-long" aria-hidden style={{ fontSize: 16 }} />
+                </IconButton>
+              </Stack>
 
-                <div className="ec-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div className="ec-input-group" style={{ maxWidth: 380 }}>
-                    <label className="ec-label">{text.selectWorkflow}</label>
-                    <select className="ec-select" value={activeForm} onChange={e => setActiveForm(e.target.value as FormKey)} aria-label={text.selectWorkflow}>
-                      {FORM_KEYS.map(k => (
-                        <option key={k} value={k}>
-                          {k}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              {canManageSettings ? (
+                <DataSourceFieldsPanel formKey={activeForm} mode="settings" onChange={setLastState} />
+              ) : (
+                <Stack spacing={1.25}>
+                  <Alert severity="info" variant="outlined">
+                    You have read-only access. Only Admins and Managers can change data source settings.
+                  </Alert>
+                  <Typography variant="body2">
+                    <Box component="span" sx={{ fontWeight: 700 }}>Configured sources:</Box>{' '}
+                    {enabledInfo.sourceIds.length ? enabledInfo.sourceIds.join(', ') : '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <Box component="span" sx={{ fontWeight: 700 }}>Enabled fields:</Box>{' '}
+                    {enabledTotal
+                      ? enabledInfo.sourceIds
+                          .map(id => `${id}: ${(enabledInfo.enabledBySource[id] || []).join(', ')}`)
+                          .filter(Boolean)
+                          .join(' • ')
+                      : '—'}
+                  </Typography>
+                </Stack>
+              )}
 
-                  {canManageSettings ? (
-                    <DataSourceFieldsPanel formKey={activeForm} mode="settings" onChange={setLastState} />
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ fontSize: 12, color: '#1e293b', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '10px 12px', borderRadius: 12 }}>
-                        You have read-only access. Only Admins and Managers can change data source settings.
-                      </div>
-                      <div style={{ fontSize: 13, color: '#334155' }}>
-                        <span style={{ fontWeight: 700 }}>Configured sources:</span> {enabledInfo.sourceIds.length ? enabledInfo.sourceIds.join(', ') : '—'}
-                      </div>
-                      <div style={{ fontSize: 13, color: '#334155' }}>
-                        <span style={{ fontWeight: 700 }}>Enabled fields:</span>{' '}
-                        {enabledTotal
-                          ? enabledInfo.sourceIds
-                              .map(id => `${id}: ${(enabledInfo.enabledBySource[id] || []).join(', ')}`)
-                              .filter(Boolean)
-                              .join(' • ')
-                          : '—'}
-                      </div>
-                    </div>
-                  )}
-
-                  {canManageSettings && lastState ? (
-                    <div style={{ fontSize: 12, color: '#64748b' }}>
-                      {text.currentSelection}: {lastState.sourceIds.length ? lastState.sourceIds.join(', ') : '—'} •{' '}
-                      {Object.values(lastState.selectedFieldsBySource || {}).reduce<number>(
-                        (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
-                        0
-                      )}{' '}
-                      {text.fieldsEnabled}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </>
+              {canManageSettings && lastState ? (
+                <Typography variant="caption" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {text.currentSelection}: {lastState.sourceIds.length ? lastState.sourceIds.join(', ') : '—'} •{' '}
+                  {Object.values(lastState.selectedFieldsBySource || {}).reduce<number>(
+                    (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
+                    0
+                  )}{' '}
+                  {text.fieldsEnabled}
+                </Typography>
+              ) : null}
+            </CardContent>
+          </Card>
         )}
-      </div>
+      </PageContainer>
     </div>
   )
 }

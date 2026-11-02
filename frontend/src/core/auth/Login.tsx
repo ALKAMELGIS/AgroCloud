@@ -11,6 +11,7 @@ import { pickDefaultAssignableRole, useDirectoryRoleCatalog } from '../authoriza
 import { hydrateProfileFromAdminUserRecord, hydrateProfileFromServer } from './userProfilePersistence'
 import { appendAuditLog } from '../authorization/audit'
 import { useLanguage } from '../localization/i18n'
+import './Login.css'
 import { ELITE_AGRO_LOGO_WHITE_URL } from '../config/brandAssets'
 import { isTouchDevice } from '@/app/startup/pwaInstall'
 import { sha256Base64, sha256Hex } from '../utils/sha256'
@@ -1047,266 +1048,91 @@ export default function Login() {
       </div>
       <div className="login-bg-overlay"></div>
       <div className="login-page-content">
-        <div
-          style={{
-            width: '100%',
-            maxWidth: '360px',
-            background: 'radial-gradient(circle at top, rgba(15,23,42,0.96), rgba(15,23,42,0.92))',
-            borderRadius: '18px',
-            padding: '24px 24px 22px',
-            boxShadow: '0 22px 70px rgba(15, 23, 42, 0.85)',
-            border: '1px solid rgba(148, 163, 184, 0.45)',
-            color: 'white'
-          }}
-        >
-        <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-          <div className="login-logo-wrap">
-            <img
-              src={ELITE_AGRO_LOGO_WHITE_URL}
-              alt="Elite Agro Projects"
-            />
-          </div>
-          <div className="login-leaf-badge">
-            <div className="login-leaf-circle">
-              <i className="fa-solid fa-leaf"></i>
+        <div className="login-card">
+          <div className="login-card__brand">
+            <div className="login-logo-wrap">
+              <img src={ELITE_AGRO_LOGO_WHITE_URL} alt="Elite Agro Projects" />
+            </div>
+            <div className="login-leaf-badge">
+              <div className="login-leaf-circle">
+                <i className="fa-solid fa-leaf" aria-hidden></i>
+              </div>
+            </div>
+            <h1 className="login-card__title">Agro Cloud</h1>
+            <div className="login-mode-toggle" role="group" aria-label={`${text.signIn} / ${text.signUp}`}>
+              <button
+                type="button"
+                className={`login-mode-toggle__btn${mode === 'signin' ? ' is-active' : ''}`}
+                aria-pressed={mode === 'signin'}
+                onClick={() => {
+                  setMode('signin')
+                  setError('')
+                  setInfo('')
+                }}
+              >
+                {text.signIn}
+              </button>
+              <button
+                type="button"
+                className={`login-mode-toggle__btn${mode === 'signup' ? ' is-active' : ''}`}
+                aria-pressed={mode === 'signup'}
+                onClick={() => {
+                  setMode('signup')
+                  setError('')
+                  setInfo('')
+                }}
+              >
+                {text.signUp}
+              </button>
             </div>
           </div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: '18px',
-              fontWeight: 700,
-              letterSpacing: '-0.03em'
-            }}
-          >
-            Agro Cloud
-          </h1>
-          <div
-            style={{
-              marginTop: '14px',
-              display: 'inline-flex',
-              borderRadius: '999px',
-              padding: '2px',
-              background: 'rgba(15,23,42,0.9)',
-              border: '1px solid rgba(55, 65, 81, 0.9)'
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signin')
-                setError('')
-                  setInfo('')
-              }}
-              style={{
-                padding: '5px 14px',
-                borderRadius: '999px',
-                border: 'none',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: mode === 'signin' ? 'linear-gradient(135deg, #22c55e, #16a34a)' : 'transparent',
-                color: mode === 'signin' ? '#ecfdf5' : '#cbd5f5',
-                boxShadow: mode === 'signin' ? '0 8px 18px rgba(34,197,94,0.55)' : 'none',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {text.signIn}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signup')
-                setError('')
-                  setInfo('')
-              }}
-              style={{
-                padding: '5px 14px',
-                borderRadius: '999px',
-                border: 'none',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: mode === 'signup' ? 'linear-gradient(135deg, #22c55e, #16a34a)' : 'transparent',
-                color: mode === 'signup' ? '#ecfdf5' : '#cbd5f5',
-                boxShadow: mode === 'signup' ? '0 8px 18px rgba(34,197,94,0.55)' : 'none',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {text.signUp}
-            </button>
-          </div>
-        </div>
-        <form onSubmit={handleSubmit} autoComplete="on">
-          {mode === 'signup' && (
-            <div
-              style={{
-                marginBottom: '10px',
-                display: 'flex',
-                justifyContent: 'center'
-              }}
-            >
-              <div style={{ width: '100%', maxWidth: '280px' }}>
-                <label
-                  htmlFor="signup-name"
-                  style={{
-                    display: 'block',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    letterSpacing: '0.14em',
-                    textTransform: 'uppercase',
-                    color: 'rgba(226, 232, 240, 0.92)',
-                    marginBottom: '5px',
-                    paddingInline: '2px'
-                  }}
-                >
+          <form onSubmit={handleSubmit} autoComplete="on" className="login-form">
+            {mode === 'signup' && (
+              <div className="login-field">
+                <label htmlFor="signup-name" className="login-field__label">
                   {text.fullName}
                 </label>
-                <div
-                  style={{
-                    borderRadius: '12px',
-                    padding: '6px 9px 7px',
-                    background:
-                      'radial-gradient(circle at top left, rgba(15,23,42,0.96), rgba(15,23,42,0.9))',
-                    border: '1px solid rgba(148, 163, 184, 0.5)',
-                    boxShadow: '0 10px 24px rgba(15, 23, 42, 0.85)'
-                  }}
-                >
-                  <input
-                    id="signup-name"
-                    type="text"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    autoComplete="name"
-                    style={{
-                      width: '100%',
-                      padding: '4px 0 3px',
-                      borderRadius: '0',
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'white',
-                      fontSize: '12px',
-                      outline: 'none'
-                    }}
-                  />
-                </div>
+                <input
+                  id="signup-name"
+                  className="login-field__input"
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  autoComplete="name"
+                />
               </div>
-            </div>
-          )}
-          <div
-            style={{
-              marginBottom: '10px',
-              display: 'flex',
-              justifyContent: 'center'
-            }}
-          >
-            <div style={{ width: '100%', maxWidth: '280px' }}>
-              <label
-                htmlFor="login-email"
-                style={{
-                  display: 'block',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color: 'rgba(226, 232, 240, 0.92)',
-                  marginBottom: '5px',
-                  paddingInline: '2px'
-                }}
-              >
+            )}
+            <div className="login-field">
+              <label htmlFor="login-email" className="login-field__label">
                 {text.email}
               </label>
-              <div
-                style={{
-                  borderRadius: '12px',
-                  padding: '6px 9px 7px',
-                  background:
-                    'radial-gradient(circle at top left, rgba(15,23,42,0.96), rgba(15,23,42,0.9))',
-                  border: '1px solid rgba(148, 163, 184, 0.5)',
-                  boxShadow: '0 10px 24px rgba(15, 23, 42, 0.85)'
-                }}
-              >
-                <input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  autoComplete="email"
-                  style={{
-                    width: '100%',
-                    padding: '4px 0 3px',
-                    borderRadius: '0',
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'white',
-                    fontSize: '12px',
-                    outline: 'none'
-                  }}
-                />
-              </div>
+              <input
+                id="login-email"
+                className="login-field__input"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'login-error' : undefined}
+              />
             </div>
-          </div>
-          <div
-            style={{
-              marginBottom: '10px',
-              display: 'flex',
-              justifyContent: 'center'
-            }}
-          >
-            <div style={{ width: '100%', maxWidth: '280px' }}>
-              <label
-                htmlFor="login-password"
-                style={{
-                  display: 'block',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color: 'rgba(226, 232, 240, 0.92)',
-                  marginBottom: '5px',
-                  paddingInline: '2px'
-                }}
-              >
+            <div className="login-field">
+              <label htmlFor="login-password" className="login-field__label">
                 {text.password}
               </label>
-              <div
-                style={{
-                  borderRadius: '12px',
-                  padding: '6px 9px 7px',
-                  background:
-                    'radial-gradient(circle at top left, rgba(15,23,42,0.96), rgba(15,23,42,0.9))',
-                  border: '1px solid rgba(148, 163, 184, 0.5)',
-                  boxShadow: '0 10px 24px rgba(15, 23, 42, 0.85)'
-                }}
-              >
-                <input
-                  id="login-password"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  style={{
-                    width: '100%',
-                    padding: '4px 0 3px',
-                    borderRadius: '0',
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'white',
-                    fontSize: '12px',
-                    outline: 'none'
-                  }}
-                />
-              </div>
+              <input
+                id="login-password"
+                className="login-field__input"
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'login-error' : undefined}
+              />
             </div>
-          </div>
-          {mode === 'signin' && (
-            <div
-              style={{
-                marginBottom: '10px',
-                display: 'flex',
-                justifyContent: 'center'
-              }}
-            >
+            {mode === 'signin' && (
               <div className="login-options-row">
                 <label className="login-keep-row" htmlFor="login-keep-signed">
                   <input
@@ -1347,230 +1173,75 @@ export default function Login() {
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-          {mode === 'signup' && (
-            <div
-              style={{
-                marginBottom: '10px',
-                display: 'flex',
-                justifyContent: 'center'
-              }}
-            >
-              <div style={{ width: '100%', maxWidth: '280px' }}>
-                <label
-                  htmlFor="signup-role"
-                  style={{
-                    display: 'block',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    letterSpacing: '0.14em',
-                    textTransform: 'uppercase',
-                    color: 'rgba(226, 232, 240, 0.92)',
-                    marginBottom: '5px',
-                    paddingInline: '2px'
-                  }}
-                >
+            )}
+            {mode === 'signup' && (
+              <div className="login-field">
+                <span className="login-field__label" id="signup-role-label">
                   {text.role}
-                </label>
-                <div
-                  style={{
-                    borderRadius: '12px',
-                    padding: '6px 9px 7px',
-                    background:
-                      'radial-gradient(circle at top left, rgba(15,23,42,0.96), rgba(15,23,42,0.9))',
-                    border: '1px solid rgba(148, 163, 184, 0.5)',
-                    boxShadow: '0 10px 24px rgba(15, 23, 42, 0.85)'
-                  }}
-                >
-                  <div
-                    ref={roleDropdownRef}
-                    style={{
-                      position: 'relative'
-                    }}
+                </span>
+                <div ref={roleDropdownRef} className="login-role">
+                  <button
+                    id="signup-role"
+                    type="button"
+                    className="login-field__input login-role__trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded={isRoleOpen}
+                    aria-labelledby="signup-role-label signup-role"
+                    onClick={() => setIsRoleOpen(open => !open)}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setIsRoleOpen(open => !open)}
-                      style={{
-                        width: '100%',
-                        padding: '4px 0 3px',
-                        borderRadius: '0',
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#e5e7eb',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        letterSpacing: '0.02em',
-                        outline: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <span>{text.roles[role as keyof typeof text.roles] ?? role}</span>
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '18px',
-                          height: '18px',
-                          borderRadius: '999px',
-                          background: 'rgba(15,23,42,0.9)',
-                          border: '1px solid rgba(148,163,184,0.5)',
-                          color: '#9ca3af',
-                          fontSize: '10px'
-                        }}
-                      >
-                        <i className={isRoleOpen ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'}></i>
-                      </span>
-                    </button>
-                    {isRoleOpen && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: 'calc(100% + 6px)',
-                          left: 0,
-                          right: 0,
-                          borderRadius: '12px',
-                          background:
-                            'radial-gradient(circle at top left, rgba(15,23,42,0.98), rgba(15,23,42,0.94))',
-                          border: '1px solid rgba(148, 163, 184, 0.7)',
-                          boxShadow: '0 18px 40px rgba(15, 23, 42, 0.95)',
-                          padding: '4px',
-                          zIndex: 30
-                        }}
-                      >
-                        {signupRoleCatalog.map(option => (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() => {
-                              setRole(option)
-                              setIsRoleOpen(false)
-                            }}
-                            style={{
-                              width: '100%',
-                              border: 'none',
-                              background:
-                                role === option
-                                  ? 'linear-gradient(135deg, rgba(34,197,94,0.22), rgba(16,185,129,0.18))'
-                                  : 'transparent',
-                              color: '#e5e7eb',
-                              textAlign: 'left',
-                              padding: '7px 8px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <span>{text.roles[option as keyof typeof text.roles] ?? option}</span>
-                            {role === option && (
-                              <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: '999px',
-                                  background: 'rgba(34,197,94,0.18)',
-                                  color: '#4ade80',
-                                  fontSize: '10px'
-                                }}
-                              >
-                                <i className="fa-solid fa-check"></i>
-                              </span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                    <span>{text.roles[role as keyof typeof text.roles] ?? role}</span>
+                    <span className="login-role__chevron" aria-hidden>
+                      <i className={isRoleOpen ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'}></i>
+                    </span>
+                  </button>
+                  {isRoleOpen && (
+                    <div className="login-role__menu" role="listbox" aria-labelledby="signup-role-label">
+                      {signupRoleCatalog.map(option => (
+                        <button
+                          key={option}
+                          type="button"
+                          role="option"
+                          aria-selected={role === option}
+                          className={`login-role__option${role === option ? ' is-selected' : ''}`}
+                          onClick={() => {
+                            setRole(option)
+                            setIsRoleOpen(false)
+                          }}
+                        >
+                          <span>{text.roles[option as keyof typeof text.roles] ?? option}</span>
+                          {role === option && (
+                            <span className="login-role__check" aria-hidden>
+                              <i className="fa-solid fa-check"></i>
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
-          {info && (
-            <div
-              style={{
-                marginBottom: '10px',
-                padding: '7px 9px',
-                borderRadius: '6px',
-                background: 'rgba(34, 197, 94, 0.08)',
-                color: '#bbf7d0',
-                fontSize: '12px',
-                whiteSpace: 'pre-line'
-              }}
-            >
-              {info}
-            </div>
-          )}
-          {error && (
-            <div
-              style={{
-                marginBottom: '10px',
-                padding: '7px 9px',
-                borderRadius: '6px',
-                background: 'rgba(239, 68, 68, 0.1)',
-                color: '#fecaca',
-                fontSize: '12px'
-              }}
-            >
-              {error}
-            </div>
-          )}
-          {awaitingVerification && (
-            <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
+            )}
+            {info && (
+              <div className="login-message login-message--info" role="status" aria-live="polite">
+                {info}
+              </div>
+            )}
+            {error && (
+              <div id="login-error" className="login-message login-message--error" role="alert">
+                {error}
+              </div>
+            )}
+            {awaitingVerification && (
               <button
                 type="button"
+                className="login-secondary-btn"
                 disabled={isResendingVerification || isSubmitting}
                 onClick={() => void handleResendVerification()}
-                style={{
-                  width: '100%',
-                  maxWidth: '280px',
-                  padding: '7px 12px',
-                  borderRadius: '999px',
-                  border: '1px solid rgba(34, 197, 94, 0.55)',
-                  background: 'rgba(34, 197, 94, 0.12)',
-                  color: '#bbf7d0',
-                  fontWeight: 600,
-                  fontSize: '12px',
-                  cursor: isResendingVerification || isSubmitting ? 'default' : 'pointer',
-                  opacity: isResendingVerification || isSubmitting ? 0.7 : 1,
-                }}
               >
                 {isResendingVerification ? text.resendingVerify : text.resendVerify}
               </button>
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{
-                width: '100%',
-                maxWidth: '220px',
-                padding: '7px 12px',
-                borderRadius: '999px',
-                border: 'none',
-                background: isSubmitting
-                  ? 'linear-gradient(135deg, #16a34a, #22c55e)'
-                  : 'linear-gradient(135deg, #22c55e, #16a34a)',
-                boxShadow: '0 10px 22px rgba(34, 197, 94, 0.75)',
-                color: 'white',
-                fontWeight: 600,
-                fontSize: '12px',
-                cursor: isSubmitting ? 'default' : 'pointer',
-                marginTop: '12px',
-                letterSpacing: '0.03em'
-              }}
-            >
+            )}
+            <button type="submit" className="login-submit-btn" disabled={isSubmitting} aria-busy={isSubmitting || undefined}>
               {isSubmitting
                 ? mode === 'signin'
                   ? text.signingIn
@@ -1579,8 +1250,7 @@ export default function Login() {
                   ? text.signIn
                   : text.createAccount}
             </button>
-          </div>
-        </form>
+          </form>
         </div>
       </div>
     </div>
