@@ -294,7 +294,7 @@
 .ec-btn-primary:hover {
   background: var(--ds-color-primary-hover);
   border-color: var(--ds-color-primary-hover);
-  box-shadow: 0 14px 34px rgba(22, 163, 74, 0.20);
+  box-shadow: var(--ds-shadow-md);
   transform: translateY(-0.5px);
 }
 
@@ -1441,7 +1441,7 @@ html[data-theme='dark'] .settings-page .settings-header-back:hover {
 
 /* Light cards: hairline border, no heavy shadow — aligns with full-width page rhythm */
 .content--operations-fit .ec-card {
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--ds-color-surface);
   border: 1px solid var(--ds-color-border);
   border-radius: 18px;
   box-shadow: none;
@@ -1450,7 +1450,7 @@ html[data-theme='dark'] .settings-page .settings-header-back:hover {
 }
 
 html[data-theme='dark'] .content--operations-fit .ec-card {
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--ds-color-surface);
   border-color: var(--ds-color-border);
 }
 
@@ -1665,8 +1665,8 @@ html[data-theme='dark'] .content--operations-fit .ops-head-icon--slate {
   margin-top: 14px;
   padding: 14px 16px;
   border-radius: 14px;
-  border: 1px solid #fecaca;
-  background: linear-gradient(180deg, #fef2f2, #fff);
+  border: 1px solid color-mix(in srgb, var(--ds-color-danger) 40%, transparent);
+  background: color-mix(in srgb, var(--ds-color-danger) 7%, var(--ds-color-surface));
   color: var(--ds-color-danger);
   font-size: 0.8125rem;
 }
@@ -1706,7 +1706,7 @@ html[data-theme='dark'] .content--operations-fit .ops-head-icon--slate {
 }
 
 .irrigation-scheduling-modern .irrigation-toolbar .ec-btn-primary {
-  box-shadow: 0 4px 14px rgba(4, 120, 87, 0.35);
+  box-shadow: var(--ds-shadow-sm);
 }
 
 @media (max-width: 640px) {

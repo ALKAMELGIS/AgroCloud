@@ -3,40 +3,42 @@
  * dark glass + matte #E6E6E6. Applies to swipe, GIS float, legend, chat composer.
  */
 
+/* Overlay tokens alias the design system (agro-premium.css) so every floating map surface
+   shares one green-tinted glass palette in both themes. */
 html[data-theme='light'] {
-  --si-overlay-bg: rgba(255, 255, 255, 0.94);
-  --si-overlay-bg-soft: rgba(248, 250, 252, 0.96);
-  --si-overlay-text: #222222;
-  --si-overlay-muted: #555555;
-  --si-overlay-border: rgba(34, 34, 34, 0.12);
-  --si-overlay-border-strong: rgba(34, 34, 34, 0.18);
-  --si-overlay-field-bg: #ffffff;
-  --si-overlay-field-border: rgba(34, 34, 34, 0.16);
-  --si-overlay-fill: rgba(34, 34, 34, 0.05);
-  --si-overlay-fill-hover: rgba(34, 34, 34, 0.08);
-  --si-overlay-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
-  --si-overlay-accent-bg: rgba(5, 150, 105, 0.14);
-  --si-overlay-accent-text: #047857;
-  --si-overlay-icon: #555555;
-  --si-overlay-icon-hover: #222222;
+  --si-overlay-bg: rgba(255, 255, 255, 0.92) /* opaque-ish ds glass: map imagery must not bleed into text */;
+  --si-overlay-bg-soft: var(--ds-color-surface-2);
+  --si-overlay-text: var(--ds-color-text);
+  --si-overlay-muted: var(--ds-color-text-muted);
+  --si-overlay-border: var(--ds-color-border);
+  --si-overlay-border-strong: var(--ds-color-border-strong);
+  --si-overlay-field-bg: var(--ds-color-surface);
+  --si-overlay-field-border: var(--ds-color-border-strong);
+  --si-overlay-fill: var(--ds-color-bg-subtle);
+  --si-overlay-fill-hover: var(--ds-color-primary-soft);
+  --si-overlay-shadow: var(--ds-shadow-md);
+  --si-overlay-accent-bg: var(--ds-color-primary-soft);
+  --si-overlay-accent-text: var(--ds-color-primary);
+  --si-overlay-icon: var(--ds-color-text-muted);
+  --si-overlay-icon-hover: var(--ds-color-text);
 }
 
 html[data-theme='dark'] {
-  --si-overlay-bg: rgba(16, 22, 26, 0.92);
-  --si-overlay-bg-soft: rgba(12, 12, 14, 0.88);
-  --si-overlay-text: #e6e6e6;
-  --si-overlay-muted: #b8b8b8;
-  --si-overlay-border: rgba(255, 255, 255, 0.12);
-  --si-overlay-border-strong: rgba(255, 255, 255, 0.18);
-  --si-overlay-field-bg: rgba(0, 0, 0, 0.55);
-  --si-overlay-field-border: rgba(255, 255, 255, 0.18);
-  --si-overlay-fill: rgba(255, 255, 255, 0.06);
-  --si-overlay-fill-hover: rgba(255, 255, 255, 0.1);
-  --si-overlay-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --si-overlay-accent-bg: rgba(76, 175, 80, 0.28);
-  --si-overlay-accent-text: #ffffff;
-  --si-overlay-icon: #b8b8b8;
-  --si-overlay-icon-hover: #e6e6e6;
+  --si-overlay-bg: rgba(18, 27, 23, 0.92) /* = --ds-color-surface @ 92% */;
+  --si-overlay-bg-soft: var(--ds-color-surface-2);
+  --si-overlay-text: var(--ds-color-text);
+  --si-overlay-muted: var(--ds-color-text-secondary);
+  --si-overlay-border: var(--ds-color-border-strong);
+  --si-overlay-border-strong: rgba(230, 237, 233, 0.22);
+  --si-overlay-field-bg: var(--ds-color-bg);
+  --si-overlay-field-border: var(--ds-color-border-strong);
+  --si-overlay-fill: rgba(230, 237, 233, 0.06);
+  --si-overlay-fill-hover: var(--ds-color-primary-soft);
+  --si-overlay-shadow: var(--ds-shadow-md);
+  --si-overlay-accent-bg: var(--ds-color-primary-soft);
+  --si-overlay-accent-text: var(--ds-color-primary-hover);
+  --si-overlay-icon: var(--ds-color-text-secondary);
+  --si-overlay-icon-hover: var(--ds-color-text);
 }
 
 /* ── Map Swipe ─────────────────────────────────────────────────────────── */
