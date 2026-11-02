@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '@/app/App'
 
@@ -32,6 +32,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // Unmount before jsdom teardown so pending React commits never run without `window`.
+  cleanup()
   vi.restoreAllMocks()
 })
 

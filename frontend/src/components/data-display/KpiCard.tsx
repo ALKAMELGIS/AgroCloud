@@ -29,9 +29,9 @@ export function KpiCard({ title, value, unit, subtitle, icon, trend, loading, er
         <Typography variant="overline" color="text.secondary" display="block" gutterBottom>
           {title}
         </Typography>
-        <Stack direction="row" alignItems="center" justifyContent="center" spacing={1.5} sx={{ py: 0.5 }}>
+        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ py: 0.5 }}>
           {icon ? <Box sx={{ color: 'primary.main', display: 'flex' }}>{icon}</Box> : null}
-          <Typography variant="h4" component="p" fontWeight={700}>
+          <Typography variant="h2" component="p" sx={{ fontVariantNumeric: 'tabular-nums' }}>
             {error ? '—' : value}
             {unit && !error ? (
               <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
@@ -41,17 +41,17 @@ export function KpiCard({ title, value, unit, subtitle, icon, trend, loading, er
           </Typography>
         </Stack>
         {trend ? (
-          <Typography variant="caption" color="success.main" display="block" textAlign="center">
+          <Typography variant="caption" color="success.main" display="block">
             {trend}
           </Typography>
         ) : null}
         {subtitle ? (
-          <Typography variant="caption" color="text.secondary" display="block" textAlign="center" sx={{ mt: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
             {subtitle}
           </Typography>
         ) : null}
         {error ? (
-          <Typography variant="caption" color="error" display="block" textAlign="center">
+          <Typography variant="caption" color="error" display="block">
             {error}
           </Typography>
         ) : null}
