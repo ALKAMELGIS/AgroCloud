@@ -2411,3 +2411,51 @@ html[data-theme='dark'] .navmenu.navmenu--mobile {
   border-color: rgba(71, 85, 105, 0.6);
   box-shadow: 18px 0 60px rgba(0, 0, 0, 0.6);
 }
+
+/* =====================================================================
+   AgroCloud Premium (2026-11): on wide screens show text labels next to
+   icons so daily users can scan the primary bar without hovering.
+   Tablet keeps the icon-only bar; mobile keeps the drawer.
+   ===================================================================== */
+@media (min-width: 1280px) {
+  .navmenu.navmenu--compact .navmenu-list {
+    justify-content: flex-start;
+    gap: 2px;
+  }
+
+  .navmenu.navmenu--compact .navmenu-list > .navmenu-li > .item,
+  .navmenu.navmenu--compact .navmenu-list > .group:not(.navmenu-utility) > .group-header {
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: var(--ds-radius-sm, 8px);
+    transition: background-color 150ms var(--ds-ease-out, ease), color 150ms var(--ds-ease-out, ease);
+  }
+
+  .navmenu.navmenu--compact .navmenu-list > .navmenu-li > .item:hover,
+  .navmenu.navmenu--compact .navmenu-list > .group:not(.navmenu-utility) > .group-header:hover {
+    background: var(--ds-color-primary-soft);
+  }
+
+  .navmenu.navmenu--compact .navmenu-list > .navmenu-li > .item.active,
+  .navmenu.navmenu--compact .navmenu-list > .group:not(.navmenu-utility) > .group-header.active,
+  .navmenu.navmenu--compact .navmenu-list > .group.open:not(.navmenu-utility) > .group-header {
+    background: var(--ds-color-primary-soft);
+    color: var(--ds-color-primary);
+  }
+
+  .navmenu.navmenu--compact .navmenu-list > .navmenu-li > .item .label,
+  .navmenu.navmenu--compact .navmenu-list > .group:not(.navmenu-utility) > .group-header .label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    max-width: none;
+    opacity: 1;
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: inherit;
+  }
+}

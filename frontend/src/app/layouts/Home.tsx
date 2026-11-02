@@ -1,9 +1,10 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useContext, useEffect, useState, type CSSProperties } from 'react'
 import { useTheme } from '@mui/material/styles'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './Home.css'
 import { useLanguage, type AppLanguage } from '@/core/localization/i18n'
 import { useSystemSettingsOptional } from '@/core/state/SystemSettingsContext'
+import { AuthContextOptional } from '@/core/state/auth'
 import { startSession } from '@/core/auth/auth'
 import { GPS_VEHICLE_TRACKING_SIGNIN_URL } from '@/core/routing/defaultPageLinks'
 
@@ -214,6 +215,38 @@ function homeCardAccentStyle(accentHex: string, darkCanvas: boolean): CSSPropert
   } as CSSProperties
 }
 
+function homeGreeting(language: AppLanguage, now: Date): string {
+  const h = now.getHours()
+  if (language === 'ar') return h < 12 ? 'صباح الخير' : h < 18 ? 'مساء الخير' : 'مساء الخير'
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
+}
+
+function HomeWelcome({ language }: { language: AppLanguage }) {
+  const auth = useContext(AuthContextOptional)
+  const now = new Date()
+  const firstName = String(auth?.user?.name || '').trim().split(/\s+/)[0]
+  const dateLabel = now.toLocaleDateString(language === 'ar' ? 'ar' : 'en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+  return (
+    <header className="home-welcome">
+      <p className="home-welcome__date">{dateLabel}</p>
+      <h1 className="home-welcome__title">
+        {homeGreeting(language, now)}
+        {firstName ? `, ${firstName}` : ''}
+      </h1>
+      <p className="home-welcome__sub">
+        {language === 'ar'
+          ? 'اختر مساحة العمل للبدء — الخرائط، صور الأقمار الصناعية، العمليات والتقارير.'
+          : 'Pick a workspace to get started — maps, satellite imagery, field operations and reports.'}
+      </p>
+    </header>
+  )
+}
+
 export default function Home() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -380,7 +413,9 @@ export default function Home() {
                         aria-label={subItem.label[language]}
                         style={homeCardAccentStyle(activeGroup.color, darkHomeCanvas)}
                       >
-                        <i className={`app-icon ${subItem.icon} fa-fw`} aria-hidden="true"></i>
+                        <span className="app-icon-tile" aria-hidden="true">
+                          <i className={`app-icon ${subItem.icon} fa-fw`}></i>
+                        </span>
                         <span className="app-label">{subItem.label[language]}</span>
                         {homePageSettings.showItemCounts ? (
                           <span className="app-meta">
@@ -406,6 +441,7 @@ export default function Home() {
         </div>
       ) : (
         <div className="home-modern">
+          <HomeWelcome language={language} />
           <div className="home-apps-strip">
             <div className="home-apps-list" aria-label="Applications">
               {menuItems.map((item) => (
@@ -418,20 +454,22 @@ export default function Home() {
                   data-reveal="item"
                   style={homeCardAccentStyle(item.color, darkHomeCanvas)}
                 >
-                  <i className={`app-icon ${item.icon} fa-fw`} aria-hidden="true"></i>
+                  <span className="app-icon-tile" aria-hidden="true">
+                    <i className={`app-icon ${item.icon} fa-fw`}></i>
+                  </span>
                   <span className="app-label">{item.label[language]}</span>
                   {homePageSettings.showItemCounts ? (
                     <span className="app-meta">
                       {item.items?.length
                         ? language === 'ar'
                           ? `${item.items.length} عناصر`
-                          : `${item.items.length} items`
+                          : `${item.items.length} ${item.items.length === 1 ? 'item' : 'items'}`
                         : language === 'ar'
                           ? 'فتح'
                           : 'Open'}
                     </span>
                   ) : null}
-                  {homePageSettings.showCardChevron && item.items ? <i className="fa-solid fa-chevron-right mini-chev"></i> : null}
+                  {homePageSettings.showCardChevron && item.items ? <i className="fa-solid fa-chevron-right mini-chev" aria-hidden="true"></i> : null}
                 </button>
               ))}
             </div>
