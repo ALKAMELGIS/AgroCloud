@@ -654,7 +654,7 @@ html[data-theme='light'] .si-lll-cloud-cover {
 }
 
 html[data-theme='light'] .si-lll-cloud-cover__vals {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='dark'] .si-lll-cloud-cover {
@@ -1134,21 +1134,21 @@ html[data-theme='light'] .si-lll-hlegend-ramp {
 }
 
 html[data-theme='light'] .si-lll-hlegend-extent-v {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-lll-hlegend-col {
   background: rgba(248, 250, 252, 0.92);
-  border-color: rgba(15, 23, 42, 0.08);
+  border-color: var(--ds-color-border);
 }
 
 html[data-theme='light'] .si-lll-hlegend-col-name,
 html[data-theme='light'] .si-lll-hlegend-col-range.is-primary {
-  color: #1e293b;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-lll-hlegend-col-range {
-  color: #64748b;
+  color: var(--ds-color-text-muted);
 }
 
 /* ── Light theme overrides for the scientific layout ──────────────────── */
@@ -1853,19 +1853,19 @@ html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__kicker,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__location,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__territory,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-stat__label {
-  color: #64748b;
+  color: var(--ds-color-text-muted);
 }
 
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__title,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-stat strong,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-gauge__inner strong {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-layer-live-float__body .si-lll-badges .si-layer-live-legend__badge,
 html[data-theme='light'] .si-layer-live-float__body .si-lll-badges .si-layer-live-legend__are-badge {
   background: rgba(241, 245, 249, 0.96);
-  color: #475569;
+  color: var(--ds-color-text-secondary);
   border: 1px solid rgba(148, 163, 184, 0.42);
 }
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-gauge__insight {
@@ -1876,6 +1876,6 @@ html[data-theme='light'] .si-layer-live-float .si-lll-analyze-gauge__inner {
 }
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-stat {
   background: rgba(248, 250, 252, 0.95);
-  border-color: rgba(148, 163, 184, 0.28);
-  color: #0f172a;
+  border-color: var(--ds-color-border-strong);
+  color: var(--ds-color-text);
 }

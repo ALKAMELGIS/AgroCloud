@@ -28,13 +28,13 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--ds-color-border, rgba(15, 23, 42, 0.1));
-  background: var(--ds-color-surface, #fff);
+  border-bottom: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface);
 }
 
 html[data-theme='dark'] .gps-in-app-browser__toolbar {
-  background: rgba(15, 23, 42, 0.85);
-  border-bottom-color: rgba(148, 163, 184, 0.2);
+  background: var(--ds-color-surface);
+  border-bottom-color: var(--ds-color-border-strong);
 }
 
 .gps-in-app-browser__nav {
@@ -51,15 +51,15 @@ html[data-theme='dark'] .gps-in-app-browser__toolbar {
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid var(--ds-color-border, rgba(15, 23, 42, 0.12));
+  border: 1px solid var(--ds-color-border);
   border-radius: 8px;
-  background: var(--ds-color-bg-subtle, #f8fafc);
-  color: var(--ds-color-text, #0f172a);
+  background: var(--ds-color-bg-subtle, var(--ds-color-surface-2));
+  color: var(--ds-color-text);
   cursor: pointer;
 }
 
 .gps-in-app-browser__btn:hover:not(:disabled) {
-  background: var(--ds-color-bg-muted, #f1f5f9);
+  background: var(--ds-color-bg-muted, var(--ds-color-surface-2));
 }
 
 .gps-in-app-browser__btn:disabled {
@@ -68,9 +68,9 @@ html[data-theme='dark'] .gps-in-app-browser__toolbar {
 }
 
 html[data-theme='dark'] .gps-in-app-browser__btn {
-  background: rgba(30, 41, 59, 0.6);
-  border-color: rgba(148, 163, 184, 0.25);
-  color: #e2e8f0;
+  background: var(--ds-color-surface-2);
+  border-color: var(--ds-color-border-strong);
+  color: var(--ds-color-text);
 }
 
 .gps-in-app-browser__url-wrap {
@@ -82,13 +82,13 @@ html[data-theme='dark'] .gps-in-app-browser__btn {
   padding: 0 10px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid var(--ds-color-border, rgba(15, 23, 42, 0.12));
-  background: var(--ds-color-bg-subtle, #f8fafc);
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-bg-subtle, var(--ds-color-surface-2));
 }
 
 html[data-theme='dark'] .gps-in-app-browser__url-wrap {
   background: rgba(15, 23, 42, 0.5);
-  border-color: rgba(148, 163, 184, 0.2);
+  border-color: var(--ds-color-border-strong);
 }
 
 .gps-in-app-browser__url-icon {
@@ -104,7 +104,7 @@ html[data-theme='dark'] .gps-in-app-browser__url-wrap {
   background: transparent;
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: var(--ds-color-text-muted, #475569);
+  color: var(--ds-color-text-muted, var(--ds-color-text-secondary));
   outline: none;
   text-overflow: ellipsis;
 }
@@ -118,8 +118,8 @@ html[data-theme='dark'] .gps-in-app-browser__url-wrap {
   padding: 0 12px;
   border-radius: 8px;
   border: 0;
-  background: #10b981;
-  color: #fff;
+  background: var(--ds-color-primary);
+  color: var(--ds-color-on-primary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -134,7 +134,7 @@ html[data-theme='dark'] .gps-in-app-browser__url-wrap {
   flex: 1 1 auto;
   min-height: 0;
   position: relative;
-  background: #fff;
+  background: var(--ds-color-surface);
 }
 
 .gps-in-app-browser__frame-wrap iframe {
@@ -149,9 +149,9 @@ html[data-theme='dark'] .gps-in-app-browser__url-wrap {
   flex: 0 0 auto;
   padding: 6px 12px;
   font-size: 11px;
-  color: var(--ds-color-text-muted, #64748b);
-  border-top: 1px solid var(--ds-color-border, rgba(15, 23, 42, 0.08));
-  background: var(--ds-color-bg-subtle, #f8fafc);
+  color: var(--ds-color-text-muted);
+  border-top: 1px solid var(--ds-color-border);
+  background: var(--ds-color-bg-subtle, var(--ds-color-surface-2));
 }
 
 html[data-theme='dark'] .gps-in-app-browser__hint {

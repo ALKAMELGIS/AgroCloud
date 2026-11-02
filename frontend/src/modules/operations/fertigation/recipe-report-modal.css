@@ -17,7 +17,7 @@
   display: flex;
   flex-direction: column;
   border-radius: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid var(--ds-color-border-strong);
   background: linear-gradient(165deg, #ffffff 0%, #f8fafc 42%, #f1f5f9 100%);
   box-shadow:
     0 4px 6px -1px rgba(15, 23, 42, 0.06),
@@ -37,7 +37,7 @@
   justify-content: space-between;
   gap: 14px;
   padding: 18px 22px 14px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+  border-bottom: 1px solid var(--ds-color-border);
   background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
 }
 
@@ -46,7 +46,7 @@
   font-size: 1.18rem;
   font-weight: 900;
   letter-spacing: -0.03em;
-  color: #0f172a;
+  color: var(--ds-color-text);
   line-height: 1.2;
 }
 
@@ -55,7 +55,7 @@
   font-size: 0.8rem;
   font-weight: 600;
   line-height: 1.55;
-  color: #64748b;
+  color: var(--ds-color-text-muted);
   max-width: 56ch;
 }
 
@@ -64,9 +64,9 @@
   width: 40px;
   height: 40px;
   border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.95);
-  color: #64748b;
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text-muted);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -79,7 +79,7 @@
 
 .recipe-report-modal__close:hover {
   border-color: rgba(5, 150, 105, 0.35);
-  color: #047857;
+  color: var(--ds-color-primary);
   box-shadow: 0 6px 16px rgba(5, 150, 105, 0.12);
 }
 
@@ -113,7 +113,7 @@
   font-weight: 900;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #475569;
+  color: var(--ds-color-text-secondary);
 }
 
 .recipe-report-modal__dates {
@@ -128,18 +128,18 @@
   gap: 6px;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #334155;
+  color: var(--ds-color-text-secondary);
 }
 
 .recipe-report-modal__field input[type='date'] {
   height: 40px;
   border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
+  border: 1px solid var(--ds-color-border);
   padding: 0 10px;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #0f172a;
-  background: #fff;
+  color: var(--ds-color-text);
+  background: var(--ds-color-surface);
 }
 
 .recipe-report-modal__field input:focus-visible {
@@ -151,14 +151,14 @@
   margin: 0;
   font-size: 0.72rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--ds-color-text-muted);
   line-height: 1.45;
 }
 
 .recipe-report-modal__meta {
   font-size: 0.8rem;
   font-weight: 700;
-  color: #334155;
+  color: var(--ds-color-text-secondary);
 }
 
 .recipe-report-modal__rowhead {
@@ -180,7 +180,7 @@
   padding: 0;
   font-size: 0.78rem;
   font-weight: 800;
-  color: #047857;
+  color: var(--ds-color-primary);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -199,7 +199,7 @@
   overflow: auto;
   padding: 6px 4px 10px;
   border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--ds-color-border);
   background: rgba(255, 255, 255, 0.65);
 }
 
@@ -209,11 +209,11 @@
   gap: 8px;
   padding: 8px 11px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  background: #fff;
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface);
   font-size: 0.78rem;
   font-weight: 750;
-  color: #334155;
+  color: var(--ds-color-text-secondary);
   cursor: pointer;
   user-select: none;
 }
@@ -227,7 +227,7 @@
 .recipe-report-modal__chip--on {
   border-color: rgba(4, 120, 87, 0.35);
   background: rgba(236, 253, 245, 0.85);
-  color: #064e3b;
+  color: var(--ds-color-primary-hover);
 }
 
 .recipe-report-modal__foot {
@@ -236,7 +236,7 @@
   gap: 12px;
   flex-wrap: wrap;
   padding: 14px 22px 18px;
-  border-top: 1px solid rgba(15, 23, 42, 0.07);
+  border-top: 1px solid var(--ds-color-border);
   background: linear-gradient(180deg, #fafafa 0%, #ffffff 100%);
 }
 
@@ -259,15 +259,15 @@
 }
 
 .recipe-report-modal__btn--ghost {
-  background: #fff;
-  border-color: rgba(15, 23, 42, 0.12);
-  color: #334155;
+  background: var(--ds-color-surface);
+  border-color: var(--ds-color-border);
+  color: var(--ds-color-text-secondary);
 }
 
 .recipe-report-modal__btn--primary {
-  background: linear-gradient(135deg, #10b981 0%, #059669 45%, #047857 100%);
-  border-color: rgba(4, 120, 87, 0.4);
-  color: #fff;
+  background: var(--ds-color-primary);
+  border-color: var(--ds-color-primary);
+  color: var(--ds-color-on-primary);
   box-shadow:
     0 10px 24px rgba(5, 150, 105, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
@@ -280,29 +280,29 @@
 }
 
 html[data-theme='dark'] .recipe-report-modal {
-  border-color: rgba(148, 163, 184, 0.2);
+  border-color: var(--ds-color-border-strong);
   background: linear-gradient(165deg, #0f172a 0%, #1e293b 100%);
 }
 
 html[data-theme='dark'] .recipe-report-modal__head {
   background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-  border-bottom-color: rgba(148, 163, 184, 0.15);
+  border-bottom-color: var(--ds-color-border-strong);
 }
 
 html[data-theme='dark'] .recipe-report-modal__title {
-  color: #f8fafc;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='dark'] .recipe-report-modal__subtitle,
 html[data-theme='dark'] .recipe-report-modal__hint,
 html[data-theme='dark'] .recipe-report-modal__meta {
-  color: #94a3b8;
+  color: var(--ds-color-text-muted);
 }
 
 html[data-theme='dark'] .recipe-report-modal__chip {
-  background: rgba(30, 41, 59, 0.9);
-  border-color: rgba(148, 163, 184, 0.2);
-  color: #e2e8f0;
+  background: var(--ds-color-surface-2);
+  border-color: var(--ds-color-border-strong);
+  color: var(--ds-color-text);
 }
 
 html[data-theme='dark'] .recipe-report-modal__chip--on {
@@ -313,12 +313,12 @@ html[data-theme='dark'] .recipe-report-modal__chip--on {
 
 html[data-theme='dark'] .recipe-report-modal__chips {
   background: rgba(15, 23, 42, 0.5);
-  border-color: rgba(148, 163, 184, 0.15);
+  border-color: var(--ds-color-border-strong);
 }
 
 html[data-theme='dark'] .recipe-report-modal__foot {
   background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  border-top-color: rgba(148, 163, 184, 0.15);
+  border-top-color: var(--ds-color-border-strong);
 }
 
 @media (max-width: 520px) {

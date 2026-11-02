@@ -193,7 +193,7 @@ export default function Recipes() {
     return (
       <div className="workflow-shell-page recipes-page">
         <div className="recipes-inner">
-          <p style={{ color: '#64748b', fontWeight: 700 }}>{c.invalid}</p>
+          <p className="recipes-invalid">{c.invalid}</p>
           <Link to="/">Home</Link>
         </div>
       </div>
@@ -273,7 +273,12 @@ export default function Recipes() {
 
           <div className="recipes-table-wrap">
             {emptyPrimary ? (
-              <div className="recipes-empty">{c.emptyConfigured}</div>
+              <div className="recipes-empty recipes-empty--block" role="status">
+                <span className="recipes-empty__icon" aria-hidden>
+                  <i className="fa-solid fa-table-columns" />
+                </span>
+                <p className="recipes-empty__text">{c.emptyConfigured}</p>
+              </div>
             ) : (
               <table className="recipes-table">
                 <thead>
@@ -289,7 +294,7 @@ export default function Recipes() {
                 <tbody>
                   {recipeRows.length === 0 ? (
                     <tr>
-                      <td colSpan={columns.length + 1} className="recipes-empty" style={{ border: 'none' }}>
+                      <td colSpan={columns.length + 1} className="recipes-empty recipes-empty--cell">
                         {c.emptyPlaceholder}
                       </td>
                     </tr>
@@ -300,7 +305,7 @@ export default function Recipes() {
                           <td key={col.id}>{row.cells[col.id] ?? ''}</td>
                         ))}
                         <td>
-                          <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>
+                          <span className="recipes-row-empty-cell">—</span>
                         </td>
                       </tr>
                     ))

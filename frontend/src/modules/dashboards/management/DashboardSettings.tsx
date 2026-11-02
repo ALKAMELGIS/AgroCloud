@@ -1,5 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Alert,
+  Button,
+  Divider,
+  FormControlLabel,
+  IconButton,
+  Link,
+  Paper,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material'
+import DashboardCustomizeOutlinedIcon from '@mui/icons-material/DashboardCustomizeOutlined'
+import AddRoundedIcon from '@mui/icons-material/AddRounded'
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded'
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
+import LinkRoundedIcon from '@mui/icons-material/LinkRounded'
 import { useLanguage } from '@/core/localization/i18n'
+import { PageContainer, PageHeader, SectionHeader } from '@/components'
 import {
   AGRO_CLOUD_EMBED_CHANGED_EVENT,
   AGRO_CLOUD_KEEP_ALIVE_CHANGED_EVENT,
@@ -47,6 +67,8 @@ export default function DashboardSettings() {
             added: 'تمت إضافة الرابط إلى القائمة.',
             removed: 'تم حذف الرابط.',
             noSaved: 'لا توجد روابط محفوظة بعد.',
+            remove: 'حذف الرابط',
+            crumbMaster: 'البيانات الرئيسية',
           }
         : {
             title: 'Dashboard Settings',
@@ -70,6 +92,8 @@ export default function DashboardSettings() {
             added: 'URL added to saved links.',
             removed: 'URL removed.',
             noSaved: 'No saved links yet.',
+            remove: 'Remove link',
+            crumbMaster: 'Master Data',
           },
     [language],
   )
@@ -166,135 +190,144 @@ export default function DashboardSettings() {
     setFlash(copy.removed)
   }, [copy.removed, persistSavedUrls])
 
-  return (
-    <div className="page dashboard-settings-page">
-      <header className="dashboard-settings-header">
-        <h1 className="dashboard-settings-title">{copy.title}</h1>
-        <p className="dashboard-settings-lead">{copy.lead}</p>
-      </header>
+  const applySavedUrl = (url: string) => {
+    setDraft(url)
+    writeAgroCloudDashboardUrl(url)
+    window.dispatchEvent(new Event(AGRO_CLOUD_EMBED_CHANGED_EVENT))
+    setFlash(copy.saved)
+  }
 
-      <section className="dashboard-settings-card" aria-labelledby="dash-url-heading">
-        <h2 id="dash-url-heading" className="dashboard-settings-card-heading">
+  const flashIsError = flash === copy.invalid
+
+  return (
+    <PageContainer sx={{ maxWidth: 980 }}>
+      <PageHeader
+        title={copy.title}
+        description={copy.lead}
+        icon={<DashboardCustomizeOutlinedIcon />}
+        breadcrumbs={[{ label: copy.crumbMaster }, { label: copy.title }]}
+      />
+
+      <Paper variant="outlined" component="section" aria-labelledby="dash-url-heading" sx={{ p: { xs: 3, sm: 4 }, borderRadius: 3.5 }}>
+        <Typography id="dash-url-heading" variant="h6" component="h2" sx={{ mb: 2 }}>
           {copy.urlLabel}
-        </h2>
-        <input
+        </Typography>
+        <TextField
           id="master-agro-dash-url"
-          className="dashboard-settings-input"
-          aria-label={copy.urlLabel}
+          fullWidth
           type="url"
-          dir="ltr"
-          spellCheck={false}
-          autoComplete="off"
-          placeholder={DEFAULT_AGRO_CLOUD_DASHBOARD_URL}
           value={draft}
           onChange={e => setDraft(e.target.value)}
+          placeholder={DEFAULT_AGRO_CLOUD_DASHBOARD_URL}
+          error={flashIsError}
+          slotProps={{
+            htmlInput: {
+              'aria-label': copy.urlLabel,
+              dir: 'ltr',
+              spellCheck: false,
+              autoComplete: 'off',
+            },
+          }}
         />
-        <div className="dashboard-settings-actions">
-          <button type="button" className="gis-btn gis-btn-primary" onClick={handleSave}>
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center" sx={{ mt: 2 }}>
+          <Button variant="contained" onClick={handleSave}>
             {copy.save}
-          </button>
-          <button type="button" className="gis-btn gis-btn-outline" onClick={handleReset}>
+          </Button>
+          <Button variant="outlined" onClick={handleReset}>
             {copy.reset}
-          </button>
-          {flash ? (
-            <span
-              className={
-                flash === copy.invalid ? 'dashboard-settings-flash err' : 'dashboard-settings-flash ok'
-              }
-            >
-              {flash}
-            </span>
-          ) : null}
-        </div>
-        <p className="dashboard-settings-hint">
+          </Button>
+        </Stack>
+        {flash ? (
+          <Alert severity={flashIsError ? 'error' : 'success'} sx={{ mt: 2 }} role="status">
+            {flash}
+          </Alert>
+        ) : null}
+        <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 2, mb: 0 }}>
           {language === 'ar' ? (
             <>الافتراضي: لوحة ArcGIS على نطاق EAP. الرابط يُحفظ محلياً في هذا المتصفح.</>
           ) : (
             <>
               Embedded from{' '}
-              <a href={DEFAULT_AGRO_CLOUD_DASHBOARD_URL} target="_blank" rel="noreferrer">
+              <Link href={DEFAULT_AGRO_CLOUD_DASHBOARD_URL} target="_blank" rel="noreferrer">
                 ArcGIS Dashboards (EAP)
-              </a>
+              </Link>
               . Change the URL above if your organization hosts a different dashboard.
             </>
           )}
-        </p>
-      </section>
+        </Typography>
+      </Paper>
 
-      <section className="dashboard-settings-card dashboard-settings-card-pin" aria-labelledby="dash-pin-heading">
-        <h2 id="dash-pin-heading" className="dashboard-settings-card-heading">
+      <Paper variant="outlined" component="section" aria-labelledby="dash-pin-heading" sx={{ p: { xs: 3, sm: 4 }, borderRadius: 3.5 }}>
+        <Typography id="dash-pin-heading" variant="h6" component="h2" sx={{ mb: 1 }}>
           {copy.pinHeading}
-        </h2>
-        <label className="dashboard-settings-pin-row">
-          <input
-            type="checkbox"
-            className="dashboard-settings-pin-checkbox"
-            checked={pinDashboard}
-            onChange={e => handlePinChange(e.target.checked)}
-          />
-          <span className="dashboard-settings-pin-text">{copy.pinLabel}</span>
-        </label>
-        <p className="dashboard-settings-pin-hint">{copy.pinHint}</p>
-      </section>
+        </Typography>
+        <FormControlLabel
+          sx={{ mx: 0, gap: 1.5, alignItems: 'center' }}
+          control={<Switch checked={pinDashboard} onChange={e => handlePinChange(e.target.checked)} />}
+          label={<Typography variant="body2" fontWeight={600}>{copy.pinLabel}</Typography>}
+        />
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, maxWidth: 720 }}>
+          {copy.pinHint}
+        </Typography>
+      </Paper>
 
-      <section className="dashboard-settings-card dashboard-settings-card-presets" aria-labelledby="dash-saved-links-heading">
-        <div className="dashboard-settings-presets-head">
-          <div>
-            <h2 id="dash-saved-links-heading" className="dashboard-settings-card-heading">
-              {copy.quickLinksHeading}
-            </h2>
-            <p className="dashboard-settings-presets-lead">{copy.quickLinksLead}</p>
-          </div>
-          <div className="dashboard-settings-actions">
-            <button type="button" className="gis-btn gis-btn-primary" onClick={addCurrentUrl}>
-              <i className="fa-solid fa-plus" aria-hidden /> {copy.addCurrent}
-            </button>
-            <button type="button" className="gis-btn gis-btn-outline" onClick={clearSavedUrls} disabled={savedUrls.length === 0}>
-              <i className="fa-solid fa-trash" aria-hidden /> {copy.clearAll}
-            </button>
-          </div>
-        </div>
+      <Paper variant="outlined" component="section" aria-label={copy.quickLinksHeading} sx={{ p: { xs: 3, sm: 4 }, borderRadius: 3.5 }}>
+        <SectionHeader
+            title={copy.quickLinksHeading}
+            description={copy.quickLinksLead}
+            actions={
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={addCurrentUrl}>
+                  {copy.addCurrent}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutlineRoundedIcon />}
+                  onClick={clearSavedUrls}
+                  disabled={savedUrls.length === 0}
+                >
+                  {copy.clearAll}
+                </Button>
+              </Stack>
+            }
+          />
         {savedUrls.length === 0 ? (
-          <p className="dashboard-settings-empty">{copy.noSaved}</p>
+          <Typography variant="body2" color="text.secondary" className="dashboard-settings-empty">
+            {copy.noSaved}
+          </Typography>
         ) : (
           <div className="dashboard-settings-preset-list" role="list">
-            {savedUrls.map(url => (
+            {savedUrls.map((url, i) => (
               <div className="dashboard-settings-preset-item" role="listitem" key={url}>
-                <button
-                  type="button"
-                  className="dashboard-settings-preset-link"
-                  onClick={() => {
-                    setDraft(url)
-                    writeAgroCloudDashboardUrl(url)
-                    window.dispatchEvent(new Event(AGRO_CLOUD_EMBED_CHANGED_EVENT))
-                    setFlash(copy.saved)
-                  }}
-                  title={url}
-                >
-                  {url}
-                </button>
-                <div className="dashboard-settings-preset-actions">
+                {i > 0 ? <Divider className="dashboard-settings-preset-divider" /> : null}
+                <div className="dashboard-settings-preset-row">
+                  <LinkRoundedIcon fontSize="small" className="dashboard-settings-preset-icon" aria-hidden />
                   <button
                     type="button"
-                    className="dashboard-settings-preset-btn"
-                    onClick={() => {
-                      setDraft(url)
-                      writeAgroCloudDashboardUrl(url)
-                      window.dispatchEvent(new Event(AGRO_CLOUD_EMBED_CHANGED_EVENT))
-                      setFlash(copy.saved)
-                    }}
+                    className="dashboard-settings-preset-link"
+                    onClick={() => applySavedUrl(url)}
+                    title={url}
+                    dir="ltr"
                   >
-                    {copy.applySaved}
+                    {url}
                   </button>
-                  <button type="button" className="dashboard-settings-preset-btn is-danger" onClick={() => removeSavedUrl(url)}>
-                    <i className="fa-solid fa-xmark" aria-hidden />
-                  </button>
+                  <div className="dashboard-settings-preset-actions">
+                    <Button size="small" variant="outlined" onClick={() => applySavedUrl(url)}>
+                      {copy.applySaved}
+                    </Button>
+                    <Tooltip title={copy.remove}>
+                      <IconButton size="small" aria-label={copy.remove} onClick={() => removeSavedUrl(url)}>
+                        <CloseRoundedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </section>
-    </div>
+      </Paper>
+    </PageContainer>
   )
 }

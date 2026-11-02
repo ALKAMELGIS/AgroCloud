@@ -1255,7 +1255,7 @@ html[data-theme='light'] .si-its-float .si-dyn-snap__card {
 }
 
 html[data-theme='light'] .si-its-float .si-dyn-snap__preview {
-  background: #e2e8f0;
+  background: var(--ds-color-bg-subtle);
   border-color: var(--its-line);
 }
 

@@ -1951,7 +1951,7 @@ html[data-theme='light'] .si-map-floating-controls .si-weather-toggle {
 }
 
 html[data-theme='light'] .si-map-floating-controls .si-weather-button:hover {
-  border-color: rgba(15, 23, 42, 0.2);
+  border-color: var(--ds-color-border-strong);
   background: var(--si-wx-glass-deep);
 }
 

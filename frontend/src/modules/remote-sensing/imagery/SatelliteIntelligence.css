@@ -81,7 +81,7 @@ main.content > .si-page {
 }
 
 html[data-theme='light'] .si-page {
-  background: #f1f5f9;
+  background: var(--ds-color-surface-2);
   --si-panel-border: rgba(15, 23, 42, 0.1);
   --si-panel-glow: rgba(4, 120, 87, 0.06);
   --si-map-ctrl-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.9) 100%);
@@ -118,7 +118,7 @@ html[data-theme='light'] .si-page {
 }
 
 html[data-theme='light'] .si-main-content {
-  background: #f1f5f9;
+  background: var(--ds-color-surface-2);
 }
 
 .si-main-content {
@@ -2813,13 +2813,13 @@ html[data-theme='light'] .si-proc-mb-row {
 }
 
 html[data-theme='light'] .si-proc-mb-btn {
-  color: #334155;
+  color: var(--ds-color-text-secondary);
   border-inline-end-color: rgba(148, 163, 184, 0.45);
 }
 
 html[data-theme='light'] .si-proc-mb-btn:hover {
   background: rgba(241, 245, 249, 0.95);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-proc-mb-btn--active {
@@ -2828,12 +2828,12 @@ html[data-theme='light'] .si-proc-mb-btn--active {
 }
 
 html[data-theme='light'] .si-proc-mb-btn-label {
-  color: #475569;
+  color: var(--ds-color-text-secondary);
 }
 
 html[data-theme='light'] .si-proc-mb-toggle {
   background: rgba(241, 245, 249, 0.9);
-  color: #64748b;
+  color: var(--ds-color-text-muted);
   border-inline-start-color: rgba(148, 163, 184, 0.45);
 }
 
@@ -3048,64 +3048,64 @@ html[data-theme='light'] .si-env-toolbox-nav {
 
 html[data-theme='light'] .si-env-toolbox-back {
   background: rgba(255, 255, 255, 0.95);
-  color: #0f172a;
+  color: var(--ds-color-text);
   border-color: rgba(148, 163, 184, 0.4);
 }
 
 html[data-theme='light'] .si-env-toolbox-back:hover {
-  background: #f8fafc;
+  background: var(--ds-color-surface-2);
   border-color: rgba(99, 102, 241, 0.45);
 }
 
 html[data-theme='light'] .si-env-toolbox-breadcrumb-current {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-env-toolbox-breadcrumb {
-  color: #64748b;
+  color: var(--ds-color-text-muted);
 }
 
 /* Light theme â€” layer picker + field controls inside map toolbox (matches si-sat-ctx-dock--light) */
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-select,
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-field input[type='date'] {
   background: rgba(255, 255, 255, 0.92) !important;
-  color: #0f172a !important;
+  color: var(--ds-color-text) !important;
   border-color: rgba(148, 163, 184, 0.32) !important;
   color-scheme: light !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-label,
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-kicker {
-  color: #475569 !important;
+  color: var(--ds-color-text-secondary) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-title,
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-checkbox-row {
-  color: #0f172a !important;
+  color: var(--ds-color-text) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__abbr,
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__option {
-  color: #0f172a !important;
+  color: var(--ds-color-text) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__science {
-  color: #475569 !important;
+  color: var(--ds-color-text-secondary) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__menu {
   background: rgba(255, 255, 255, 0.98) !important;
-  border-color: rgba(148, 163, 184, 0.28) !important;
+  border-color: var(--ds-color-border-strong) !important;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__search-wrap {
   background: rgba(255, 255, 255, 0.98) !important;
-  border-bottom-color: rgba(148, 163, 184, 0.18) !important;
+  border-bottom-color: var(--ds-color-border-strong) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__search {
-  color: #0f172a !important;
+  color: var(--ds-color-text) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__search::placeholder {
@@ -3117,7 +3117,7 @@ html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-s
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__group-label {
-  color: #64748b !important;
+  color: var(--ds-color-text-muted) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__option:hover,
@@ -3228,12 +3228,12 @@ html[data-theme='light'] .si-env-side-strip {
 }
 
 html[data-theme='light'] .si-env-side-row {
-  color: #475569;
+  color: var(--ds-color-text-secondary);
 }
 
 html[data-theme='light'] .si-env-side-row:hover {
   background: rgba(241, 245, 249, 0.95);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-env-side-row--selected {
@@ -3750,7 +3750,7 @@ html[data-theme='light'] .si-env-layer-options-menu {
 }
 
 html[data-theme='light'] .si-env-layer-options-menu__item {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-env-layer-options-menu__item > i {
@@ -12619,7 +12619,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
 
 html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-explore-collections-search {
   background: rgba(241, 245, 249, 0.9);
-  border-color: rgba(148, 163, 184, 0.28);
+  border-color: var(--ds-color-border-strong);
 }
 
 /* ------------------------------------------------------------------

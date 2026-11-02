@@ -695,7 +695,7 @@ html[data-theme='dark'] .si-wviz-range::-moz-range-track {
 
 html[data-theme='dark'] .si-wviz-range::-webkit-slider-thumb,
 html[data-theme='dark'] .si-wviz-range::-moz-range-thumb {
-  border-color: #1e293b;
+  border-color: var(--ds-color-border-strong);
 }
 
 /* ── Map overlay canvas ── */

@@ -2,13 +2,13 @@
 
 .sensor-shell {
   --sip-page-bg: transparent;
-  --sip-green: #2d5a27;
-  --sip-green-hover: #244622;
-  --sip-green-soft: #f0faf5;
-  --sip-green-active-text: #005d37;
-  --sip-slate: #546e7a;
-  --sip-border: #e2e8f0;
-  --sip-card-bg: #ffffff;
+  --sip-green: var(--ds-color-primary);
+  --sip-green-hover: var(--ds-color-primary-hover);
+  --sip-green-soft: var(--ds-color-primary-soft);
+  --sip-green-active-text: var(--ds-color-primary-hover);
+  --sip-slate: var(--ds-color-text-muted);
+  --sip-border: var(--ds-color-border);
+  --sip-card-bg: var(--ds-color-surface);
 
   min-height: calc(100vh - 120px);
   background: var(--sip-page-bg);
@@ -21,14 +21,10 @@ html[data-theme='dark'] .sensor-shell {
   background: transparent;
 }
 
-html[data-theme='dark'] .sensor-empty-card {
-  background: rgba(15, 23, 42, 0.45);
-  border-color: rgba(51, 65, 85, 0.65);
-}
-
+html[data-theme='dark'] .sensor-empty-card,
 html[data-theme='dark'] .sensor-integration-card {
-  background: rgba(15, 23, 42, 0.42);
-  border-color: rgba(51, 65, 85, 0.65);
+  background: var(--ds-color-surface);
+  border-color: var(--ds-color-border);
 }
 
 /* Full width of `<main>` minus app gutters (aligned with `--content-pad` from app-design-system). */
@@ -75,7 +71,7 @@ html[data-theme='dark'] .sensor-integration-card {
 .sensor-page-icon--emerald {
   background: linear-gradient(145deg, rgba(16, 185, 129, 0.2), rgba(4, 120, 87, 0.06));
   border: 1px solid rgba(16, 185, 129, 0.28);
-  color: #047857;
+  color: var(--ds-color-primary);
 }
 
 .sensor-page-icon--sky {
@@ -124,8 +120,9 @@ html[data-theme='dark'] .sensor-integration-card {
   font-weight: 600;
   cursor: pointer;
   background: var(--sip-green);
-  color: #fff;
+  color: var(--ds-color-on-primary);
   white-space: nowrap;
+  min-height: 44px;
 }
 
 .sensor-btn-primary > .fa-solid {
@@ -154,7 +151,7 @@ html[data-theme='dark'] .sensor-integration-card {
   font-weight: 600;
   cursor: pointer;
   background: var(--sip-card-bg);
-  color: #374151;
+  color: var(--ds-color-text-secondary);
 }
 
 .sensor-btn-outline > .fa-solid {
@@ -163,8 +160,8 @@ html[data-theme='dark'] .sensor-integration-card {
 }
 
 .sensor-btn-outline:hover {
-  border-color: #cfd5d9;
-  background: #fafafa;
+  border-color: var(--ds-color-border-strong);
+  background: var(--ds-color-surface-2);
 }
 
 .sensor-btn-secondary {
@@ -177,12 +174,12 @@ html[data-theme='dark'] .sensor-integration-card {
   font-size: var(--ds-text-xs);
   font-weight: 600;
   cursor: pointer;
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--ds-color-surface-2);
+  color: var(--ds-color-text-secondary);
 }
 
 .sensor-btn-secondary:hover:not(:disabled) {
-  background: #e5e7eb;
+  background: var(--ds-color-border);
 }
 
 .sensor-btn-secondary:disabled {
@@ -215,7 +212,7 @@ html[data-theme='dark'] .sensor-integration-card {
 }
 
 .sensor-btn-ghost.danger {
-  color: var(--ds-color-danger, #b91c1c);
+  color: var(--ds-color-danger);
 }
 
 .sensor-flash {
@@ -243,7 +240,7 @@ html[data-theme='dark'] .sensor-integration-card {
   max-width: none;
   margin: 0;
   background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  border: 1px solid var(--ds-color-border);
   border-radius: 16px;
   padding: clamp(56px, 14vh, 104px) clamp(20px, 4vw, 40px);
   text-align: center;
@@ -255,7 +252,7 @@ html[data-theme='dark'] .sensor-integration-card {
 .sensor-empty-text {
   margin: 0 0 var(--ds-space-5);
   font-size: var(--ds-text-sm);
-  color: #64748b;
+  color: var(--ds-color-text-muted);
 }
 
 /* Integration list */
@@ -278,7 +275,7 @@ html[data-theme='dark'] .sensor-integration-card {
   flex-wrap: wrap;
   padding: var(--ds-space-4) var(--ds-space-5);
   background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  border: 1px solid var(--ds-color-border);
   border-radius: 16px;
   box-shadow: none;
 }
@@ -300,7 +297,7 @@ html[data-theme='dark'] .sensor-integration-card {
   margin: 0;
   font-size: 11px;
   font-family: var(--ds-font-mono, ui-monospace, monospace);
-  color: #6b7280;
+  color: var(--ds-color-text-muted);
   word-break: break-all;
 }
 
@@ -323,8 +320,8 @@ html[data-theme='dark'] .sensor-integration-card {
   letter-spacing: 0.04em;
   padding: 4px 8px;
   border-radius: 6px;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--ds-color-surface-2);
+  color: var(--ds-color-text-muted);
 }
 
 .sensor-badge-active {
@@ -357,9 +354,9 @@ html[data-theme='dark'] .sensor-integration-card {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--ds-color-surface);
   border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--ds-color-border);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.03),
     0 24px 48px -12px rgba(15, 23, 42, 0.22),
@@ -369,7 +366,7 @@ html[data-theme='dark'] .sensor-integration-card {
 .sensor-modal-header {
   flex-shrink: 0;
   padding: 22px 28px 18px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  border-bottom: 1px solid var(--ds-color-border);
   background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
 }
 
@@ -378,7 +375,7 @@ html[data-theme='dark'] .sensor-integration-card {
   font-size: 1.125rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .sensor-modal-body {
@@ -414,8 +411,8 @@ html[data-theme='dark'] .sensor-integration-card {
   gap: 12px;
   flex-wrap: wrap;
   padding: 18px 28px 22px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-  background: #ffffff;
+  border-top: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface);
   box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.04);
 }
 
@@ -451,7 +448,7 @@ html[data-theme='dark'] .sensor-integration-card {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--ds-color-text-muted);
 }
 
 .sensor-mapping-intro {
@@ -465,7 +462,7 @@ html[data-theme='dark'] .sensor-integration-card {
   padding: 12px 14px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--ds-color-border);
   margin-bottom: 18px;
 }
 
@@ -510,7 +507,7 @@ html[data-theme='dark'] .sensor-integration-card {
   padding: 0 6px;
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--ds-color-text-muted);
   z-index: 1;
 }
 
@@ -525,7 +522,7 @@ html[data-theme='dark'] .sensor-integration-card {
   width: 100%;
   min-width: 0;
   border-radius: 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--ds-color-border-strong);
   background: var(--sip-card-bg);
   color: var(--ds-color-text);
   font-size: var(--ds-text-sm);
@@ -538,14 +535,14 @@ html[data-theme='dark'] .sensor-integration-card {
 .sensor-modal-body .sensor-field.outlined select,
 .sensor-modal-body .sensor-field.outlined textarea {
   padding: 13px 14px;
-  border-color: #e2e8f0;
-  background: #ffffff;
+  border-color: var(--ds-color-border);
+  background: var(--ds-color-surface);
   border-radius: 10px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .sensor-modal-body .sensor-field-label {
-  background-color: #f1f5f9;
+  background-color: var(--ds-color-surface-2);
 }
 
 .sensor-field.outlined input:focus,
@@ -557,7 +554,7 @@ html[data-theme='dark'] .sensor-integration-card {
 
 .sensor-field-hint {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--ds-color-text-muted);
   margin-top: 4px;
   padding-inline-start: 4px;
 }

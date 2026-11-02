@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '@/core/localization/i18n'
 import { useGeminiApiKey } from '@/core/hooks/useGeminiApiKey'
@@ -13,6 +13,20 @@ type Provider = 'gemini' | 'deepseek'
 
 const INTRO_EN =
   "Hello! I'm AgriCloud AI Agro-Chat. For your saved GIS layers I prioritize GIS Content in this browser; for general topics (e.g. broad weather or definitions) I add clear, labeled general knowledge when your layers don't hold the answer."
+const SUGGESTIONS_EN = [
+  'Which GIS layers do I have saved?',
+  'Summarize the fields in my farm boundaries layer',
+  'How much water does a date palm need in summer?',
+  'What does a low NDVI value usually indicate?',
+] as const
+
+const SUGGESTIONS_AR = [
+  'ما طبقات GIS المحفوظة لدي؟',
+  'لخّص الحقول في طبقة حدود المزرعة',
+  'كم تحتاج نخلة التمر من الماء في الصيف؟',
+  'ماذا تعني قيمة NDVI المنخفضة عادةً؟',
+] as const
+
 const INTRO_AR =
   'مرحباً! أنا محادثة AgriCloud الذكية. أبحث أولاً في بيانات طبقاتك المحفوظة (GIS Content)؛ وإن لم تكفِ، أضيف إجابة عامة من المعرفة العامة مع تصنيف واضح لرفع الدقة وتقليل اللبس.'
 
@@ -32,6 +46,14 @@ export default function AiAgroChat() {
   const inFlight = useRef(false)
   const attachmentRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLInputElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const logRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const el = logRef.current
+    // Keep the intro + suggestions in view until the first message; then follow the newest reply.
+    if (el && (messages.length > 0 || busy)) el.scrollTop = el.scrollHeight
+  }, [messages.length, busy])
 
   const introText = ar ? INTRO_AR : INTRO_EN
 
@@ -131,6 +153,13 @@ export default function AiAgroChat() {
     })
   }, [ar, draft, provider, geminiKey, deepseekKey])
 
+  const pickSuggestion = useCallback((text: string) => {
+    setDraft(text)
+    inputRef.current?.focus()
+  }, [])
+
+  const suggestions = ar ? SUGGESTIONS_AR : SUGGESTIONS_EN
+
   const displayRows: Msg[] = messages.length === 0 ? [{ id: 'intro', role: 'assistant', text: introText }] : messages
 
   return (
@@ -145,7 +174,7 @@ export default function AiAgroChat() {
               <h1 className="aagc-title">{ar ? 'محادثة Agro الذكية' : 'AI Agro-Chat'}</h1>
               <p className="aagc-sub">
                 <Link to="/dashboards/ai-agro-cloud">AI AgroCloud</Link>
-                {' · '}
+                <span aria-hidden> · </span>
                 {ar ? 'محتوى GIS' : 'GIS Content'}
               </p>
             </div>
@@ -175,19 +204,49 @@ export default function AiAgroChat() {
           </div>
         </header>
 
-        <div className="aagc-messages" role="log" aria-live="polite" aria-relevant="additions">
+        <div ref={logRef} className="aagc-messages" role="log" aria-live="polite" aria-relevant="additions">
           {displayRows.map(m => (
             <div key={m.id} className={`aagc-row aagc-row--${m.role === 'user' ? 'user' : 'bot'}`}>
+              {m.role === 'assistant' ? (
+                <span className="aagc-avatar" aria-hidden>
+                  <i className="fa-solid fa-seedling" />
+                </span>
+              ) : null}
               <div className="aagc-bubble">
+                <span className="visually-hidden">{m.role === 'user' ? (ar ? 'أنت:' : 'You:') : ar ? 'المساعد:' : 'Assistant:'} </span>
                 <p>{m.text}</p>
               </div>
             </div>
           ))}
+          {messages.length === 0 && !busy ? (
+            <div className="aagc-suggestions">
+              <p className="aagc-suggestions__label" id="aagc-suggestions-label">
+                {ar ? 'جرّب أن تسأل' : 'Try asking'}
+              </p>
+              <ul className="aagc-suggestions__list" aria-labelledby="aagc-suggestions-label">
+                {suggestions.map(q => (
+                  <li key={q}>
+                    <button type="button" className="aagc-suggestion" onClick={() => pickSuggestion(q)}>
+                      <i className="fa-regular fa-lightbulb" aria-hidden />
+                      <span>{q}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {busy ? (
             <div className="aagc-row aagc-row--bot">
+              <span className="aagc-avatar" aria-hidden>
+                <i className="fa-solid fa-seedling" />
+              </span>
               <div className="aagc-bubble">
                 <span className="aagc-typing">
-                  <i className="fa-solid fa-spinner fa-spin" aria-hidden />
+                  <span className="aagc-typing__dots" aria-hidden>
+                    <span />
+                    <span />
+                    <span />
+                  </span>
                   {ar ? 'جارٍ التفكير…' : 'Thinking…'}
                 </span>
               </div>
@@ -195,14 +254,19 @@ export default function AiAgroChat() {
           ) : null}
         </div>
 
-        {error ? <p className="aagc-error">{error}</p> : null}
+        {error ? (
+          <p className="aagc-error" role="alert">
+            <i className="fa-solid fa-circle-exclamation" aria-hidden />
+            <span>{error}</span>
+          </p>
+        ) : null}
 
         <footer className="aagc-footer">
           <input ref={attachmentRef} type="file" hidden onChange={onPickAttachment} />
           <input ref={imageRef} type="file" accept="image/*" hidden onChange={onPickImage} />
           {pickedAssetName ? (
             <div className="aagc-picked-asset" role="status">
-                <i className={inputMode === 'image' ? 'fa-solid fa-image' : 'fa-solid fa-paperclip'} aria-hidden />
+              <i className={inputMode === 'image' ? 'fa-solid fa-image' : 'fa-solid fa-paperclip'} aria-hidden />
               <span>{pickedAssetName}</span>
               <button
                 type="button"
@@ -219,6 +283,7 @@ export default function AiAgroChat() {
           ) : null}
           <div className="aagc-input-row">
             <textarea
+              ref={inputRef}
               className="aagc-input"
               rows={2}
               value={draft}
@@ -233,40 +298,43 @@ export default function AiAgroChat() {
               disabled={busy}
               aria-label={ar ? 'رسالة' : 'Message'}
             />
-            <button type="button" className="aagc-send" onClick={() => void send()} disabled={busy || !draft.trim()}>
-              {ar ? 'إرسال' : 'Send'}
-            </button>
-            <div className="aagc-input-tools" role="group" aria-label={ar ? 'أدوات الإدخال' : 'Input tools'}>
-              <button
-                type="button"
-                className={`aagc-tool-btn${inputMode === 'attachment' ? ' is-active' : ''}`}
-                onClick={() => attachmentRef.current?.click()}
-                title={ar ? 'إرفاق ملف' : 'Attachment file'}
-                aria-label={ar ? 'إرفاق ملف' : 'Attachment file'}
-                disabled={busy}
-              >
-                <i className="fa-solid fa-paperclip" aria-hidden />
-              </button>
-              <button
-                type="button"
-                className={`aagc-tool-btn${inputMode === 'image' ? ' is-active' : ''}`}
-                onClick={() => imageRef.current?.click()}
-                title={ar ? 'إرفاق صورة' : 'Image attachment'}
-                aria-label={ar ? 'إرفاق صورة' : 'Image attachment'}
-                disabled={busy}
-              >
-                <i className="fa-solid fa-image" aria-hidden />
-              </button>
-              <button
-                type="button"
-                className={`aagc-tool-btn${inputMode === 'voice' ? ' is-active is-recording' : ''}`}
-                onClick={toggleVoiceUi}
-                title={ar ? 'تسجيل صوت' : 'Voice recording'}
-                aria-label={ar ? 'تسجيل صوت' : 'Voice recording'}
-                aria-pressed={inputMode === 'voice'}
-                disabled={busy}
-              >
-                <i className="fa-solid fa-microphone" aria-hidden />
+            <div className="aagc-composer-actions">
+              <div className="aagc-input-tools" role="group" aria-label={ar ? 'أدوات الإدخال' : 'Input tools'}>
+                <button
+                  type="button"
+                  className={`aagc-tool-btn${inputMode === 'attachment' ? ' is-active' : ''}`}
+                  onClick={() => attachmentRef.current?.click()}
+                  title={ar ? 'إرفاق ملف' : 'Attachment file'}
+                  aria-label={ar ? 'إرفاق ملف' : 'Attachment file'}
+                  disabled={busy}
+                >
+                  <i className="fa-solid fa-paperclip" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className={`aagc-tool-btn${inputMode === 'image' ? ' is-active' : ''}`}
+                  onClick={() => imageRef.current?.click()}
+                  title={ar ? 'إرفاق صورة' : 'Image attachment'}
+                  aria-label={ar ? 'إرفاق صورة' : 'Image attachment'}
+                  disabled={busy}
+                >
+                  <i className="fa-solid fa-image" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className={`aagc-tool-btn${inputMode === 'voice' ? ' is-active is-recording' : ''}`}
+                  onClick={toggleVoiceUi}
+                  title={ar ? 'تسجيل صوت' : 'Voice recording'}
+                  aria-label={ar ? 'تسجيل صوت' : 'Voice recording'}
+                  aria-pressed={inputMode === 'voice'}
+                  disabled={busy}
+                >
+                  <i className="fa-solid fa-microphone" aria-hidden />
+                </button>
+              </div>
+              <button type="button" className="aagc-send" onClick={() => void send()} disabled={busy || !draft.trim()}>
+                <span>{ar ? 'إرسال' : 'Send'}</span>
+                <i className="fa-solid fa-paper-plane aagc-send__icon" aria-hidden />
               </button>
             </div>
           </div>

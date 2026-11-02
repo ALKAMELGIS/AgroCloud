@@ -132,7 +132,7 @@ html[data-theme='light'] .si-map-swipe-panel__grid select {
 }
 
 html[data-theme='light'] .si-map-swipe-panel__grid input:hover {
-  background-color: #f8fafc;
+  background-color: var(--ds-color-surface-2);
   border-color: var(--si-overlay-border-strong);
 }
 
@@ -338,7 +338,7 @@ html[data-theme='light'] .si-map-container .si-geo-explorer-bubble {
 }
 
 html[data-theme='light'] .si-map-container .si-geo-explorer-row--user .si-geo-explorer-bubble {
-  background: #f1f5f9;
+  background: var(--ds-color-surface-2);
   border-color: rgba(34, 34, 34, 0.14);
 }
 
@@ -669,7 +669,7 @@ html[data-theme='light'] .si-geo-ai-float-body .si-geo-explorer-bubble {
 }
 
 html[data-theme='light'] .si-geo-ai-float-body .si-geo-explorer-row--user .si-geo-explorer-bubble {
-  background: #f1f5f9;
+  background: var(--ds-color-surface-2);
 }
 
 html[data-theme='light'] .si-geo-ai-float-fab {

@@ -62,7 +62,7 @@ export function GisContentPortalToolbar({
   onToggleSelectAll: () => void
 }) {
   return (
-    <div className="gis-portal-main__toolbar">
+    <div className="gis-portal-main__toolbar ds-toolbar">
       <div className="gis-portal-main__toolbar-left">
         {showSelectAll ? (
           <input
@@ -505,7 +505,7 @@ export function GisContentPortalTableView({
   }
 
   return (
-    <div className="gis-portal-table-wrap">
+    <div className="gis-portal-table-wrap ds-table-wrap">
       <table className="gis-portal-table">
         <thead>
           <tr>
