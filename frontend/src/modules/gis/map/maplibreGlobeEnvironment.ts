@@ -1,5 +1,23 @@
-import type { Map as MaplibreMap } from 'maplibre-gl'
-import type { SkySpecification } from '@maplibre/maplibre-gl-style-spec'
+import type { Map as MaplibreMap, SkySpecification } from 'maplibre-gl'
+
+/**
+ * Any map exposing `setProjection` — MapLibre (`{ type }`), Mapbox GL (`{ name }` | string)
+ * or a test double. Parameter typed `never` so every library signature is assignable.
+ */
+export type AgroCloudProjectionSettableMap = { setProjection?: (projection: never) => unknown }
+
+type AgroCloudProjectionInput = { type: 'globe' | 'mercator' } | { name: 'globe' | 'mercator' }
+
+/** Invoke `map.setProjection` (bound to `map`) across MapLibre / Mapbox signature differences. */
+function callSetProjection(map: AgroCloudProjectionSettableMap, projection: AgroCloudProjectionInput): void {
+  const setProjection = map.setProjection as ((this: unknown, p: AgroCloudProjectionInput) => unknown) | undefined
+  setProjection?.call(map, projection)
+}
+
+/** MapLibre GL 5 has no `setFog`; Mapbox-compatible maps / doubles may provide one. */
+type MaplibreMapWithOptionalFog = MaplibreMap & {
+  setFog?: (fog: typeof MAPLIBRE_GLOBE_FOG_GALAXY | null) => unknown
+}
 
 /** Google Earth–style space backdrop (pure black + procedural stars via fog). */
 export const MAPLIBRE_GLOBE_SKY_GALAXY: SkySpecification = {
@@ -31,34 +49,34 @@ export const MAPLIBRE_GLOBE_LIGHT = {
 }
 
 export function setMapLibreGlobeProjection(
-  map: { setProjection?: (p: { type: string } | { name: string }) => void } | null | undefined,
+  map: AgroCloudProjectionSettableMap | null | undefined,
 ): void {
   if (!map?.setProjection) return
   try {
-    map.setProjection({ type: 'globe' })
+    callSetProjection(map, { type: 'globe' })
     return
   } catch {
     /* Mapbox GL */
   }
   try {
-    map.setProjection({ name: 'globe' })
+    callSetProjection(map, { name: 'globe' })
   } catch {
     /* ignore */
   }
 }
 
 export function setMapLibreMercatorProjection(
-  map: { setProjection?: (p: { type: string } | { name: string }) => void } | null | undefined,
+  map: AgroCloudProjectionSettableMap | null | undefined,
 ): void {
   if (!map?.setProjection) return
   try {
-    map.setProjection({ type: 'mercator' })
+    callSetProjection(map, { type: 'mercator' })
     return
   } catch {
     /* Mapbox GL */
   }
   try {
-    map.setProjection({ name: 'mercator' })
+    callSetProjection(map, { name: 'mercator' })
   } catch {
     /* ignore */
   }
@@ -74,7 +92,7 @@ function transparentMapLibreCanvas(map: MaplibreMap): void {
 }
 
 export function applyMapLibreGlobeGalaxyFog(
-  map: MaplibreMap | null | undefined,
+  map: MaplibreMapWithOptionalFog | null | undefined,
   zoom?: number,
 ): void {
   if (!map?.setFog) return
@@ -83,7 +101,7 @@ export function applyMapLibreGlobeGalaxyFog(
     if (z < MAPLIBRE_GLOBE_PORTFOLIO_MAX_ZOOM) {
       map.setFog(MAPLIBRE_GLOBE_FOG_GALAXY)
     } else {
-      map.setFog(null as never)
+      map.setFog(null)
     }
   } catch {
     /* style not ready */
@@ -129,10 +147,16 @@ export function applyMapLibreGlobeOrFieldEnvironment(
   else applyMapLibreFieldBasemapEnvironment(map)
 }
 
-export function mergeMapLibreGlobeCockpitStyle<T extends Record<string, unknown>>(base: T): T {
+export function mergeMapLibreGlobeCockpitStyle<T extends Record<string, unknown>>(
+  base: T,
+): T & {
+  projection: { type: 'globe' }
+  sky: SkySpecification
+  light: typeof MAPLIBRE_GLOBE_LIGHT
+} {
   return {
     ...base,
-    projection: { type: 'globe' },
+    projection: { type: 'globe' as const },
     sky: MAPLIBRE_GLOBE_SKY_GALAXY,
     light: MAPLIBRE_GLOBE_LIGHT,
   }

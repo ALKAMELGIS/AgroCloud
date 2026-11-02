@@ -93,7 +93,7 @@ function queryRenderedHitsAtPoint(
       geometry: [number, number] | [[number, number], [number, number]],
       opts?: { layers?: string[] },
     ) => MapboxRenderedHit[]
-  },
+  } & Parameters<typeof filterMapLayerIdsThatExist>[0],
   lng: number,
   lat: number,
   layerIds: string[],

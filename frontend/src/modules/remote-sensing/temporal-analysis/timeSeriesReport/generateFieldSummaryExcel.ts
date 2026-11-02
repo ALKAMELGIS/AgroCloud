@@ -1069,7 +1069,7 @@ export async function generateFieldSummaryExcel(input: {
     chartSpecs.length > 0
       ? await injectNativeMeteoCharts(raw as ArrayBuffer, chartSpecs, AREA_COVERAGE_SHEET)
       : raw
-  const blob = new Blob([withCharts], {
+  const blob = new Blob([withCharts as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
   const filename = input.filename || defaultFieldReportFilename(input.aoiName, input.toDate)

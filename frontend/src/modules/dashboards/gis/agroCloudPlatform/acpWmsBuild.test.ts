@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildAgroStructuresLayerAoiMask, fetchAgroStructuresGeoJson } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import { buildAcpWmsSessionClipFeatureCollection, buildAcpWmsTileClipSource, resolveAcpWmsBuildOptions } from './acpWmsClip'
 import { buildAcpWmsChunkTileEntries, limitAcpWmsTileEntries } from './acpWmsViewportEngine'
@@ -6,6 +6,10 @@ import {
   buildSentinelLayerLiveDisplayChunks,
   isSentinelLayerLiveWmsRenderReady,
 } from '@/modules/remote-sensing/indices/sentinelLayerLiveWmsEngine'
+import {
+  agroStructuresLiveArcgisEnabled,
+  stubAgroStructuresFeatureServerFetch,
+} from '@/modules/remote-sensing/imagery/__fixtures__/agroStructuresSyntheticFeatureServer'
 
 describe('limitAcpWmsTileEntries', () => {
   it('passthrough — layer cap is applied at WKT merge build time', () => {
@@ -20,7 +24,17 @@ describe('limitAcpWmsTileEntries', () => {
   })
 })
 
+// Offline by default (synthetic Agro_Structures FeatureServer); AGROCLOUD_LIVE_ARCGIS=1 queries the live service.
 describe('ACP WMS tile build', () => {
+  let restoreFetch: (() => void) | null = null
+  beforeEach(() => {
+    if (!agroStructuresLiveArcgisEnabled()) restoreFetch = stubAgroStructuresFeatureServerFetch()
+  })
+  afterEach(() => {
+    restoreFetch?.()
+    restoreFetch = null
+  })
+
   it('builds render-ready NDVI chunks and GetMap URLs for session clip', async () => {
     const data = await fetchAgroStructuresGeoJson()
     const mask = buildAgroStructuresLayerAoiMask(data)

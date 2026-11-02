@@ -7,9 +7,19 @@ import {
 
 describe('developEliteMapViewPublish', () => {
   it('snaps small pans to the same signature', () => {
-    const a = { west: 54.01, south: 24.01, east: 55.02, north: 25.03, zoom: 10.4 }
-    const b = { west: 54.03, south: 24.02, east: 55.04, north: 25.05, zoom: 10.4 }
+    // Coordinates sit inside DEVELOP_ELITE_MAP_VIEW_BBOX_TILE_DEG (0.42°) cells; 55.02 is exactly a
+    // grid line (131 × 0.42), so east edges are kept clear of it to test a pan *within* one cell.
+    const a = { west: 54.01, south: 24.01, east: 55.12, north: 25.03, zoom: 10.4 }
+    const b = { west: 54.03, south: 24.02, east: 55.14, north: 25.05, zoom: 10.4 }
     expect(developEliteMapViewSignature(quantizeDevelopEliteMapView(a))).toBe(
+      developEliteMapViewSignature(quantizeDevelopEliteMapView(b)),
+    )
+  })
+
+  it('changes signature when a pan crosses a tile boundary', () => {
+    const a = { west: 54.01, south: 24.01, east: 55.0, north: 25.03, zoom: 10.4 }
+    const b = { west: 54.01, south: 24.01, east: 55.04, north: 25.03, zoom: 10.4 }
+    expect(developEliteMapViewSignature(quantizeDevelopEliteMapView(a))).not.toBe(
       developEliteMapViewSignature(quantizeDevelopEliteMapView(b)),
     )
   })

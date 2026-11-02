@@ -1042,7 +1042,7 @@ export async function generateAoiRawDataByLayerExcel(
     chartSpecs,
     'Charts_Dashboard',
   )
-  const blob = new Blob([withCharts], {
+  const blob = new Blob([withCharts as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
   const url = URL.createObjectURL(blob)

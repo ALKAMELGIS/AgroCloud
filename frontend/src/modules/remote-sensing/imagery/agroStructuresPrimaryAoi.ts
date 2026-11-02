@@ -131,7 +131,7 @@ export function resolveAgroStructuresFeatureAreaHa(
   const attrNum = Number(fromAttr)
   if (Number.isFinite(attrNum) && attrNum > 0) return attrNum
   if (isPolygonalAoiGeometry(geometry)) {
-    const { areaHa } = computeSiAoiFieldMetrics(geometry as GeoJSON.Geometry)
+    const { areaHa } = computeSiAoiFieldMetrics(geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon)
     if (Number.isFinite(areaHa) && areaHa > 0) return areaHa
   }
   return 0
@@ -139,7 +139,7 @@ export function resolveAgroStructuresFeatureAreaHa(
 
 /** Count + area (ha) per Structure_Type from the full Agro_Structures GeoJSON layer. */
 export function buildAgroStructuresStructureTypeTotals(
-  geojson: { features?: unknown[] } | null | undefined,
+  geojson: { type?: string; features?: unknown[] } | null | undefined,
 ): AgroStructuresStructureTypeTotal[] {
   const buckets = new Map<number, { count: number; areaHa: number }>(
     AGRO_STRUCTURES_STRUCTURE_TYPE_CATALOG.map(item => [item.code, { count: 0, areaHa: 0 }]),
@@ -180,7 +180,7 @@ export type AgroStructuresLayerKpiTotals = {
 
 /** Static KPI totals from the full Agro_Structures layer (all Structure_Type values). */
 export function buildAgroStructuresLayerKpiTotals(
-  geojson: { features?: unknown[] } | null | undefined,
+  geojson: { type?: string; features?: unknown[] } | null | undefined,
   options?: { countryFilter?: string },
 ): AgroStructuresLayerKpiTotals {
   const countryFilter = options?.countryFilter?.trim()
@@ -399,11 +399,13 @@ export function buildAgroStructuresCountryDescriptionMap(
   const arcTypes = Array.isArray(arcDef.types) ? arcDef.types : []
   for (const subtype of arcTypes) {
     const domains =
-      subtype && typeof subtype === 'object' && subtype.domains && typeof subtype.domains === 'object'
-        ? (subtype.domains as Record<string, unknown>)
+      subtype && typeof subtype === 'object'
+        ? (subtype as { domains?: unknown }).domains
         : null
-    if (!domains) continue
-    for (const [fieldName, domain] of Object.entries(domains)) {
+    const domainsRecord =
+      domains && typeof domains === 'object' ? (domains as Record<string, unknown>) : null
+    if (!domainsRecord) continue
+    for (const [fieldName, domain] of Object.entries(domainsRecord)) {
       if (String(fieldName).toLowerCase() !== 'country') continue
       collectAgroStructuresCountryDomainLabels(domain, out)
     }
@@ -506,7 +508,7 @@ export async function fetchAgroStructuresCountryDescriptionMap(
 
 /** Count + area (ha) per Country from the full Agro_Structures GeoJSON layer. */
 export function buildAgroStructuresCountryTotals(
-  geojson: { features?: unknown[] } | null | undefined,
+  geojson: { type?: string; features?: unknown[] } | null | undefined,
 ): AgroStructuresCountryTotal[] {
   const buckets = new Map<string, { structureCount: number; areaHa: number }>()
   const features = Array.isArray(geojson?.features) ? geojson!.features! : []
@@ -585,8 +587,9 @@ export function isAgroStructuresSentinelMaskStructureType(
   return AGRO_STRUCTURES_SENTINEL_STRUCTURE_TYPE_LABEL_SET.has(label)
 }
 
-export function filterAgroStructuresSentinelMaskFeatures(features: unknown[]): unknown[] {
-  return features.filter(raw => {
+/** Keeps Sentinel-mask Structure_Types whose geometry is a valid Polygon / MultiPolygon Feature. */
+export function filterAgroStructuresSentinelMaskFeatures(features: unknown[]): GeoJSON.Feature[] {
+  return features.filter((raw): raw is GeoJSON.Feature => {
     const props = (raw as { properties?: Record<string, unknown> })?.properties ?? {}
     return isAgroStructuresSentinelMaskStructureType(props) && featureToPrimaryAoiFeature(raw) != null
   })
@@ -713,11 +716,10 @@ export function isAgroStructuresLayer(layer: AgroStructuresLayerLike | null | un
   return name === 'agro_structures' || name === 'agro structures'
 }
 
-export type GeoJsonPolygonalFeature = {
-  type: 'Feature'
-  properties?: Record<string, unknown>
-  geometry: { type: 'Polygon' | 'MultiPolygon'; coordinates: unknown }
-}
+export type GeoJsonPolygonalFeature = GeoJSON.Feature<
+  GeoJSON.Polygon | GeoJSON.MultiPolygon,
+  Record<string, unknown>
+>
 
 export function isPolygonalAoiGeometry(
   geom: unknown,
@@ -1020,7 +1022,7 @@ export function countAgroStructuresPolygons(geojson: { features?: unknown[] } | 
 /** Layer-wide AOI mask: Farm Plots + PIVOT polygons only (Structure_Type filter before GEOMETRY). */
 export function buildAgroStructuresLayerAoiMask(
   geojson: { type?: string; features?: unknown[] } | null | undefined,
-): { type: 'FeatureCollection'; features: unknown[] } | null {
+): GeoJSON.FeatureCollection | null {
   if (!geojson || geojson.type !== 'FeatureCollection' || !Array.isArray(geojson.features)) return null
   const features = filterAgroStructuresSentinelMaskFeatures(geojson.features)
   if (!features.length) return null

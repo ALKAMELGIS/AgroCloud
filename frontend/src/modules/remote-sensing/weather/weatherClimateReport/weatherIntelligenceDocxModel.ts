@@ -72,7 +72,7 @@ function buildWeatherKeyFindings(
 }
 
 function buildExecutiveKpiCards(executive: WeatherIntelligenceExecutive): Array<{ label: string; value: string; subValue?: string }> {
-  const cards = executive.kpis
+  const cards: Array<{ label: string; value: string; subValue?: string }> = executive.kpis
     .filter(k => !/weather risk score|crop stress index/i.test(k.label))
     .map(k => ({
       label: k.label

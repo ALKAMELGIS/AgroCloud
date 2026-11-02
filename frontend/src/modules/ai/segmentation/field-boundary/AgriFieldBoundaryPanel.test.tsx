@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AgriFieldBoundaryPanel } from './AgriFieldBoundaryPanel'
+import { AgriFieldBoundaryPanel, type AgriFieldBoundaryPanelProps } from './AgriFieldBoundaryPanel'
 
 afterEach(cleanup)
 
@@ -60,9 +60,10 @@ const baseProps = {
   onReset: () => {},
   onExportGeojson: () => {},
   onExportShapefile: () => {},
-}
+} satisfies Partial<AgriFieldBoundaryPanelProps>
 
-function mountWithHost(props: Partial<typeof baseProps> = {}) {
+/** Per-test overrides may use any model/phase/AOI the panel accepts (not just the base literals). */
+function mountWithHost(props: Partial<AgriFieldBoundaryPanelProps> = {}) {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const mapContainerRef = { current: host }
@@ -350,7 +351,9 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     const tab = screen.getByRole('tab', { name: 'Optimal Learning Rate Finder' })
     expect(tab.hasAttribute('disabled')).toBe(false)
     fireEvent.click(tab)
-    expect(screen.getByLabelText(/FTW Dataset — Samples:/)).toBeTruthy()
+    // Training dashboard is AOI-scoped (AoiTrainingChartsWorkspace): AOI picker + LR-vs-loss chart for that AOI.
+    expect(screen.getByLabelText('Select AOI for training charts')).toBeTruthy()
+    expect(screen.getByLabelText('Learning rate versus loss for Test AOI')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Build Dataset' })).toBeTruthy()
     cleanupHost()
   })

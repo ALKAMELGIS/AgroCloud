@@ -8,6 +8,12 @@ import {
   setImageryTsMemoryCache,
   writeImageryTsChunkCache,
 } from './imageryTimeSeriesCache'
+import type { SentinelHubDailyIndexMeans } from '../imagery/sentinelHubStatisticsApi'
+
+/** NDVI-only daily row (other indices absent in these cache fixtures). */
+function ndviRow(date: string, ndvi: number): SentinelHubDailyIndexMeans {
+  return { date, ndvi, ndwi: null, ndmi: null }
+}
 
 describe('imageryTimeSeriesCache overlap', () => {
   it('builds chunk cache keys scoped to geometry and range', () => {
@@ -23,7 +29,7 @@ describe('imageryTimeSeriesCache overlap', () => {
       fromIso: '2021-01-01',
       toIso: '2026-07-21',
       cloudFilter: 65,
-      daily: [{ date: '2026-07-10', ndvi: 0.4 }],
+      daily: [ndviRow('2026-07-10', 0.4)],
       savedAt: Date.now(),
       expiresAt: Date.now() + 60_000,
     }
@@ -55,8 +61,8 @@ describe('imageryTimeSeriesCache overlap', () => {
       toIso: '2026-07-08',
       cloudFilter,
       daily: [
-        { date: '2026-06-01', ndvi: 0.42 },
-        { date: '2026-07-01', ndvi: 0.51 },
+        ndviRow('2026-06-01', 0.42),
+        ndviRow('2026-07-01', 0.51),
       ],
       savedAt: Date.now(),
       expiresAt: Date.now() + 60_000,
@@ -65,7 +71,7 @@ describe('imageryTimeSeriesCache overlap', () => {
 
     await writeImageryTsChunkCache(
       buildImageryTsChunkCacheKey(geometryHash, '2025-01-01', '2025-03-31', cloudFilter),
-      [{ date: '2025-02-15', ndvi: 0.33 }],
+      [ndviRow('2025-02-15', 0.33)],
     )
 
     const merged = findImageryTsOverlappingDaily({

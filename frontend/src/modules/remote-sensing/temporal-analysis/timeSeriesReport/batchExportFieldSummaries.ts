@@ -265,7 +265,7 @@ export async function batchExportFieldSummaries(
 
   for (let i = 0; i < modelResults.length; i++) {
     const result = modelResults[i]!
-    if (result.ok) {
+    if (result.ok === true) {
       succeededSummaries.push(result.summary)
       summaryFieldKeys.push(result.fieldKey)
       succeeded += 1
@@ -282,8 +282,7 @@ export async function batchExportFieldSummaries(
     emit(plots.length, 'Writing executive workbook…')
     portfolio = buildPortfolio(succeededSummaries)
 
-    delivery =
-      (await saveExcel({
+    const saved = await saveExcel({
         summaries: succeededSummaries.map((s, idx) => ({
           ...s,
           et0MmDay: et0ByFieldKey?.get(summaryFieldKeys[idx]!) ?? s.et0MmDay ?? null,
@@ -298,7 +297,9 @@ export async function batchExportFieldSummaries(
         aetByFieldKey,
         fieldKeys: summaryFieldKeys,
         saveTarget: input.saveTarget,
-      })) ?? undefined
+      })
+    // A `void` saver (custom deps) yields no delivery record.
+    delivery = saved ? (saved as FieldSummaryExcelDelivery) : undefined
   }
 
   return {

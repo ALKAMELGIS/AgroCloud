@@ -2,6 +2,7 @@ import {
   contourElevationStrokeColor,
   type HydroLegend,
   type HydroStepResult,
+  type HydroVectorResult,
 } from './hydroEngine'
 import {
   bboxFromGeometry,
@@ -522,7 +523,7 @@ function contourElevBounds(result: HydroStepResult): { minElev: number; maxElev:
 
 function drawContourLayer(
   ctx: CanvasRenderingContext2D,
-  result: HydroStepResult,
+  result: HydroStepResult & HydroVectorResult,
   bbox: LngLatBbox,
   x: number,
   y: number,
@@ -570,7 +571,7 @@ function drawContourLayer(
 
 function drawStreamLayer(
   ctx: CanvasRenderingContext2D,
-  result: HydroStepResult,
+  result: HydroStepResult & HydroVectorResult,
   bbox: LngLatBbox,
   x: number,
   y: number,

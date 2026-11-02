@@ -258,7 +258,7 @@ export default function Login() {
         setError('')
         return
       }
-      setError(result?.error || text.resendVerifyFailed)
+      setError((result && result.ok === false ? result.error : '') || text.resendVerifyFailed)
     } finally {
       setIsResendingVerification(false)
     }
@@ -667,7 +667,7 @@ export default function Login() {
           setIsSubmitting(false)
           return
         }
-        if (serverRegister && !serverRegister.ok) {
+        if (serverRegister && serverRegister.ok === false) {
           logLoginAttempt('failure', `server_register_${serverRegister.code || 'error'}`, emailTrimmed)
           if (serverRegister.code === 'email_delivery_failed') {
             setAwaitingVerification(true)
@@ -721,7 +721,7 @@ export default function Login() {
           setIsSubmitting(false)
           return
         }
-        if (serverLogin && !serverLogin.ok) {
+        if (serverLogin && serverLogin.ok === false) {
           if (serverLogin.code === 'email_not_verified') {
             savePendingEmailVerification(emailTrimmed, passwordTrimmed)
             setAwaitingVerification(true)

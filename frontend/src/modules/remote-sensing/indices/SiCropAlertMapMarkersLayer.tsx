@@ -23,7 +23,7 @@ function useMapZoomOnViewportChange(): number | null {
   const [zoom, setZoom] = useState<number | null>(null)
 
   useEffect(() => {
-    const map = mapRef?.current?.getMap?.() ?? mapRef?.getMap?.()
+    const map = mapRef?.current?.getMap?.()
     if (!map) return
 
     const sync = () => setZoom(map.getZoom())

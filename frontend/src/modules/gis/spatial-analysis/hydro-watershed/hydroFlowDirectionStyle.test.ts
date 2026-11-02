@@ -26,7 +26,7 @@ describe('ESRI D8 flow direction style', () => {
     expect(legend.swatches).toHaveLength(ESRI_D8_FLOW_DIRECTIONS.length + 1)
     expect(legend.swatches[0]?.label).toMatch(/→ East \(1\)/)
     expect(legend.swatches.some(s => s.label.includes('North'))).toBe(true)
-    expect(legend.swatches.at(-1)?.label).toMatch(/Flat \/ sink/)
+    expect(legend.swatches[legend.swatches.length - 1]?.label).toMatch(/Flat \/ sink/)
   })
 
   it('keeps dir-index and code colour lookups aligned', () => {

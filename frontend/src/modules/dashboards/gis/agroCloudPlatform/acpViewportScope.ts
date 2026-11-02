@@ -1,6 +1,6 @@
 import { resolveAgroStructuresCountry } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
-import type { AcpMapScopeMode } from './acpPlatformContext'
+import type { AcpMapScopeMode } from './acpPlatformConfig'
 import {
   buildKpiTotalsFromFeatures,
   filterGeoJsonFeaturesInBBox,

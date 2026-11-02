@@ -15,6 +15,7 @@ import {
   PieController,
   ScatterController,
   type ChartData,
+  type ChartDataset,
 } from 'chart.js'
 import { Bar, Line, Pie, Scatter } from 'react-chartjs-2'
 import { useImageryTimeSeriesStream } from './useImageryTimeSeriesStream'
@@ -1158,7 +1159,7 @@ export function SiImageryTimeSeriesPanel({
           const isNdsiLayer = entry.layerId.trim().toUpperCase() === 'NDSI'
           const seriesLabel = entry.label || (isNdsiLayer ? 'NDSI mean' : entry.layerId)
           const data = entry.values.map(v => (v == null || !Number.isFinite(v) ? NaN : Number(v)))
-          const datasets: Array<Record<string, unknown>> = [
+          const datasets: ChartDataset<'line' | 'bar'>[] = [
             {
               label: seriesLabel,
               data,
@@ -1591,7 +1592,7 @@ export function SiImageryTimeSeriesPanel({
                 display: true,
                 text: scatterCorrelation.xLayerId,
                 color: chartInk.tick,
-                font: { size: 10, weight: '600' as const },
+                font: { size: 10, weight: 600 },
               },
               ticks: { color: chartInk.tick, maxTicksLimit: 8, font: { size: 9 } },
               grid: { color: chartInk.grid },
@@ -1601,7 +1602,7 @@ export function SiImageryTimeSeriesPanel({
                 display: true,
                 text: scatterCorrelation.yLayerId,
                 color: chartInk.tick,
-                font: { size: 10, weight: '600' as const },
+                font: { size: 10, weight: 600 },
               },
               ticks: { color: chartInk.tick, font: { size: 9 } },
               grid: { color: chartInk.grid },
@@ -2237,7 +2238,7 @@ export function SiImageryTimeSeriesPanel({
               ) : chartType === 'pie' ? (
                 <Pie ref={chartRef as never} data={pieChartData} options={pieChartOptions} />
               ) : chartType === 'scatter' ? (
-                <Scatter ref={chartRef as never} data={scatterChartData} options={scatterChartOptions} />
+                <Scatter ref={chartRef as never} data={scatterChartData as ChartData<'scatter'>} options={scatterChartOptions} />
               ) : (
                 <Line ref={chartRef as never} data={chartData as ChartData<'line'>} options={cartesianChartOptions} />
               )}

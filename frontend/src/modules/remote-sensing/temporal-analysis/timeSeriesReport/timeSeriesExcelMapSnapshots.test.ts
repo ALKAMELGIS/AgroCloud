@@ -47,8 +47,8 @@ describe('timeSeriesExcelMapSnapshots', () => {
     expect(String(ws!.getCell('A22').value ?? '')).toContain('0.5200')
     // ExcelJS model keeps images on the workbook; API varies by version.
     const images =
-      typeof (wb as { getImages?: () => unknown[] }).getImages === 'function'
-        ? (wb as { getImages: () => unknown[] }).getImages()
+      typeof (wb as unknown as { getImages?: () => unknown[] }).getImages === 'function'
+        ? (wb as unknown as { getImages: () => unknown[] }).getImages()
         : ((wb as { model?: { media?: unknown[] } }).model?.media ?? [])
     expect(images.length).toBeGreaterThanOrEqual(1)
   })
@@ -81,8 +81,8 @@ describe('timeSeriesExcelMapSnapshots', () => {
     const ws = wb.getWorksheet('Map Snapshots')
     expect(String(ws!.getCell('A6').value ?? '')).toBe('(Map unavailable)')
     const images =
-      typeof (wb as { getImages?: () => unknown[] }).getImages === 'function'
-        ? (wb as { getImages: () => unknown[] }).getImages()
+      typeof (wb as unknown as { getImages?: () => unknown[] }).getImages === 'function'
+        ? (wb as unknown as { getImages: () => unknown[] }).getImages()
         : ((wb as { model?: { media?: unknown[] } }).model?.media ?? [])
     expect(images.length).toBe(0)
   })

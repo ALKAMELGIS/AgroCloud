@@ -11,7 +11,7 @@ function stubCache(referenceDate: string): CropAlertResultsCache {
       imageDate: referenceDate,
       analysisDate: referenceDate,
       latestSceneDate: null,
-      dataSource: 'sentinel-2',
+      dataSource: 'Sentinel Live',
       quality: 'verified',
       warningMessage: null,
     },

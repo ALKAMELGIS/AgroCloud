@@ -4,6 +4,7 @@ import {
   moveMapDataLayerInOrder,
   normalizeDevelopEliteMapDataLayerOrder,
   orderDevelopEliteMapDataLayerDefs,
+  type DevelopEliteMapDataLayerId,
 } from './developEliteMapDataLayers'
 
 describe('developEliteMapDataLayers', () => {
@@ -14,7 +15,7 @@ describe('developEliteMapDataLayers', () => {
   })
 
   it('reorders layers by drag target', () => {
-    const order = ['trees', 'agro-structures', 'world-countries']
+    const order: DevelopEliteMapDataLayerId[] = ['trees', 'agro-structures', 'world-countries']
     expect(moveMapDataLayerInOrder(order, 'world-countries', 'trees')).toEqual([
       'world-countries',
       'trees',

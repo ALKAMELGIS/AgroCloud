@@ -121,6 +121,8 @@ export type AcpPlatformContextValue = {
   registerEngineSnapshot: (snap: Partial<AcpEngineSnapshot>) => void
   refreshEngine: () => void
   refreshEngineRef: React.MutableRefObject<(() => void) | null>
+  /** ArcGIS Country coded-value code → description — from the engine snapshot (`...engineSnap`). */
+  countryDescriptionMap: Map<string, string>
   /** Bumped on every AOI auto-sync (weather, alerts, WMS listeners). */
   aoiSyncRevision: number
   mapHomeRef: MutableRefObject<(() => void) | null>

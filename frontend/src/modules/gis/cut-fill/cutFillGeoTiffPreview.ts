@@ -43,7 +43,7 @@ const NO_CHANGE_RGBA: [number, number, number, number] = [161, 161, 170, 170]
 let rasterSeq = 0
 const grids = new Map<string, CutFillRasterGrid>()
 let xhrInstalled = false
-let emptyTilePng: Uint8Array | null = null
+let emptyTilePng: Uint8Array<ArrayBuffer> | null = null
 
 function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff
@@ -114,7 +114,7 @@ function pngChunk(type: string, data: Uint8Array): Uint8Array {
 }
 
 /** Uncompressed RGBA PNG. Used so tile bytes are ready inside XMLHttpRequest.open. */
-export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array): Uint8Array {
+export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array): Uint8Array<ArrayBuffer> {
   const stride = width * 4
   const raw = new Uint8Array((stride + 1) * height)
   for (let y = 0; y < height; y += 1) {
@@ -264,7 +264,7 @@ export function buildCutFillGeoTiffPreview(
   })
 }
 
-function emptyTile(): Uint8Array {
+function emptyTile(): Uint8Array<ArrayBuffer> {
   if (!emptyTilePng) emptyTilePng = encodeRgbaPng(TILE, TILE, new Uint8Array(TILE * TILE * 4))
   return emptyTilePng
 }
@@ -276,7 +276,7 @@ function tileIntersects(grid: CutFillRasterGrid, z: number, x: number, y: number
 }
 
 /** Paint one XYZ tile from the analysis grid. Outside the AOI stays transparent. */
-export function renderCutFillTilePng(id: string, z: number, x: number, y: number): Uint8Array {
+export function renderCutFillTilePng(id: string, z: number, x: number, y: number): Uint8Array<ArrayBuffer> {
   const grid = grids.get(decodeURIComponent(id))
   if (!grid || !tileIntersects(grid, z, x, y)) return emptyTile()
   const image = new Uint8Array(TILE * TILE * 4)

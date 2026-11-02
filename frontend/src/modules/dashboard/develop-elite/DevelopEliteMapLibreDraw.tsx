@@ -69,14 +69,19 @@ function lngLatFromEvent(e: MapMouseEvent): [number, number] {
   return [e.lngLat.lng, e.lngLat.lat]
 }
 
+/** Handlers here are also bound to touch events, whose `originalEvent` is a TouchEvent. */
+function originalPointerEvent(e: MapMouseEvent): MouseEvent | TouchEvent | undefined {
+  return e.originalEvent as MouseEvent | TouchEvent | undefined
+}
+
 function isSingleTouch(e: MapMouseEvent): boolean {
-  const te = e.originalEvent as TouchEvent | undefined
-  if (te?.type?.startsWith('touch')) return te.touches.length === 1
+  const te = originalPointerEvent(e)
+  if (te?.type?.startsWith('touch')) return (te as TouchEvent).touches.length === 1
   return true
 }
 
 function isPrimarySketchPointer(e: MapMouseEvent): boolean {
-  const oe = e.originalEvent
+  const oe = originalPointerEvent(e)
   if (oe instanceof MouseEvent) return oe.button === 0
   if (typeof TouchEvent !== 'undefined' && oe instanceof TouchEvent) return oe.touches.length === 1
   return true

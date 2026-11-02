@@ -27,32 +27,25 @@ const mask: GeoJSON.FeatureCollection = {
   ],
 }
 
+/** Minimal stub — sync helpers only read map keys (fieldKey). */
 function resultFor(objectId: string, fieldKey: string): CropAlertFieldResult {
-  return {
+  const stub: Partial<CropAlertFieldResult> = {
     fieldKey,
     objectId,
     farmName: 'Field',
     farmCode: objectId,
     structureType: 'PIVOT',
-    country: 'UAE',
-    city: '',
     centroid: [55, 24],
     severity: 'normal',
-    alertTier: 'stable',
     chasCurrent: 0.5,
     chasPrevious: 0.48,
     deltaChas: 0.02,
-    coveragePct: 80,
-    ndviCurrent: 0.6,
-    ndviPrevious7: 0.58,
-    ndviPrevious30: 0.55,
-    ndviChangePct7: 3,
-    ndviChangePct30: 9,
     ndviChangePct2: 1,
     ndviTrendLabel: 'Stable',
     alertReasonLines: [],
     alertExplanation: '',
   }
+  return stub as CropAlertFieldResult
 }
 
 describe('acpStructuresAlertSync', () => {

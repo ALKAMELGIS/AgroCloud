@@ -11,7 +11,7 @@ export function deferAfterFirstPaint(fn: () => void, timeoutMs = 2500): void {
       // ignore
     }
   }
-  if ('requestIdleCallback' in window) {
+  if (typeof window.requestIdleCallback === 'function') {
     window.requestIdleCallback(run, { timeout: timeoutMs })
   } else {
     window.setTimeout(run, 1)

@@ -746,7 +746,7 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           backgroundColor: 'rgba(15, 23, 42, 0.94)',
           borderColor: 'rgba(52, 211, 153, 0.35)',
           borderWidth: 1,
-          titleFont: { size: 10, weight: '600' as const },
+          titleFont: { size: 10, weight: 600 },
           bodyFont: { size: 10 },
           callbacks: {
             title: (items: Array<{ dataIndex: number }>) => {
@@ -793,7 +793,7 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
             display: true,
             text: unit,
             color: 'rgba(255, 255, 255, 0.45)',
-            font: { size: 9, weight: '600' as const },
+            font: { size: 9, weight: 600 },
           },
         },
       },

@@ -50,7 +50,8 @@ export function buildDevelopEliteRasterWmsClipSource(
     return { type: 'FeatureCollection', features: [] }
   }
   const filtered = buildDevelopEliteRasterClipFeatureCollection(structures, slot, viewport)
-  return buildAgroStructuresLayerAoiMask(filtered)
+  // Mask builder keeps GeoJSON features from `filtered` (typed loosely as `unknown[]` upstream).
+  return buildAgroStructuresLayerAoiMask(filtered) as GeoJSON.FeatureCollection | null
 }
 
 /** Clipmask requires GEOMETRY WKT on every chunk — never full-canvas evalscript bleed. */

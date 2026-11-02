@@ -18,7 +18,7 @@ import {
 } from './sentinelHubWmsAoiClip'
 import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
 
-export type SiAoiLayerModeClipMask = { type: 'FeatureCollection'; features: unknown[] } | null
+export type SiAoiLayerModeClipMask = GeoJSON.FeatureCollection | null
 
 const MASK_CACHE_MAX = 32
 const CHUNKS_CACHE_MAX = 48
@@ -140,7 +140,7 @@ export function buildSiAoiLayerModeClipMask(
   }
 
   if (settings.maskMode === 'entire-layer' && layer.geojson?.features?.length) {
-    const features: unknown[] = []
+    const features: GeoJSON.Feature[] = []
     for (const raw of layer.geojson.features) {
       const aoi = featureToPrimaryAoiFeature(raw)
       if (aoi) features.push(aoi)

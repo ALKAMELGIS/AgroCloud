@@ -11,7 +11,7 @@ import type { LayerClassAreaResult } from '../classification/siLayerClassAreaEng
 const ndviSpec: LayerLiveLegendSpec = {
   id: 'NDVI',
   title: 'NDVI',
-  kind: 'index',
+  kind: 'gradient',
   valueMin: -1,
   valueMax: 1,
   classes: [],
@@ -30,6 +30,7 @@ function mockAreaResult(avgMid: number): LayerClassAreaResult {
       color: '#000',
       rangeLabel: `${lo}–${hi}`,
       areaHa: count / 100,
+      areaKm2: count / 10_000,
       areaM2: count * 100,
       count,
       pctOfAoi: count > 0 ? count / 10 : 0,

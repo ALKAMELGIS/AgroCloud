@@ -69,7 +69,8 @@ export function unlockLeafletMapForSketch(map: L.Map): void {
 type LeafletDraggableLike = {
   _dragging?: boolean
   _moved?: boolean
-  _onUp?: (event: Event) => void
+  /** Leaflet only reads `type` / `target` from the synthetic up event. */
+  _onUp?: (event: Pick<Event, 'type' | 'target'>) => void
   finishDrag?: () => void
 }
 
@@ -90,7 +91,7 @@ export function releaseLeafletMapPointerState(map: L.Map): void {
         if (typeof draggable.finishDrag === 'function') {
           draggable.finishDrag()
         } else {
-          draggable._onUp?.({ type: 'mouseup', target: container } as Event)
+          draggable._onUp?.({ type: 'mouseup', target: container })
         }
       } catch {
         draggable._dragging = false

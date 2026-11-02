@@ -9,7 +9,7 @@ import {
 } from './siAiDlModelLoader'
 
 function makeFile(name: string, content: string | ArrayBuffer | Uint8Array, type = 'application/octet-stream'): File {
-  const blob = new Blob([content], { type })
+  const blob = new Blob([content as BlobPart], { type })
   return new File([blob], name, { type })
 }
 
@@ -62,7 +62,7 @@ describe('siAiDlModelLoader', () => {
     const buf = await zip.generateAsync({ type: 'uint8array' })
     const result = await validateDlpkBuffer(buf, 'broken.dlpk')
     expect(result.ok).toBe(false)
-    if (result.ok) return
+    if (result.ok !== false) return
     expect(result.error.toLowerCase()).toContain('emd')
   })
 
@@ -70,7 +70,7 @@ describe('siAiDlModelLoader', () => {
     const file = makeFile('model.pth', new Uint8Array(2048))
     const result = await validateAndLoadModel(file, 'yolo')
     expect(result.ok).toBe(false)
-    if (result.ok) return
+    if (result.ok !== false) return
     expect(result.error).toContain('not compatible')
   })
 

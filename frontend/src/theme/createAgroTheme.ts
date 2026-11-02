@@ -7,8 +7,13 @@ import { agroZIndex } from './zIndex'
 
 export type AgroThemeMode = 'light' | 'dark'
 
-export function createAgroTheme(mode: AgroThemeMode): Theme {
-  const palette = mode === 'dark' ? darkPalette() : lightPalette()
+export interface AgroThemeOptions {
+  /** Organisation accent from System Settings → custom theme (hex). */
+  customPrimary?: string | null
+}
+
+export function createAgroTheme(mode: AgroThemeMode, options: AgroThemeOptions = {}): Theme {
+  const palette = mode === 'dark' ? darkPalette(options.customPrimary) : lightPalette(options.customPrimary)
   const base = createTheme({
     palette,
     typography: agroTypography,

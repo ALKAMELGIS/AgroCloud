@@ -836,7 +836,7 @@ export function buildRemoteSensingLayerSelectGroups(
   ])
 
   const standard = capabilityLayers
-    .map(l => {
+    .map((l): RemoteSensingLayerSelectOption | null => {
       const id = String(l.name || '').trim()
       if (!id || assigned.has(id.toUpperCase())) return null
       return { id, label: String(l.title || id).trim() || id, scientificName: undefined }

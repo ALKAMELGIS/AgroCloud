@@ -484,7 +484,7 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
     <c:plotArea>
       ${plotAreaLayoutXml({
         secondary: useSecondary,
-        legendBottom: !spec.hideLegend && kind !== 'pie',
+        legendBottom: !spec.hideLegend, // pie returned earlier
         catCount,
       })}
       ${plotParts.join('\n')}
@@ -675,8 +675,9 @@ export type WeatherNativeChartInput = {
     tempMaxC: number | null
     humidityPct: number | null
     rainfallMm: number | null
-    rainfallSharePct: number | null
-    cumulativeRainfallMm: number | null
+    /** Falls back to rainfallMm when absent (e.g. RH-enriched climate monthly rows). */
+    rainfallSharePct?: number | null
+    cumulativeRainfallMm?: number | null
   }>
   yearly?: Array<{
     label: string

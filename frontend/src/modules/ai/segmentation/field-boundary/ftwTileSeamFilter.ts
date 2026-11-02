@@ -111,7 +111,7 @@ export function isFtwTileSeamSliver(
 
   let perimeterM = 0
   try {
-    perimeterM = turf.length(turf.polygonToLine(feature as turf.AllGeoJSON), { units: 'meters' })
+    perimeterM = turf.length(turf.polygonToLine(feature as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>), { units: 'meters' })
   } catch {
     perimeterM = 0
   }

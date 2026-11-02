@@ -29,7 +29,8 @@ export function focusWeatherFarmOnMap(
   if (farmId === 'all') {
     const locFeatures = agriLocations?.features ?? []
     if (locFeatures.length) {
-      const layer = L.geoJSON({ type: 'FeatureCollection', features: locFeatures })
+      const locCollection: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: locFeatures }
+      const layer = L.geoJSON(locCollection)
       const bounds = layer.getBounds()
       if (bounds.isValid()) {
         map.fitBounds(bounds, {

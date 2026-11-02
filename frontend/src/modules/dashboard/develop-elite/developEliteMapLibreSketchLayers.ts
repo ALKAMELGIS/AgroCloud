@@ -1,4 +1,10 @@
-import type { GeoJSONSource, Map as MaplibreMap } from 'maplibre-gl'
+import type {
+  CircleLayerSpecification,
+  FillLayerSpecification,
+  GeoJSONSource,
+  LineLayerSpecification,
+  Map as MaplibreMap,
+} from 'maplibre-gl'
 import {
   developEliteMapLibreHasLayer,
   developEliteMapLibreRunIfStyleReady,
@@ -51,13 +57,14 @@ function ensureLayer(
     Object.entries(spec.paint).forEach(([k, v]) => map.setPaintProperty(spec.id, k, v))
     return
   }
+  // Paint keys are authored per `spec.type` at the call sites below.
   map.addLayer({
     id: spec.id,
     type: spec.type,
     source: spec.source,
     filter: spec.filter as Parameters<MaplibreMap['setFilter']>[1],
     paint: spec.paint,
-  })
+  } as FillLayerSpecification | LineLayerSpecification | CircleLayerSpecification)
 }
 
 export function ensureDevelopEliteMapLibreSketchLayers(map: MaplibreMap): void {

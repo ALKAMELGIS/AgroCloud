@@ -56,7 +56,7 @@ function WeatherMapPickLoader({
 
 }) {
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const debounceRef = useRef<number | null>(null)
 
 
 
@@ -80,7 +80,7 @@ function WeatherMapPickLoader({
 
 
 
-    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (debounceRef.current) window.clearTimeout(debounceRef.current)
 
     const ac = new AbortController()
 
@@ -122,7 +122,7 @@ function WeatherMapPickLoader({
 
     return () => {
 
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (debounceRef.current) window.clearTimeout(debounceRef.current)
 
       ac.abort()
 

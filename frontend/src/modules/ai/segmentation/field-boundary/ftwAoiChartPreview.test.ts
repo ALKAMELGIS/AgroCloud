@@ -11,7 +11,7 @@ describe('resolveFtwSessionEpochHistory preview', () => {
     })
     expect(history.length).toBeGreaterThan(8)
     expect(history[0]?.metrics?.iou).toBeGreaterThan(0)
-    expect(history.at(-1)?.train_loss).toBeGreaterThan(0)
+    expect(history[history.length - 1]?.train_loss).toBeGreaterThan(0)
   })
 
   it('returns empty when preview LR is missing', () => {

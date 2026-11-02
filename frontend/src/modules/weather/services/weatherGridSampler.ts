@@ -29,7 +29,8 @@ function metricValue(
     case 'wind_speed':
       return snap.windSpeedKmh
     case 'pressure':
-      return snap.pressureHpa ?? null
+      // Snapshots carry pressure only on hourly points (map-pick leaves nextHours empty → null).
+      return snap.nextHours[0]?.pressureHpa ?? null
     default:
       return null
   }

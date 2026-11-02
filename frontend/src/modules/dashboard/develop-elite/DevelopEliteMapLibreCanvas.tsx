@@ -60,6 +60,7 @@ import {
   applyDevelopEliteMapSpaceEnvironment,
   bindDevelopEliteMapSpaceEnvironment,
 } from './developEliteMapSpaceEnvironment'
+import { asDevelopEliteFogCapableMap, asDevelopEliteGlobeNudgeMap, asMapLibreRequestParameters } from './developEliteMapLibreCompat'
 
 type Props = {
   basemapId: string
@@ -199,9 +200,6 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       pitch: initialView.pitch,
       bearing: initialView.bearing,
       maxPitch: AGRO_CLOUD_MAP_MAX_PITCH,
-      projection: DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY
-        ? { type: 'mercator' }
-        : { type: 'globe' },
       attributionControl: false,
       fadeDuration: 0,
       dragRotate: false,
@@ -211,15 +209,12 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       transformRequest: (url, resourceType) => {
         if (isDevelopEliteLayerLiveTileUrl(url)) {
           const resolved = resolveDevelopEliteLayerLiveTileFetchUrl(url)
-          return {
+          return asMapLibreRequestParameters({
             url: resolved ?? DE_LAYER_LIVE_TILE_PLACEHOLDER_PNG,
-            credentials: 'omit' as const,
-          }
+            credentials: 'omit',
+          })
         }
-        return agroCloudMapboxTransformRequest(url, resourceType ?? undefined) as {
-          url: string
-          credentials?: 'omit' | 'same-origin' | 'include'
-        }
+        return asMapLibreRequestParameters(agroCloudMapboxTransformRequest(url, resourceType ?? undefined))
       },
     })
 
@@ -238,10 +233,10 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
     })
     const unbindGlobeCanvasBoot = DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY
       ? () => {}
-      : bindSiMapboxGlobeCanvasBoot(() => map, () => el)
+      : bindSiMapboxGlobeCanvasBoot(() => asDevelopEliteGlobeNudgeMap(map), () => el)
     const unbindSpaceEnvironment = DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY
       ? () => {}
-      : bindDevelopEliteMapSpaceEnvironment(map, shellRef.current)
+      : bindDevelopEliteMapSpaceEnvironment(asDevelopEliteFogCapableMap(map), shellRef.current)
     const reapplyAfterStyle = () => {
       applyDevelopEliteMapLibrePerformanceTuning(map)
       restoreGlobeBasemap(map)

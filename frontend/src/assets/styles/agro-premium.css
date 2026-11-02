@@ -1,0 +1,380 @@
+/**
+ * AgroCloud Premium — design-system authority layer (loaded LAST in main.tsx).
+ *
+ * Mirrors `src/theme/tokens.ts` (the MUI theme reads the same values) so legacy CSS pages and
+ * MUI pages share one palette, radius scale, elevation and focus treatment in light + dark.
+ * Built from the UI UX Pro Max recommendation (design-system/agrocloud/MASTER.md).
+ *
+ * Rules for this file:
+ *  - Only tokens + shared primitives (.ds-*, .gis-btn/.gis-input, .ec-*, tables, forms, scrollbars).
+ *  - Never target map internals (.maplibregl-*, .mapboxgl-*, canvas) — GIS rendering stays untouched.
+ *  - System Settings "custom" accent writes inline --ds-color-primary* on <html>, which still wins.
+ */
+
+/* ============================== Tokens · light ============================== */
+:root,
+:root[data-theme='light'],
+html[data-theme='light'] {
+  color-scheme: light;
+
+  --ds-font-sans: 'Inter', 'IBM Plex Sans Arabic', 'Noto Kufi Arabic', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ds-font-mono: 'Fira Code', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --ds-color-bg: #f4f7f5;
+  --ds-color-bg-dashboard: #f7faf8;
+  --ds-color-bg-subtle: #edf2ef;
+  --ds-color-surface: #ffffff;
+  --ds-color-surface-2: #f7faf8;
+  --ds-color-surface-raised: #ffffff;
+  --ds-color-text: #17241e;
+  --ds-color-text-secondary: #475569;
+  --ds-color-text-muted: #5f6b66;
+  --ds-color-border: #dde5e0;
+  --ds-color-border-strong: #c4d2ca;
+
+  --ds-color-primary: #047857;
+  --ds-color-primary-hover: #065f46;
+  --ds-color-primary-soft: rgba(4, 120, 87, 0.1);
+  --ds-color-on-primary: #ffffff;
+  --ds-color-secondary: #0369a1;
+  --ds-color-secondary-soft: rgba(3, 105, 161, 0.1);
+  --ds-color-accent: #a16207;
+  --ds-color-accent-soft: rgba(161, 98, 7, 0.12);
+  --ds-color-success: #15803d;
+  --ds-color-warning: #b45309;
+  --ds-color-danger: #dc2626;
+  --ds-color-info: #0369a1;
+
+  --ds-radius-xs: 6px;
+  --ds-radius-sm: 8px;
+  --ds-radius-md: 10px;
+  --ds-radius-lg: 14px;
+  --ds-radius-xl: 18px;
+
+  --ds-shadow-sm: 0 1px 2px rgba(16, 24, 20, 0.06), 0 1px 1px rgba(16, 24, 20, 0.04);
+  --ds-shadow-md: 0 4px 14px rgba(16, 24, 20, 0.07), 0 1px 3px rgba(16, 24, 20, 0.05);
+  --ds-shadow-lg: 0 18px 44px rgba(16, 24, 20, 0.12), 0 4px 12px rgba(16, 24, 20, 0.06);
+
+  --ds-glass-bg: rgba(255, 255, 255, 0.74);
+  --ds-glass-border: rgba(255, 255, 255, 0.65);
+  --ds-glass-blur: 16px;
+
+  --ds-focus-ring: 0 0 0 3px rgba(4, 120, 87, 0.35);
+  --ds-motion-fast: 150ms;
+  --ds-motion-md: 200ms;
+  --ds-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --ds-control-h: 38px;
+  --ds-control-h-sm: 32px;
+
+  /* theme-system.css aliases */
+  --theme-text-primary: var(--ds-color-text);
+  --theme-text-secondary: var(--ds-color-text-secondary);
+  --theme-text-muted: var(--ds-color-text-muted);
+  --theme-bg-base: var(--ds-color-bg);
+  --theme-bg-elevated: var(--ds-color-bg-dashboard);
+  --theme-surface: var(--ds-color-surface);
+  --theme-border: var(--ds-color-border);
+  --theme-border-strong: var(--ds-color-border-strong);
+}
+
+/* ============================== Tokens · dark =============================== */
+:root[data-theme='dark'],
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  --ds-color-bg: #0b1210;
+  --ds-color-bg-dashboard: #0f1714;
+  --ds-color-bg-subtle: #0f1714;
+  --ds-color-surface: #121b17;
+  --ds-color-surface-2: #18231e;
+  --ds-color-surface-raised: #18231e;
+  --ds-color-text: #e6ede9;
+  --ds-color-text-secondary: #a9b8b0;
+  --ds-color-text-muted: #8a9992;
+  --ds-color-border: rgba(230, 237, 233, 0.09);
+  --ds-color-border-strong: rgba(230, 237, 233, 0.16);
+
+  --ds-color-primary: #22c55e;
+  --ds-color-primary-hover: #4ade80;
+  --ds-color-primary-soft: rgba(34, 197, 94, 0.14);
+  --ds-color-on-primary: #05200f;
+  --ds-color-secondary: #38bdf8;
+  --ds-color-secondary-soft: rgba(56, 189, 248, 0.14);
+  --ds-color-accent: #eab308;
+  --ds-color-accent-soft: rgba(234, 179, 8, 0.14);
+  --ds-color-success: #22c55e;
+  --ds-color-warning: #fbbf24;
+  --ds-color-danger: #f87171;
+  --ds-color-info: #38bdf8;
+
+  --ds-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.25);
+  --ds-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.38), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --ds-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
+
+  --ds-glass-bg: rgba(18, 27, 23, 0.68);
+  --ds-glass-border: rgba(230, 237, 233, 0.08);
+  --ds-glass-blur: 18px;
+
+  --ds-focus-ring: 0 0 0 3px rgba(74, 222, 128, 0.45);
+}
+
+/* ============================== Base typography ============================= */
+body {
+  font-family: var(--ds-font-sans);
+  color: var(--ds-color-text);
+  background-color: var(--ds-color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+:where(code, kbd, samp, pre, .ds-mono) {
+  font-family: var(--ds-font-mono);
+  font-size: 0.92em;
+}
+
+/* Numbers line up in every table and KPI. */
+:where(table, .ds-kpi, .ds-num, [class*='kpi'] [class*='value']) {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--ds-color-primary-soft);
+}
+
+/* ============================== Focus ======================================= */
+:where(button, [role='button'], a, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
+/* ============================== Buttons ===================================== */
+:where(.ds-btn, .gis-btn, .ec-btn) {
+  min-height: var(--ds-control-h);
+  border-radius: var(--ds-radius-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+  transition:
+    background-color var(--ds-motion-fast) var(--ds-ease-out),
+    border-color var(--ds-motion-fast) var(--ds-ease-out),
+    box-shadow var(--ds-motion-fast) var(--ds-ease-out),
+    color var(--ds-motion-fast) var(--ds-ease-out);
+}
+
+:where(.ds-btn, .gis-btn):not(:disabled):hover {
+  box-shadow: var(--ds-shadow-sm);
+}
+
+:where(.ds-btn, .gis-btn, .ec-btn):disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+:where(.ds-btn-primary, .gis-btn-primary, .ec-btn-primary, .search-btn-primary) {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), var(--ds-shadow-sm);
+}
+
+/* Dark mode: bright green fills need dark ink for 4.5:1 contrast (white on #22c55e is 2.3:1). */
+html[data-theme='dark'] :is(.ds-btn-primary, .gis-btn-primary, .ec-btn-primary, .search-btn-primary) {
+  color: var(--ds-color-on-primary);
+}
+html[data-theme='dark'] :is(.ds-btn-primary, .gis-btn-primary, .ec-btn-primary, .search-btn-primary) :is(i, svg) {
+  color: inherit;
+}
+
+@media (max-width: 599.98px) {
+  :where(.ds-btn, .gis-btn, .ec-btn) {
+    min-height: 44px;
+  }
+}
+
+/* ============================== Form controls =============================== */
+:where(.content) :where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file']), select, textarea) {
+  border-radius: var(--ds-radius-sm);
+  border-color: var(--ds-color-border-strong);
+  background-color: var(--ds-color-surface);
+  transition:
+    border-color var(--ds-motion-fast) var(--ds-ease-out),
+    box-shadow var(--ds-motion-fast) var(--ds-ease-out);
+}
+
+:where(.content) :where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file']), select, textarea):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ds-color-primary) 45%, var(--ds-color-border-strong));
+}
+
+:where(.content) :where(input, select, textarea):focus-visible,
+.gis-input:focus-visible,
+.ec-input:focus-visible {
+  border-color: var(--ds-color-primary);
+  box-shadow: var(--ds-focus-ring);
+}
+
+.gis-input,
+.ec-input {
+  border-radius: var(--ds-radius-sm);
+  border-color: var(--ds-color-border-strong);
+}
+
+.gis-input::placeholder,
+.ec-input::placeholder,
+:where(.content) :where(input, textarea)::placeholder {
+  color: var(--ds-color-text-muted);
+  opacity: 0.85;
+}
+
+:where(input[type='checkbox'], input[type='radio']) {
+  accent-color: var(--ds-color-primary);
+}
+
+/* Labels sit above fields, readable at a glance. */
+:where(.ec-label, .gis-style-label, .profile-field-label, .si-rs-panel__label, .agrocloud-indicator-config__field-label) {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ds-color-text-secondary);
+  letter-spacing: 0.01em;
+}
+
+/* iOS: no zoom-on-focus. */
+@media (max-width: 599.98px) {
+  :where(.content) :where(input:not([type='checkbox'], [type='radio']), select, textarea),
+  .gis-input,
+  .ec-input {
+    font-size: 16px;
+  }
+}
+
+/* ============================== Cards & surfaces ============================ */
+:where(.ds-card, .ec-card) {
+  border-radius: var(--ds-radius-lg);
+  border-color: var(--ds-color-border);
+  background: var(--ds-color-surface);
+  box-shadow: var(--ds-shadow-sm);
+}
+
+:where(.ec-card-header) {
+  padding: 14px 18px;
+}
+
+:where(.ec-card-title) {
+  font-weight: 650;
+  font-size: 15px;
+  letter-spacing: -0.005em;
+}
+
+:where(.ec-card-body) {
+  padding: 16px 18px;
+}
+
+.ds-glass {
+  background: var(--ds-glass-bg);
+  border: 1px solid var(--ds-glass-border);
+  -webkit-backdrop-filter: saturate(160%) blur(var(--ds-glass-blur));
+  backdrop-filter: saturate(160%) blur(var(--ds-glass-blur));
+  box-shadow: var(--ds-shadow-md);
+}
+
+/* ============================== Tables ====================================== */
+:where(.content) table:where(:not([class*='mapbox']):not([class*='maplibre'])) {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+:where(.content) :where(table) :where(th) {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ds-color-text-secondary);
+  background: var(--ds-color-surface-2);
+  border-bottom: 1px solid var(--ds-color-border);
+  white-space: nowrap;
+  text-align: start;
+}
+
+:where(.content) :where(table) :where(td) {
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
+:where(.content) :where(table) :where(tbody tr) {
+  transition: background-color var(--ds-motion-fast) var(--ds-ease-out);
+}
+
+:where(.content) :where(table) :where(tbody tr:hover) {
+  background-color: var(--ds-color-primary-soft);
+}
+
+/* Any wide table scrolls horizontally inside its own wrapper instead of breaking the page. */
+.ds-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-color-surface);
+}
+
+.ds-table-wrap > table {
+  width: 100%;
+  min-width: max-content;
+}
+
+.ds-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* ============================== Page scaffolding ============================ */
+.ds-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-stack-gap, 20px);
+  padding: var(--content-pad, clamp(16px, 2.2vw, 24px));
+  max-width: 1600px;
+  margin-inline: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ds-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  box-shadow: var(--ds-shadow-sm);
+}
+
+.ds-toolbar__spacer {
+  flex: 1 1 auto;
+}
+
+.ds-grid-auto {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+}
+
+/* ============================== Badges ====================================== */
+:where(.ds-badge) {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ============================== Scrollbars ================================== */
+:where(.content, .ds-table-wrap) {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ds-color-text-muted) 45%, transparent) transparent;
+}
+
+/* ============================== Motion ====================================== */
+@media (prefers-reduced-motion: reduce) {
+  :where(.ds-btn, .gis-btn, .ec-btn, .ds-card, .ec-card, table tr) {
+    transition: none !important;
+  }
+}

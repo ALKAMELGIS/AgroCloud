@@ -221,7 +221,7 @@ describe('productionEstimationSheet', () => {
     const b = buildProductionEstimationRow(
       baseSummary({
         plotId: 'F-002',
-        farmName: 'Farm B',
+        fieldName: 'Farm B',
         cropType: 'Wheat',
         areaHa: 200,
         ndvi: 0.61,

@@ -120,8 +120,10 @@ export function reorderWorksheets(wb: ExcelJS.Workbook, order: readonly string[]
 
   reordered.forEach((ws, index) => {
     if (ws) {
-      ws.id = index
-      ws.orderNo = index
+      // exceljs internals: `id` is typed readonly and `orderNo` is untyped, both are plain fields at runtime.
+      const internalWs = ws as unknown as { id: number; orderNo: number }
+      internalWs.id = index
+      internalWs.orderNo = index
     }
   })
   internal._worksheets = reordered

@@ -19,6 +19,7 @@ import {
   developEliteMapLibreCinematicFlyToPortfolioHome,
   type DevelopEliteMapLibreCinematicFlyOpts,
 } from './developEliteMapLibreCinematicFly'
+import { asDevelopEliteProjectionMap } from './developEliteMapLibreCompat'
 
 function geoJsonBbox(
   geojson: GeoJSON.FeatureCollection,
@@ -118,7 +119,7 @@ export function applyDevelopEliteMapLibreFlatPortfolioCamera(
 ): void {
   const view = resolveDevelopEliteMapDefaultView()
   if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
-    setMapLibreGlobeProjection(map)
+    setMapLibreGlobeProjection(asDevelopEliteProjectionMap(map))
     applyMapLibreGlobeGalaxySky(map)
   }
   map.easeTo({
@@ -145,7 +146,7 @@ export function developEliteMapLibreApplyDefaultPortfolioView(
     return
   }
   if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
-    setMapLibreGlobeProjection(map)
+    setMapLibreGlobeProjection(asDevelopEliteProjectionMap(map))
     applyMapLibreGlobeGalaxySky(map)
   }
   map.flyTo({

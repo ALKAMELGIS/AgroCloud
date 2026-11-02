@@ -27,6 +27,7 @@ export const WEATHER_LAYER_CHIP_META: Record<WeatherMapLayerId, WeatherLayerChip
   cloud_cover: { emoji: '☁️', anim: 'drift' },
   pressure: { emoji: '🌀', anim: 'spin' },
   visibility: { emoji: '👁️', anim: 'glow' },
+  shortwave_radiation: { emoji: '☀️', anim: 'glow' },
 }
 
 export function weatherLayerChipMeta(id: WeatherMapLayerId): WeatherLayerChipMeta {

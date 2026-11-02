@@ -414,7 +414,7 @@ export function landCoverFromSpectralIndices(input: {
 export function agriculturalStatusFromEvidence(input: {
   ndvi: number | null | undefined
   ndwi?: number | null | undefined
-  objectType?: string | number | null
+  objectType?: unknown
 }): string {
   const typeHint = String(input.objectType ?? '')
     .trim()

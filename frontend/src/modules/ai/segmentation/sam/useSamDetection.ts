@@ -122,6 +122,11 @@ function imageSize(dataUrl: string): Promise<{ width: number; height: number }> 
   })
 }
 
+/** `coordinates` of any non-collection geometry (GeometryCollection → undefined). */
+function geometryCoords(g: GeoJSON.Geometry): unknown {
+  return g.type === 'GeometryCollection' ? undefined : g.coordinates
+}
+
 function walkCoords(c: unknown, out: number[][]) {
   if (!c) return
   if (typeof (c as number[])[0] === 'number' && typeof (c as number[])[1] === 'number') {
@@ -136,10 +141,10 @@ export function bboxOfSamAoi(aoi: SamAoiGeometry): [number, number, number, numb
   const coords: number[][] = []
   if (aoi.type === 'FeatureCollection') {
     for (const f of aoi.features) {
-      if (f?.geometry) walkCoords((f.geometry as GeoJSON.Geometry).coordinates, coords)
+      if (f?.geometry) walkCoords(geometryCoords(f.geometry), coords)
     }
   } else {
-    walkCoords(aoi.coordinates, coords)
+    walkCoords(geometryCoords(aoi), coords)
   }
   if (!coords.length) return null
   let w = Infinity

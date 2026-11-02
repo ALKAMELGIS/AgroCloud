@@ -188,7 +188,7 @@ export function useFieldBoundaryTrainingSamples() {
   const saveApproved = useCallback(() => {
     clearNotice()
     const result = downloadApprovedFieldTrainingSamples(samples)
-    if (!result.ok) {
+    if (result.ok === false) {
       setError(result.reason)
       return false
     }

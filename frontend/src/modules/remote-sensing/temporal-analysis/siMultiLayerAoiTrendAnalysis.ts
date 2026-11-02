@@ -17,7 +17,10 @@ import {
   mergeDailyIndexSeries,
 } from '../imagery/sentinelHubStatisticsApi'
 
-export type SiImageryAnalysisMode = 'single-layer-trend' | 'multi-layer-aoi-comparison'
+export type SiImageryAnalysisMode =
+  | 'single-layer-trend'
+  | 'multi-layer-aoi-comparison'
+  | 'plot-layer-time-series'
 
 /** Lookback window when resolving a single acquisition date (matches time-series panel). */
 export const MULTI_LAYER_AOI_LOOKBACK_DAYS = 90

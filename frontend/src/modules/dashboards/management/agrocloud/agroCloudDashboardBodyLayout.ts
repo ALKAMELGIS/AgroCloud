@@ -174,7 +174,9 @@ function mapLayoutTree(
     }
     if (mapped !== child) changed = true
     children.push(mapped)
-    sizes.push(node.sizes[i] ?? equalSizes(node.children.length)[i] ?? 100 / node.children.length)
+    // Stack nodes carry no `sizes` — only splits do.
+    const prevSize = node.kind === 'split' ? node.sizes[i] : undefined
+    sizes.push(prevSize ?? equalSizes(node.children.length)[i] ?? 100 / node.children.length)
   }
 
   if (!changed) return node

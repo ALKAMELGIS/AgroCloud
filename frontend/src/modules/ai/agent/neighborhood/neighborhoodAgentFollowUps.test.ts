@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { NeighborhoodAgentEvidencePayload } from './components/neighborhoodAgentEvidence'
 import { buildNeighborhoodAgentFollowUps } from './neighborhoodAgentFollowUps'
 
 describe('buildNeighborhoodAgentFollowUps', () => {
@@ -7,15 +8,16 @@ describe('buildNeighborhoodAgentFollowUps', () => {
   })
 
   it('suggests contextual chips after a vegetation pack reply', () => {
+    const evidence: NeighborhoodAgentEvidencePayload = {
+      packId: 'vegetation',
+      packLabel: 'Vegetation / RS health',
+      thoughtTitle: 'Thought · Vegetation',
+      tools: [{ name: 'read_rs_analysis', label: 'RS analysis', ok: true, preview: 'NDVI' }],
+    }
     const chips = buildNeighborhoodAgentFollowUps({
       lastUserText: 'vegetation health',
       lastAssistantText: 'NDVI looks moderate across the AOI.',
-      evidence: {
-        packId: 'vegetation',
-        packLabel: 'Vegetation / RS health',
-        thoughtTitle: 'Thought · Vegetation',
-        tools: [{ name: 'read_rs_analysis', label: 'RS analysis', ok: true, preview: 'NDVI' }],
-      },
+      evidence,
     })
     expect(chips.length).toBe(2)
     expect(chips.some(c => c.id === 'fu-veg')).toBe(false)
@@ -24,14 +26,15 @@ describe('buildNeighborhoodAgentFollowUps', () => {
   })
 
   it('uses Arabic labels when the user wrote Arabic', () => {
+    const evidence: NeighborhoodAgentEvidencePayload = {
+      packId: 'vegetation',
+      thoughtTitle: 'Thought',
+      tools: [{ name: 'read_rs_analysis', label: 'RS', ok: true, preview: 'ok' }],
+    }
     const chips = buildNeighborhoodAgentFollowUps({
       lastUserText: 'ما صحة الغطاء النباتي؟',
       lastAssistantText: 'المؤشر متوسط.',
-      evidence: {
-        packId: 'vegetation',
-        thoughtTitle: 'Thought',
-        tools: [{ name: 'read_rs_analysis', label: 'RS', ok: true, preview: 'ok' }],
-      },
+      evidence,
     })
     expect(chips).toHaveLength(2)
     expect(chips[0]?.label).toMatch(/[\u0600-\u06FF]/)

@@ -28,7 +28,7 @@ function lulcPayload(): TimeSeriesReportPayload {
       coverageLine: 'Coverage',
       actionsLine: 'Actions',
       actions: [],
-      lines: [],
+      lines: ['Summary'],
       areasFromHistogram: false,
     },
     ndviMean: 0.48,

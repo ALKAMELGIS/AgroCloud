@@ -244,7 +244,7 @@ export default function WeatherIntelligenceDashboard() {
             humidityPct: timelinePt.humidityPct ?? withMeta.humidityPct,
             windSpeedKmh: timelinePt.windSpeedKmh ?? withMeta.windSpeedKmh,
             windDirectionDeg: timelinePt.windDirectionDeg ?? withMeta.windDirectionDeg,
-            precipMm: timelinePt.precipMm ?? withMeta.precipMm,
+            precipMm: timelinePt.precipitationMm ?? withMeta.precipMm,
             weatherCode: timelinePt.weatherCode ?? withMeta.weatherCode,
             dailyMinC,
             dailyMaxC,

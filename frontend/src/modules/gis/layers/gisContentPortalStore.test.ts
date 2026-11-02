@@ -126,7 +126,7 @@ describe('gisContentPortalStore', () => {
 
     const raw = localStorage.getItem('geosyntra.gisContent.portal.v1')
     expect(raw).toBeTruthy()
-    const parsed = JSON.parse(raw!) as { permanentlyDeletedIds?: string[]; rows?: Array<{ id: string }> }
+    const parsed = JSON.parse(raw!) as { permanentlyDeletedIds?: string[]; rows?: Array<{ id: string } & Record<string, unknown>> }
     expect(parsed.permanentlyDeletedIds).toContain('2')
     expect(parsed.rows?.some(r => r.id === '2')).toBe(false)
 

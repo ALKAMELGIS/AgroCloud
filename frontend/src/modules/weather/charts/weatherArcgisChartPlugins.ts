@@ -223,7 +223,19 @@ export const weatherArcgisGuidesPlugin: Plugin = {
     const mode = opts.themeMode ?? 'dark'
 
     for (const guide of opts.horizontal ?? []) {
-      drawHorizontalGuide(chart, guide, mode)
+      // Chart.js deep-partials plugin options; a guide without a value has no y position.
+      if (typeof guide?.value !== 'number') continue
+      drawHorizontalGuide(
+        chart,
+        {
+          value: guide.value,
+          // Canvas ignores an invalid ('') strokeStyle, same as the previous `undefined`.
+          color: guide.color ?? '',
+          dash: guide.dash?.filter((n): n is number => typeof n === 'number'),
+          label: guide.label,
+        },
+        mode,
+      )
     }
 
     const isoLabels =

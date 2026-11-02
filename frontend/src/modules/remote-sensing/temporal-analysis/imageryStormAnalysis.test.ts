@@ -17,6 +17,8 @@ function hourly(overrides: Partial<OpenMeteoHourlyPoint> = {}): OpenMeteoHourlyP
     windSpeedKmh: 10,
     windDirectionDeg: 180,
     pressureHpa: 1013,
+    et0Mm: null,
+    shortwaveRadiationWm2: null,
     ...overrides,
   }
 }

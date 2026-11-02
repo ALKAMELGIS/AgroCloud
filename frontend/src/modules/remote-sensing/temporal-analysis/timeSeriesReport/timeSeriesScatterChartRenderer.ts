@@ -252,7 +252,7 @@ export function renderCorrelationScatterChart(
               color: '#475569',
               font: { size: 10, family: 'Segoe UI, system-ui, sans-serif' },
             },
-            grid: { color: 'rgba(148, 163, 184, 0.35)', drawBorder: false },
+            grid: { color: 'rgba(148, 163, 184, 0.35)' },
             border: { color: '#94a3b8' },
           },
           y: {
@@ -267,7 +267,7 @@ export function renderCorrelationScatterChart(
               color: '#475569',
               font: { size: 10, family: 'Segoe UI, system-ui, sans-serif' },
             },
-            grid: { color: 'rgba(148, 163, 184, 0.35)', drawBorder: false },
+            grid: { color: 'rgba(148, 163, 184, 0.35)' },
             border: { color: '#94a3b8' },
           },
         },

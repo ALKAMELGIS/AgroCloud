@@ -1191,7 +1191,8 @@ function buildEstimatedWaterLossTimelineSheet(
           pattern: 'solid',
           fgColor: { argb: p.waterStressLevel === 'Critical' ? 'FFFECACA' : 'FFFFEDD5' },
         }
-        if (cell.col === 9) {
+        // exceljs types `col` as string; at runtime it is the 1-based column number.
+        if (Number(cell.col) === 9) {
           cell.font = { bold: true, color: { argb: p.waterStressLevel === 'Critical' ? 'FF991B1B' : 'FF9A3412' } }
         }
       })
@@ -1512,7 +1513,7 @@ export async function buildTimeSeriesReportExcelBlob(
     chartSpecs.length > 0
       ? await injectNativeMeteoCharts(raw as ArrayBuffer, chartSpecs, 'Charts')
       : raw
-  return new Blob([withCharts], {
+  return new Blob([withCharts as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
 }
@@ -1633,7 +1634,7 @@ export async function exportTimeSeriesChartTimelineExcel(
     chartSpecs,
     firstTrendSheet || metaName,
   )
-  const blob = new Blob([withCharts], {
+  const blob = new Blob([withCharts as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
   const url = URL.createObjectURL(blob)

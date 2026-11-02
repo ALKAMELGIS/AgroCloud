@@ -1231,7 +1231,7 @@ function pointInPolygon(lng: number, lat: number, polygon: number[][][]): boolea
 /** Rasterise the AOI polygon onto the DEM grid (1 inside, 0 outside). */
 export function buildAoiMask(
   dem: DemGrid,
-  geometry: GeoJSON.Geometry | GeoJSON.Feature | null | undefined,
+  geometry: GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection | null | undefined,
 ): Uint8Array | null {
   if (!geometry) return null
   const polys: number[][][][] = []
@@ -1240,14 +1240,10 @@ export function buildAoiMask(
     if (geom.type === 'Polygon') polys.push(geom.coordinates as number[][][])
     else if (geom.type === 'MultiPolygon') polys.push(...(geom.coordinates as number[][][][]))
   }
-  if ((geometry as GeoJSON.FeatureCollection).type === 'FeatureCollection') {
-    for (const feat of (geometry as GeoJSON.FeatureCollection).features) pushGeom(feat.geometry)
+  if (geometry.type === 'FeatureCollection') {
+    for (const feat of geometry.features) pushGeom(feat.geometry)
   } else {
-    const geom =
-      (geometry as GeoJSON.Feature).type === 'Feature'
-        ? (geometry as GeoJSON.Feature).geometry
-        : (geometry as GeoJSON.Geometry)
-    pushGeom(geom)
+    pushGeom(geometry.type === 'Feature' ? geometry.geometry : geometry)
   }
   if (!polys.length) return null
 

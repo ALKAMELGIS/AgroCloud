@@ -63,7 +63,7 @@ function indexChangePayload(): TimeSeriesReportPayload {
       coverageLine: 'Coverage',
       actionsLine: 'Actions',
       actions: [],
-      lines: [],
+      lines: ['Summary'],
       areasFromHistogram: false,
     },
     ndviMean: 0.5,
@@ -73,6 +73,8 @@ function indexChangePayload(): TimeSeriesReportPayload {
     ndwiEstimated: false,
     saviEstimated: false,
     acquisitionDate: '2025-07-15',
+    ndviStats: null,
+    ndmiStats: null,
   })
 
   const png = tinyPngBase64()

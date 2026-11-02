@@ -7,7 +7,8 @@ import { apiUrl } from '@/core/api/apiOrigin'
 
 const BASE = () => apiUrl('/api/sentinel2/super-resolution')
 
-export type Sen2srProductMode = 'raw' | 'sen2sr'
+/** `basemap` / `drone` switch field detection capture imagery (see Sen2srProductControls). */
+export type Sen2srProductMode = 'raw' | 'sen2sr' | 'basemap' | 'drone'
 
 export type Sen2srStatus = {
   available: boolean
@@ -98,7 +99,7 @@ export type RunSen2srOptions = {
   file?: File | Blob | null
   /** Server-local path (only useful when the service can read that path). */
   inputPath?: string | null
-  aoi?: GeoJSON.Polygon | GeoJSON.MultiPolygon | GeoJSON.Feature | GeoJSON.FeatureCollection | null
+  aoi?: GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection | null
   bands?: string[] | null
   outputPath?: string | null
   display1m?: boolean

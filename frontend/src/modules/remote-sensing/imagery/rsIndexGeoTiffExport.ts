@@ -81,6 +81,12 @@ const INDEX_BANDS: Record<SentinelIndexEvalProfile, { bands: string[]; expr: str
   mndwi: { bands: ['B03', 'B11'], expr: '(s.B03-s.B11)/(s.B03+s.B11)' },
   ndmi: { bands: ['B8A', 'B11'], expr: '(s.B8A-s.B11)/(s.B8A+s.B11)' },
   ndii: { bands: ['B08', 'B11'], expr: '(s.B08-s.B11)/(s.B08+s.B11)' },
+  // Same formulas as Layer Live map evalscripts (sentinelHubWmsIndexEvalscripts).
+  awei: {
+    bands: ['B03', 'B08', 'B11', 'B12'],
+    expr: '4.0*(s.B03-s.B11)-(0.25*s.B08+2.75*s.B12)',
+  },
+  nbr: { bands: ['B08', 'B12'], expr: '(s.B08-s.B12)/(s.B08+s.B12)' },
   evi: {
     bands: ['B02', 'B04', 'B08'],
     expr: '2.5*((s.B08-s.B04)/(s.B08+6.0*s.B04-7.5*s.B02+1.0))',

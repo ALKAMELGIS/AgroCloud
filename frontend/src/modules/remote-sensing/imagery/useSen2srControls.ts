@@ -16,8 +16,7 @@ export type UseSen2srControlsOptions = {
   enabled?: boolean
   /** Optional AOI clip for enhance requests. */
   resolveAoi?: () =>
-    | GeoJSON.Polygon
-    | GeoJSON.MultiPolygon
+    | GeoJSON.Geometry
     | GeoJSON.Feature
     | GeoJSON.FeatureCollection
     | null

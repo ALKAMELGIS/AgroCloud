@@ -657,7 +657,7 @@ export function AcpMapCanvas() {
         applyWmsRef.current(map, true)
         applyPortalLayersRef.current(map)
       },
-      aoiSyncRef,
+      aoiSyncRef.current,
     )
     setMapLayerDisplay(map, ACP_LAYER_AOI_FILL, snap.layerVisibility.aoi)
     setMapLayerDisplay(map, ACP_LAYER_AOI_LINE, snap.layerVisibility.aoi)

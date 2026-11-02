@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SI_AOI_FIELD_STYLE_PALETTE } from '../imagery/siAoiFields'
 import {
   buildSiImageryFieldOptions,
   buildSiImageryFieldOptionsForSource,
@@ -104,6 +105,9 @@ describe('siImageryTimeSeriesFields', () => {
           name: 'A4 (MH147)',
           centroid: [55, 25],
           geometry: drawnAoi,
+          style: SI_AOI_FIELD_STYLE_PALETTE[0]!,
+          areaHa: 0,
+          perimeterM: 0,
         },
       ],
       drawnAoi,

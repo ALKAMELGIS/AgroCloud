@@ -4,6 +4,7 @@ import {
   developEliteArcgisLayerUrlsChanged,
   getDevelopEliteArcgisSessionCache,
   setDevelopEliteArcgisSessionCache,
+  type DevelopEliteArcgisDataSnapshot,
 } from './developEliteArcgisSessionCache'
 import { loadDevelopEliteDashboardConfig } from './developEliteDashboardConfig'
 
@@ -21,7 +22,7 @@ describe('developEliteArcgisSessionCache', () => {
     const key = developEliteArcgisCacheKey(config)
     expect(getDevelopEliteArcgisSessionCache(key)).toBeUndefined()
 
-    const snapshot = {
+    const snapshot: DevelopEliteArcgisDataSnapshot = {
       structures: { type: 'FeatureCollection', features: [] },
       zoneLayerStructures: null,
       structuresDrawingInfo: null,

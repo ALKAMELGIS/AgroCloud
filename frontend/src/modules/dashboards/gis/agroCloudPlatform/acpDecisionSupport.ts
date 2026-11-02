@@ -31,7 +31,7 @@ export function resolveAcpFieldSceneComparisonDates(row: AcpFieldTableRow): {
   const latestSceneDate =
     row.result?.ndviSceneDates?.[0] ??
     row.imageDate ??
-    row.result?.imagery?.imageDate ??
+    row.result?.imageDate ??
     null
   const previousSceneDate = row.result?.ndviSceneDates?.[1] ?? null
   return { latestSceneDate, previousSceneDate }

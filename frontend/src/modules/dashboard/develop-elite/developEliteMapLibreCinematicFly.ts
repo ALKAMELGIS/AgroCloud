@@ -12,6 +12,7 @@ import {
   DEVELOP_ELITE_MAP_DEFAULT_PORTFOLIO_PITCH,
   resolveDevelopEliteMapDefaultView,
 } from './developEliteMapViewport'
+import { asDevelopEliteProjectionMap } from './developEliteMapLibreCompat'
 
 export type DevelopEliteMapLibreCinematicFlyOpts = {
   viewMode3d?: boolean
@@ -24,7 +25,7 @@ export type DevelopEliteMapLibreCinematicFlyOpts = {
 const CINEMATIC_VIEWPORT_CLASS = 'develop-elite-map__viewport--cinematic-fly'
 
 function resolveCameraCenter(
-  center: [number, number] | { lng: number; lat: number } | undefined,
+  center: [number, number] | { lng: number; lat: number } | { lon: number; lat: number } | undefined,
 ): { lng: number; lat: number } | null {
   if (!center) return null
   if (Array.isArray(center)) {
@@ -32,8 +33,9 @@ function resolveCameraCenter(
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null
     return { lng, lat }
   }
-  if (!Number.isFinite(center.lng) || !Number.isFinite(center.lat)) return null
-  return { lng: center.lng, lat: center.lat }
+  const lng = 'lng' in center ? center.lng : center.lon
+  if (!Number.isFinite(lng) || !Number.isFinite(center.lat)) return null
+  return { lng, lat: center.lat }
 }
 
 function beginCinematicFlyChrome(map: MaplibreMap): void {
@@ -111,7 +113,7 @@ export function developEliteMapLibreCinematicFlyToBbox(
 export function developEliteMapLibreCinematicFlyToPortfolioHome(map: MaplibreMap): boolean {
   const view = resolveDevelopEliteMapDefaultView()
   if (!DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
-    setMapLibreGlobeProjection(map)
+    setMapLibreGlobeProjection(asDevelopEliteProjectionMap(map))
   }
   beginCinematicFlyChrome(map)
   const ok = flyToLikeGoogleEarth(map, {

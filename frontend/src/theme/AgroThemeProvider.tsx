@@ -30,7 +30,8 @@ export function AgroThemeProvider({ children }: { children: ReactNode }) {
   }, [settings.themeMode])
 
   const effectiveMode = settings.themeMode === 'system' ? docMode : mode
-  const theme = useMemo(() => createAgroTheme(effectiveMode), [effectiveMode])
+  const customPrimary = settings.themeMode === 'custom' ? settings.customPrimaryHex || null : null
+  const theme = useMemo(() => createAgroTheme(effectiveMode, { customPrimary }), [effectiveMode, customPrimary])
 
   return (
     <ThemeProvider theme={theme}>

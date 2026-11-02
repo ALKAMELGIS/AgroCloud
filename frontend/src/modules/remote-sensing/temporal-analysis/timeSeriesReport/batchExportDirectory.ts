@@ -21,6 +21,11 @@ type DirectoryPickerWindow = Window &
       mode?: 'read' | 'readwrite'
       startIn?: FileSystemHandle | WellKnownDirectory
     }) => Promise<FileSystemDirectoryHandle>
+    showSaveFilePicker?: (options?: {
+      suggestedName?: string
+      id?: string
+      types?: Array<{ description?: string; accept: Record<string, string[]> }>
+    }) => Promise<FileSystemFileHandle>
   }
 
 type WellKnownDirectory =
@@ -506,7 +511,7 @@ const FIELD_SUMMARY_SAVE_PICKER_ID = 'agrocloud-field-summary-export'
 
 export function isSaveFilePickerSupported(): boolean {
   if (typeof window === 'undefined') return false
-  return typeof window.showSaveFilePicker === 'function'
+  return typeof asDirectoryPickerWindow().showSaveFilePicker === 'function'
 }
 
 /** Save dialog or folder picker — must start synchronously from a click handler. */
@@ -648,7 +653,7 @@ export async function pickBatchFieldSummarySaveTarget(
 
   if (isSaveFilePickerSupported()) {
     try {
-      const handle = await window.showSaveFilePicker!({
+      const handle = await asDirectoryPickerWindow().showSaveFilePicker!({
         suggestedName: filename,
         id: FIELD_SUMMARY_SAVE_PICKER_ID,
         types: [

@@ -143,14 +143,30 @@ async function writeToHandle(handle: FileSystemFileHandle, blob: Blob) {
   await writable.close()
 }
 
+type SaveFilePickerOptionsLite = {
+  suggestedName?: string
+  types?: Array<{ description?: string; accept: Record<string, string[]> }>
+}
+
+/** File System Access API (Chromium) — not in the TS DOM lib yet. */
+function getShowSaveFilePicker():
+  | ((options?: SaveFilePickerOptionsLite) => Promise<FileSystemFileHandle>)
+  | undefined {
+  const w = window as Window & {
+    showSaveFilePicker?: (options?: SaveFilePickerOptionsLite) => Promise<FileSystemFileHandle>
+  }
+  return typeof w.showSaveFilePicker === 'function' ? w.showSaveFilePicker.bind(window) : undefined
+}
+
 export async function pickOutputDestination(): Promise<{
   fileName: string
   format: AiDlOutputFormat
   handle: FileSystemFileHandle | null
 } | null> {
-  if (typeof window.showSaveFilePicker === 'function') {
+  const showSaveFilePicker = getShowSaveFilePicker()
+  if (showSaveFilePicker) {
     try {
-      const handle = await window.showSaveFilePicker({
+      const handle = await showSaveFilePicker({
         suggestedName: defaultOutputFileName('geojson'),
         types: OUTPUT_SAVE_PICKER_TYPES,
       })

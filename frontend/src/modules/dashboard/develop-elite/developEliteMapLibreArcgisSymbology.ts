@@ -81,7 +81,7 @@ function scaleMapLibreCircleRadiusPaint(
 export const DE_AGRO_STRUCTURE_EXTRUSION_HEIGHT_M = 7
 
 /** Greenhouse, Nethouse, Glasshouse, Retractable Roof Houses, Cravo — extrude to 7 m in 3D view. */
-const DE_AGRO_STRUCTURE_EXTRUDED_TYPE_CODES = new Set(
+const DE_AGRO_STRUCTURE_EXTRUDED_TYPE_CODES = new Set<number>(
   AGRO_STRUCTURES_STRUCTURE_TYPE_CATALOG.slice(0, 5).map(entry => entry.code),
 )
 const DE_AGRO_STRUCTURE_EXTRUDED_TYPE_LABELS = new Set(

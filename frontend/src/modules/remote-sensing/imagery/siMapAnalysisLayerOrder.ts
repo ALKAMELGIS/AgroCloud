@@ -3,7 +3,18 @@
  * Satellite basemap → drawn AOI fill → Sentinel AOI raster → vector AOI boundaries.
  */
 
-import type { Map as MapboxMap } from 'mapbox-gl'
+/**
+ * Minimal map surface used for analysis layer stacking — satisfied by mapbox-gl `Map`
+ * and by SI's structural canvas helpers (only these four methods are called).
+ */
+export type SiAnalysisLayerOrderMap = {
+  getLayer(id: string): unknown
+  getStyle(): { layers?: Array<{ id: string }> } | undefined
+  moveLayer(id: string, beforeId?: string): void
+  setPaintProperty(layerId: string, name: string, value: unknown): void
+}
+
+type MapboxMap = SiAnalysisLayerOrderMap
 import {
   isSiSentinelAoiWmsMapLayerId,
   SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX,

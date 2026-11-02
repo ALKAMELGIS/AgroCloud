@@ -8,8 +8,8 @@ import {
   buildWeeklyCompositesFromDaily,
   type AoiStatsSampleMode,
   type AoiWeeklyComposite,
+  type AoiWeeklyWindow,
 } from './aoiLiveTimeSeries'
-import type { WeeklyCompositeLite } from './staticAoiMultiChartData'
 
 export type AoiLiveTimeSeriesState = {
   daily: SentinelHubDailyIndexMeans[]
@@ -25,7 +25,7 @@ export type UseAoiLiveTimeSeriesOptions = {
   fromIso: string
   toIso: string
   primaryLayerId: string
-  weeklyWindows: WeeklyCompositeLite[]
+  weeklyWindows: AoiWeeklyWindow[]
   sampleMode: AoiStatsSampleMode
   enabled: boolean
   onSampleFallback?: (weekly: AoiWeeklyComposite[]) => void

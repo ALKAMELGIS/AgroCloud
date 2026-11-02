@@ -3322,6 +3322,9 @@ export default function GisMap() {
       method: (cfg?.method as SymbologyClassMethod) || 'jenks',
       colorRamp: (cfg?.colorRamp as SymbologyColorRamp) || 'viridis',
       threshold: typeof cfg?.threshold === 'number' && Number.isFinite(cfg.threshold) ? cfg.threshold : Number.NaN,
+      // Carry per-class overrides through (same as symbologyHelpers.normalizeSymbology) instead of dropping them.
+      classOverrides: cfg?.classOverrides && typeof cfg.classOverrides === 'object' ? { ...cfg.classOverrides } : {},
+      breakOverrides: Array.isArray(cfg?.breakOverrides) ? [...cfg.breakOverrides] : [],
     }
     if (!baseUseArcGisOnline) next.useArcGisOnline = false
     return next

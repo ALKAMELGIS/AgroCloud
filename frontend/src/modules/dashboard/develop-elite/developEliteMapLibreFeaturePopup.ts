@@ -181,7 +181,7 @@ export function registerDevelopEliteMapLibreFeaturePopup(
 
   const candidateDedupeKey = (candidate: PopupCandidate): string => {
     const enriched = enrichDevelopEliteMapIdentifyFeature(candidate.feature, candidate.layerKey, opts.sources)
-    const stable = computeStableGisFeatureKey(enriched)
+    const stable = computeStableGisFeatureKey(enriched, -1)
     if (stable) return `${candidate.layerKey}:${stable}`
     const oid = (enriched.properties as Record<string, unknown> | undefined)?.OBJECTID
     return `${candidate.layerKey}:${String(oid ?? '')}:${candidate.layerKey}`
@@ -255,7 +255,7 @@ export function registerDevelopEliteMapLibreFeaturePopup(
     wirePopupActions(enriched)
 
     if (candidate.layerKey === 'agro-structures') {
-      const fieldKey = computeStableGisFeatureKey(enriched)
+      const fieldKey = computeStableGisFeatureKey(enriched, -1)
       if (fieldKey && opts.onSelectStructureFieldKey) opts.onSelectStructureFieldKey(fieldKey)
       if (opts.cropTableLink && opts.onFocusCropTableRowId) {
         const joinField = opts.cropTableLink.joinField.trim() || 'Farm_Code'

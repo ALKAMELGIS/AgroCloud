@@ -240,7 +240,7 @@ export function dedupeTreeCrowns(features: GeoJSON.Feature[], minSpacingM = 3): 
   )
   const kept: GeoJSON.Feature[] = []
   for (const f of sorted) {
-    let c: GeoJSON.Feature | null = null
+    let c: GeoJSON.Feature<GeoJSON.Point> | null = null
     try {
       c = turf.centroid(f as any)
     } catch {

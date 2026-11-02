@@ -12,6 +12,7 @@ import {
 } from './siCropAlertNdviTimeSeries'
 import {
   buildFieldImageryMeta,
+  CROP_ALERT_SAMPLE_DATA_SOURCE,
   type CropAlertFieldImageryMeta,
   type CropAlertImageryContext,
   findExactObservationRow,
@@ -425,7 +426,7 @@ export function buildSnapshotsFromSentinelSeries(
     imagery = buildFieldImageryMeta(series.daily, referenceDate, globalImagery, 'sample', seriesOptions)
     imagery = {
       ...imagery,
-      dataSource: 'Sample (Sentinel unavailable)',
+      dataSource: CROP_ALERT_SAMPLE_DATA_SOURCE,
       liveVerified: false,
       dataReason: series.error ?? 'Using per-field sample indices until Sentinel Live resolves',
     }

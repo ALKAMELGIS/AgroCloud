@@ -1,3 +1,4 @@
+import type { ExpressionSpecification } from 'maplibre-gl'
 import { resolveAgroStructuresCountry } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 
 function featureKey(f: GeoJSON.Feature, index: number): string {
@@ -40,18 +41,18 @@ export function resolveAcpMapDrawGeoJson(
   return { type: 'FeatureCollection', features }
 }
 
-export const ACP_AOI_FILL_OPACITY_EXPRESSION = [
+export const ACP_AOI_FILL_OPACITY_EXPRESSION: ExpressionSpecification = [
   'match',
   ['get', '__acpOutlineRole'],
   'greenhouse',
   0,
   0.08,
-] as const
+]
 
-export const ACP_AOI_FILL_SUPPRESSED_OPACITY_EXPRESSION = [
+export const ACP_AOI_FILL_SUPPRESSED_OPACITY_EXPRESSION: ExpressionSpecification = [
   'match',
   ['get', '__acpOutlineRole'],
   'greenhouse',
   0,
   0,
-] as const
+]

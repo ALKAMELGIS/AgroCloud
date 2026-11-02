@@ -17,8 +17,8 @@ export function developEliteListItemMatchesSearch(haystack: string, query: strin
 export function sortDevelopEliteListBySearch<T>(
   items: readonly T[],
   query: string,
-  haystack: (item: T) => string,
-  tieBreak: (a: T, b: T) => number,
+  haystack: (item: NoInfer<T>) => string,
+  tieBreak: (a: NoInfer<T>, b: NoInfer<T>) => number,
 ): T[] {
   const q = query.trim()
   const copy = [...items]

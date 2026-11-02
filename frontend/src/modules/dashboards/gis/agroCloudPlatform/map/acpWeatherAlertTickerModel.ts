@@ -8,7 +8,7 @@ import {
   extractCropAlertFieldsFromMask,
   type CropAlertFieldInput,
 } from '@/modules/remote-sensing/indices/siCropAlertEngine'
-import type { AcpMapScopeMode } from '../acpPlatformContext'
+import type { AcpMapScopeMode } from '../acpPlatformConfig'
 import { resolveAcpScopeGeoFeatures, type AcpMapViewSlice } from '../acpViewportScope'
 import type { AcpWeatherAlertLevel } from './acpWeatherAlertLayerModel'
 import { resolveWeatherAlertLevel } from './acpWeatherAlertLayerModel'
@@ -38,6 +38,8 @@ export type AcpFieldWeatherTickerEntry = {
   country: string
   lat: number
   lng: number
+  /** Field polygon (spread from {@link AcpWeatherTickerField}) — used for marker edge placement. */
+  geometry?: GeoJSON.Geometry
   snapshot: OpenMeteoWeatherSnapshot
   severity: number
   level: AcpWeatherAlertLevel

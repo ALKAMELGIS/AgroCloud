@@ -27,6 +27,7 @@ function dailyRow(overrides: Partial<SentinelHubDailyIndexMeans> = {}): Sentinel
     ndwi: 0.2,
     ndmi: 0.4,
     evi: 0.82,
+    savi: null,
     ciRe: 0.12,
     ...overrides,
   }

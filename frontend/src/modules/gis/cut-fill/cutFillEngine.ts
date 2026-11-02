@@ -18,8 +18,8 @@ export type CutFillComputeInput = {
 }
 
 export type CutFillComputeOutput = {
-  difference: Float32Array
-  classification: Uint8Array
+  difference: Float32Array<ArrayBuffer>
+  classification: Uint8Array<ArrayBuffer>
   summary: CutFillSummary
   rows: CutFillTableRow[]
 }

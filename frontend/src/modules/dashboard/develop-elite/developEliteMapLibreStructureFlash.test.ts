@@ -16,12 +16,12 @@ describe('syncDevelopEliteMapLibreStructureHighlight', () => {
       setPaintProperty: vi.fn(),
     } as never
 
-    const feature = {
+    const feature: GeoJSON.Feature = {
       type: 'Feature',
       properties: { OBJECTID: 42 },
       geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
     }
-    const geojson = { type: 'FeatureCollection', features: [feature] }
+    const geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] }
 
     syncDevelopEliteMapLibreStructureHighlight(map, geojson, 'OBJECTID:42', false)
     expect(setData).toHaveBeenCalledWith({

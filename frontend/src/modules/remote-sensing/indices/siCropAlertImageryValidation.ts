@@ -28,12 +28,20 @@ export type CropAlertImageryContext = {
   warningMessage: string | null
 }
 
+/** Shown when per-field sample indices stand in until Sentinel Live resolves. */
+export const CROP_ALERT_SAMPLE_DATA_SOURCE = 'Sample (Sentinel unavailable)' as const
+
+export type CropAlertDataSourceLabel =
+  | typeof CROP_ALERT_DATA_SOURCE
+  | typeof CROP_ALERT_SAMPLE_DATA_SOURCE
+  | 'Unavailable'
+
 export type CropAlertFieldImageryMeta = {
   imageDate: string | null
   sensingDate: string | null
   analysisDate: string
   requestedDate: string
-  dataSource: typeof CROP_ALERT_DATA_SOURCE | 'Unavailable'
+  dataSource: CropAlertDataSourceLabel
   dataQuality: CropAlertDataQuality
   liveVerified: boolean
   warningMessage: string | null

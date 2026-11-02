@@ -53,7 +53,7 @@ export function applyDevelopEliteMapLibrePerformanceTuning(map: MaplibreMap | nu
     nav.doubleClickZoom?.enable?.()
     nav.touchZoomRotate?.enable?.()
     nav.boxZoom?.enable?.()
-    nav.setRenderWorldCopies?.(false)
+    map.setRenderWorldCopies?.(false)
     ;(nav as { touchPitch?: { enable?: () => void } }).touchPitch?.enable?.()
     ;(nav as { dragPan?: { enable?: () => void } }).dragPan?.enable?.()
   } catch {
