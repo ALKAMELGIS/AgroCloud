@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { DataSourceFieldsPanel, type DataSourceFormState } from '@/modules/forms/components/datasourcefieldspanel'
 import { canManageDataSourceSettings } from '@/core/auth/auth'
 import { FertigationReportModal } from '@/modules/reports/operational/FertigationReportModal'
+import { EntryFormCardHeader } from '@/modules/operations/shared/DataEntryChrome'
 import './EC.css'
+import './fertigation-records.css'
 
 type FertigationEntry = {
   id: number
@@ -24,6 +26,12 @@ type FertigationEntry = {
 }
 
 const STORAGE_KEY = 'fertigation_records_v1'
+
+const statusTone = (status: string): 'planned' | 'progress' | 'done' => {
+  if (status === 'Completed') return 'done'
+  if (status === 'In Progress') return 'progress'
+  return 'planned'
+}
 
 const readJson = <T,>(key: string, fallback: T): T => {
   try {
@@ -80,48 +88,41 @@ export default function FertigationRecords() {
 
   const canSave = Boolean(draft.site.trim() && draft.project.trim() && draft.block.trim() && draft.date && draft.time)
 
+  const addRecord = () => {
+    const next: FertigationEntry = { id: Date.now(), ...draft }
+    setRecords(prev => [next, ...prev].slice(0, 2000))
+    setDraft(prev => ({ ...prev, project: '', block: '', flowRate: '', durationHours: '', totalVolume: '' }))
+  }
+
   return (
-    <div className="ec-page">
+    <div className="ec-page fert-page">
       <div className="ec-container ec-animate-in">
-        <div className="ec-header">
+        <header className="ec-header fert-header">
           <div className="ec-title">
             <span className="ops-head-icon ops-head-icon--rose" aria-hidden>
               <i className="fa-solid fa-flask" />
             </span>
             <div>
-              Fertigation Records
+              <h1 className="fert-header__title">Fertigation Records</h1>
               <div className="ec-section-subtitle">Plan and track fertigation schedules</div>
             </div>
           </div>
-        </div>
+        </header>
 
         <div className="ec-card">
-          <div className="ec-card-header">
-            <div>
-              <div className="ec-card-title">
-                <i className="fa-solid fa-circle-info" style={{ color: 'var(--ec-primary)' }}></i>
-                Basic Information
-              </div>
-              <div className="ec-card-subtitle-small">Configured in Settings (Manager and Admin only)</div>
-            </div>
-            {canManageSettings ? (
-              <div className="ec-card-header-actions">
-                <button
-                  type="button"
-                  className="ec-icon-btn"
-                  aria-label="Open data source settings"
-                  title="Settings"
-                  disabled={isOpeningSettings}
-                  onClick={() => {
+          <EntryFormCardHeader
+            title="Basic Information"
+            settingsAriaLabel="Open data source settings"
+            settingsBusy={isOpeningSettings}
+            onOpenSettings={
+              canManageSettings
+                ? () => {
                     setIsOpeningSettings(true)
                     navigate('/master/workflow-settings?form=Fertigation')
-                  }}
-                >
-                  <i className={isOpeningSettings ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-gear'}></i>
-                </button>
-              </div>
-            ) : null}
-          </div>
+                  }
+                : undefined
+            }
+          />
           <div className="ec-card-body">
             <DataSourceFieldsPanel formKey="Fertigation" mode="fill" variant="embedded" onChange={setDataSourceState} />
           </div>
@@ -130,7 +131,7 @@ export default function FertigationRecords() {
         <div className="ec-card">
           <div className="ec-card-header">
             <div className="ec-card-title">
-              <i className="fa-solid fa-pen-to-square" style={{ color: '#0ea5e9' }}></i>
+              <i className="fa-solid fa-pen-to-square fert-icon--info" aria-hidden="true"></i>
               New Record
             </div>
             <div className="ec-card-header-actions">
@@ -139,34 +140,41 @@ export default function FertigationRecords() {
               </button>
             </div>
           </div>
-          <div className="ec-card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <form
+            className="ec-card-body fert-form"
+            onSubmit={e => {
+              e.preventDefault()
+              if (canSave) addRecord()
+            }}
+          >
+            <div className="fert-form__grid">
             <label className="ec-input-group">
-              <span className="ec-label">Date</span>
-              <input className="ec-input" type="date" value={draft.date} onChange={e => setDraft(prev => ({ ...prev, date: e.target.value }))} />
+              <span className="ec-label">Date<span className="fert-req" aria-hidden="true"> *</span></span>
+              <input className="ec-input" type="date" required value={draft.date} onChange={e => setDraft(prev => ({ ...prev, date: e.target.value }))} />
             </label>
             <label className="ec-input-group">
-              <span className="ec-label">Time</span>
-              <input className="ec-input" type="time" value={draft.time} onChange={e => setDraft(prev => ({ ...prev, time: e.target.value }))} />
+              <span className="ec-label">Time<span className="fert-req" aria-hidden="true"> *</span></span>
+              <input className="ec-input" type="time" required value={draft.time} onChange={e => setDraft(prev => ({ ...prev, time: e.target.value }))} />
             </label>
             <label className="ec-input-group">
               <span className="ec-label">Country</span>
               <input className="ec-input" value={draft.country ?? ''} onChange={e => setDraft(prev => ({ ...prev, country: e.target.value }))} />
             </label>
             <label className="ec-input-group">
-              <span className="ec-label">Site</span>
-              <input className="ec-input" value={draft.site} onChange={e => setDraft(prev => ({ ...prev, site: e.target.value }))} />
+              <span className="ec-label">Site<span className="fert-req" aria-hidden="true"> *</span></span>
+              <input className="ec-input" required value={draft.site} onChange={e => setDraft(prev => ({ ...prev, site: e.target.value }))} />
             </label>
             <label className="ec-input-group">
-              <span className="ec-label">Project</span>
-              <input className="ec-input" value={draft.project} onChange={e => setDraft(prev => ({ ...prev, project: e.target.value }))} />
+              <span className="ec-label">Project<span className="fert-req" aria-hidden="true"> *</span></span>
+              <input className="ec-input" required value={draft.project} onChange={e => setDraft(prev => ({ ...prev, project: e.target.value }))} />
             </label>
             <label className="ec-input-group">
               <span className="ec-label">Location</span>
               <input className="ec-input" value={draft.location ?? ''} onChange={e => setDraft(prev => ({ ...prev, location: e.target.value }))} />
             </label>
             <label className="ec-input-group">
-              <span className="ec-label">Block</span>
-              <input className="ec-input" value={draft.block} onChange={e => setDraft(prev => ({ ...prev, block: e.target.value }))} />
+              <span className="ec-label">Block<span className="fert-req" aria-hidden="true"> *</span></span>
+              <input className="ec-input" required value={draft.block} onChange={e => setDraft(prev => ({ ...prev, block: e.target.value }))} />
             </label>
             <label className="ec-input-group">
               <span className="ec-label">Fertilizer Type</span>
@@ -174,7 +182,7 @@ export default function FertigationRecords() {
             </label>
             <label className="ec-input-group">
               <span className="ec-label">Concentration (ppm)</span>
-              <input className="ec-input" value={draft.concentration ?? ''} onChange={e => setDraft(prev => ({ ...prev, concentration: e.target.value }))} />
+              <input className="ec-input fert-num" inputMode="decimal" value={draft.concentration ?? ''} onChange={e => setDraft(prev => ({ ...prev, concentration: e.target.value }))} />
             </label>
             <label className="ec-input-group">
               <span className="ec-label">Status</span>
@@ -186,91 +194,98 @@ export default function FertigationRecords() {
             </label>
             <label className="ec-input-group">
               <span className="ec-label">Flow Rate (m³/h)</span>
-              <input className="ec-input" value={draft.flowRate} onChange={e => setDraft(prev => ({ ...prev, flowRate: e.target.value }))} />
+              <input className="ec-input fert-num" inputMode="decimal" value={draft.flowRate} onChange={e => setDraft(prev => ({ ...prev, flowRate: e.target.value }))} />
             </label>
             <label className="ec-input-group">
               <span className="ec-label">Duration (h)</span>
-              <input className="ec-input" value={draft.durationHours} onChange={e => setDraft(prev => ({ ...prev, durationHours: e.target.value }))} />
+              <input className="ec-input fert-num" inputMode="decimal" value={draft.durationHours} onChange={e => setDraft(prev => ({ ...prev, durationHours: e.target.value }))} />
             </label>
             <label className="ec-input-group">
               <span className="ec-label">Cycles</span>
-              <input className="ec-input" value={draft.cycles} onChange={e => setDraft(prev => ({ ...prev, cycles: e.target.value }))} />
+              <input className="ec-input fert-num" inputMode="numeric" value={draft.cycles} onChange={e => setDraft(prev => ({ ...prev, cycles: e.target.value }))} />
             </label>
             <label className="ec-input-group">
               <span className="ec-label">Total Volume (m³)</span>
-              <input className="ec-input" value={draft.totalVolume} onChange={e => setDraft(prev => ({ ...prev, totalVolume: e.target.value }))} />
+              <input className="ec-input fert-num" inputMode="decimal" value={draft.totalVolume} onChange={e => setDraft(prev => ({ ...prev, totalVolume: e.target.value }))} />
             </label>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+            </div>
+            <div className="fert-form__actions">
+              <span className="fert-form__hint">
+                <span aria-hidden="true">*</span> Required: date, time, site, project and block
+              </span>
               <button
                 type="button"
-                className="ec-btn ec-btn-primary"
-                disabled={!canSave}
-                onClick={() => {
-                  const next: FertigationEntry = { id: Date.now(), ...draft }
-                  setRecords(prev => [next, ...prev].slice(0, 2000))
-                  setDraft(prev => ({ ...prev, project: '', block: '', flowRate: '', durationHours: '', totalVolume: '' }))
-                }}
-              >
-                <i className="fa-solid fa-plus"></i> Add
-              </button>
-              <button
-                type="button"
-                className="ec-btn ec-btn-ghost"
+                className="ec-btn ec-btn-ghost entry-btn entry-btn--quiet"
                 onClick={() => setDraft(prev => ({ ...prev, site: '', project: '', block: '', flowRate: '', durationHours: '', cycles: '1', totalVolume: '' }))}
               >
                 Clear
               </button>
+              <button type="submit" className="ec-btn ec-btn-primary entry-btn entry-btn--primary" disabled={!canSave}>
+                <i className="fa-solid fa-plus" aria-hidden="true"></i> Add
+              </button>
             </div>
-          </div>
+          </form>
         </div>
 
         <div className="ec-card">
           <div className="ec-card-header">
             <div className="ec-card-title">
-              <i className="fa-solid fa-list" style={{ color: '#64748b' }}></i>
+              <i className="fa-solid fa-list fert-icon--muted" aria-hidden="true"></i>
               Recent Records
             </div>
+            {sorted.length ? <span className="fert-count">{sorted.length}</span> : null}
           </div>
-          <div className="ec-card-body" style={{ overflowX: 'auto' }}>
+          <div className="ec-card-body fert-records">
             {sorted.length === 0 ? (
-              <div style={{ color: '#64748b', fontSize: 13 }}>No records yet.</div>
+              <div className="fert-empty" role="status">
+                <span className="fert-empty__icon" aria-hidden="true">
+                  <i className="fa-solid fa-flask" />
+                </span>
+                <p className="fert-empty__title">No records yet.</p>
+                <p className="fert-empty__body">Fill in the form above and press Add — new records appear here, newest first.</p>
+              </div>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
-                    <th style={{ padding: '10px 8px' }}>Date</th>
-                    <th style={{ padding: '10px 8px' }}>Site</th>
-                    <th style={{ padding: '10px 8px' }}>Project</th>
-                    <th style={{ padding: '10px 8px' }}>Block</th>
-                    <th style={{ padding: '10px 8px' }}>Status</th>
-                    <th style={{ padding: '10px 8px' }}>Volume</th>
-                    <th style={{ padding: '10px 8px' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map(r => (
-                    <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '10px 8px', color: '#0f172a' }}>
-                        {r.date} {r.time}
-                      </td>
-                      <td style={{ padding: '10px 8px' }}>{r.site}</td>
-                      <td style={{ padding: '10px 8px' }}>{r.project}</td>
-                      <td style={{ padding: '10px 8px' }}>{r.block}</td>
-                      <td style={{ padding: '10px 8px' }}>{r.status || '—'}</td>
-                      <td style={{ padding: '10px 8px' }}>{r.totalVolume || '—'}</td>
-                      <td style={{ padding: '10px 8px' }}>
-                        <button
-                          type="button"
-                          className="ec-btn ec-btn-ghost ec-btn-sm"
-                          onClick={() => setRecords(prev => prev.filter(x => x.id !== r.id))}
-                        >
-                          Delete
-                        </button>
-                      </td>
+              <div className="ds-table-wrap fert-table-wrap">
+                <table className="fert-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Date</th>
+                      <th scope="col">Site</th>
+                      <th scope="col">Project</th>
+                      <th scope="col">Block</th>
+                      <th scope="col">Status</th>
+                      <th scope="col" className="fert-table__num">Volume</th>
+                      <th scope="col">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {sorted.map(r => (
+                      <tr key={r.id}>
+                        <td className="fert-table__date">
+                          {r.date} {r.time}
+                        </td>
+                        <td>{r.site}</td>
+                        <td>{r.project}</td>
+                        <td>{r.block}</td>
+                        <td>{r.status ? <span className={`fert-status fert-status--${statusTone(r.status)}`}>{r.status}</span> : '—'}</td>
+                        <td className="fert-table__num">{r.totalVolume || '—'}</td>
+                        <td className="fert-table__actions">
+                          <button
+                            type="button"
+                            className="ec-btn ec-btn-ghost ec-btn-sm fert-delete"
+                            aria-label={`Delete record ${r.date} ${r.time} ${r.site}`}
+                            onClick={() => setRecords(prev => prev.filter(x => x.id !== r.id))}
+                          >
+                            <i className="fa-solid fa-trash-can" aria-hidden="true"></i> Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

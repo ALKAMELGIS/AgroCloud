@@ -568,7 +568,7 @@ function buildIndexRampLegend(
   id: string,
   title: string,
   subtitle: string,
-  ramp: RampStop,
+  ramp: readonly RampStop[],
   classCount = 10,
   scaleLabels: LayerLiveLegendScaleLabels = { low: 'Low', mid: 'Moderate', high: 'High' },
   classLabels?: readonly string[],
@@ -791,6 +791,8 @@ function buildStressZonesLegend(layerId: string): LayerLiveLegendSpec | null {
     kind: 'discrete',
     classes: STRESS_ZONE_TIER_ORDER.map(tier => ({
       label: STRESS_ZONE_LABELS[tier],
+      // Tiers are categorical — no numeric range (empty renders identically to undefined).
+      rangeLabel: '',
       color: STRESS_ZONE_COLORS[tier],
     })),
     note: buildAgroCompositeLegendNote(layerId, false),

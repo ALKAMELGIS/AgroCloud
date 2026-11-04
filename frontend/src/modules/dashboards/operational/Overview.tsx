@@ -11,8 +11,15 @@ import {
   Filler,
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
-import { useSystemSettings } from '@/core/state/SystemSettingsContext'
+import { Box, Paper } from '@mui/material'
+import { alpha, useTheme } from '@mui/material/styles'
+import SpaceDashboardOutlinedIcon from '@mui/icons-material/SpaceDashboardOutlined'
+import AgricultureOutlinedIcon from '@mui/icons-material/AgricultureOutlined'
+import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined'
+import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined'
+import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined'
 import { useLanguage } from '@/core/localization/i18n'
+import { KpiCard, PageContainer, PageHeader, SectionHeader } from '@/components'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
@@ -26,40 +33,44 @@ const overviewText = {
     kpi2: 'Water savings',
     kpi3: 'Compliance score',
     kpi4: 'Open tasks',
-    trendUp: 'vs last month',
-    trendDown: 'vs last month',
+    vsLastMonth: 'vs last month',
+    kpiAria: 'Key metrics',
+    chartAria: 'Line chart: indexed yield this season compared with last season, January to June',
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
   },
   ar: {
     title: 'لوحة التحكم',
     subtitle: 'نبض العمليات — المحاصيل والمياه والامتثال في لمحة.',
     chartTitle: 'اتجاه الإنتاج',
-    chartSubtitle: 'غلة لمتجهة مقارنة بالموسم السابق',
+    chartSubtitle: 'غلة مؤشرة مقارنة بالموسم السابق',
     kpi1: 'مزارع نشطة',
     kpi2: 'توفير المياه',
     kpi3: 'درجة الامتثال',
     kpi4: 'مهام مفتوحة',
-    trendUp: 'مقارنة بالشهر الماضي',
-    trendDown: 'مقارنة بالشهر الماضي',
+    vsLastMonth: 'مقارنة بالشهر الماضي',
+    kpiAria: 'المؤشرات الرئيسية',
+    chartAria: 'مخطط خطي: الغلة المؤشرة لهذا الموسم مقارنة بالموسم السابق من يناير إلى يونيو',
     labels: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو'],
   },
 } as const
 
 export default function Overview() {
-  const { settings } = useSystemSettings()
   const { language } = useLanguage()
-  const t = overviewText[language]
+  const t = overviewText[language === 'ar' ? 'ar' : 'en']
+  const theme = useTheme()
 
-  const palette = useMemo(() => {
-    if (typeof window === 'undefined') {
-      return { primary: '#047857', muted: '#64748b', grid: 'rgba(100,116,139,0.12)', surface: 'rgba(255,255,255,0.65)' }
-    }
-    const cs = getComputedStyle(document.documentElement)
-    const primary = (cs.getPropertyValue('--ds-color-primary').trim() || '#047857').trim()
-    const muted = (cs.getPropertyValue('--ds-color-text-muted').trim() || '#64748b').trim()
-    const border = (cs.getPropertyValue('--ds-color-border').trim() || 'rgba(148,163,184,0.2)').trim()
-    return { primary, muted, grid: border, surface: 'rgba(148,163,184,0.08)' }
-  }, [settings.themeMode, settings.customPrimaryHex])
+  // Theme palette follows <html data-theme> and the custom accent, so the chart re-colors with the app.
+  const palette = useMemo(
+    () => ({
+      primary: theme.palette.primary.main,
+      muted: theme.palette.text.secondary,
+      grid: theme.palette.divider,
+      surface: theme.palette.background.paper,
+      text: theme.palette.text.primary,
+      font: String(theme.typography.fontFamily ?? 'Inter, system-ui, sans-serif'),
+    }),
+    [theme],
+  )
 
   const chartData = useMemo(
     () => ({
@@ -69,7 +80,8 @@ export default function Overview() {
           label: language === 'ar' ? 'الموسم الحالي' : 'This season',
           data: [62, 68, 72, 70, 78, 84],
           borderColor: palette.primary,
-          backgroundColor: `${palette.primary}22`,
+          backgroundColor: alpha(palette.primary, 0.12),
+          pointBackgroundColor: palette.primary,
           fill: true,
           tension: 0.38,
           pointRadius: 3,
@@ -81,9 +93,11 @@ export default function Overview() {
           data: [58, 61, 64, 65, 69, 71],
           borderColor: palette.muted,
           backgroundColor: 'transparent',
+          pointBackgroundColor: palette.muted,
+          pointStyle: 'rectRot' as const,
           fill: false,
           tension: 0.35,
-          pointRadius: 2,
+          pointRadius: 3,
           borderWidth: 1.5,
           borderDash: [6, 4],
         },
@@ -97,99 +111,84 @@ export default function Overview() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index' as const, intersect: false },
+      layout: { padding: { left: 12, right: 12 } },
       plugins: {
         legend: {
           position: 'bottom' as const,
+          rtl: language === 'ar',
           labels: {
             color: palette.muted,
-            font: { size: 12, family: 'Inter, system-ui, sans-serif' },
+            font: { size: 12, family: palette.font },
             usePointStyle: true,
             padding: 16,
           },
         },
         tooltip: {
-          backgroundColor: 'rgba(15,23,42,0.92)',
-          titleFont: { size: 12 },
-          bodyFont: { size: 12 },
+          rtl: language === 'ar',
+          backgroundColor: palette.surface,
+          titleColor: palette.text,
+          bodyColor: palette.muted,
+          borderColor: palette.grid,
+          borderWidth: 1,
+          titleFont: { size: 12, family: palette.font },
+          bodyFont: { size: 12, family: palette.font },
           padding: 12,
           cornerRadius: 10,
+          usePointStyle: true,
         },
       },
       scales: {
         x: {
-          grid: { color: palette.grid },
+          reverse: language === 'ar',
+          grid: { display: false },
+          border: { color: palette.grid },
           ticks: { color: palette.muted, maxRotation: 0 },
         },
         y: {
           min: 40,
           max: 100,
+          position: (language === 'ar' ? 'right' : 'left') as 'right' | 'left',
           grid: { color: palette.grid },
+          border: { display: false },
           ticks: { color: palette.muted },
         },
       },
     }),
-    [palette],
+    [palette, language],
   )
 
+  const kpis = [
+    { title: t.kpi1, value: '128', trend: `+4.2% ${t.vsLastMonth}`, icon: <AgricultureOutlinedIcon /> },
+    { title: t.kpi2, value: '18', unit: '%', trend: `+2.1% ${t.vsLastMonth}`, icon: <WaterDropOutlinedIcon /> },
+    { title: t.kpi3, value: '96', unit: '/ 100', trend: `+0.8 ${t.vsLastMonth}`, icon: <VerifiedUserOutlinedIcon /> },
+    // Fewer open tasks is an improvement, so the trend keeps the positive tone.
+    { title: t.kpi4, value: '14', trend: `\u22123 ${t.vsLastMonth}`, icon: <AssignmentOutlinedIcon /> },
+  ]
+
   return (
-    <div className="page">
-      <header style={{ marginBottom: 8 }}>
-        <h1 style={{ margin: 0, fontSize: 'clamp(1.35rem, 2.5vw, 1.75rem)', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--ds-color-text)' }}>
-          {t.title}
-        </h1>
-        <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--ds-color-text-muted)', maxWidth: 560, lineHeight: 1.5 }}>{t.subtitle}</p>
-      </header>
+    <PageContainer width="wide">
+      <PageHeader title={t.title} description={t.subtitle} icon={<SpaceDashboardOutlinedIcon />} />
 
-      <section className="ds-kpi-grid" aria-label="Key metrics">
-        <article className="ds-kpi-card">
-          <div className="ds-kpi-label">{t.kpi1}</div>
-          <div className="ds-kpi-value">128</div>
-          <div className="ds-kpi-meta">
-            <span className="ds-kpi-trend-up">
-              <i className="fa-solid fa-arrow-trend-up" aria-hidden /> +4.2%
-            </span>
-            <span>{t.trendUp}</span>
-          </div>
-        </article>
-        <article className="ds-kpi-card">
-          <div className="ds-kpi-label">{t.kpi2}</div>
-          <div className="ds-kpi-value">18%</div>
-          <div className="ds-kpi-meta">
-            <span className="ds-kpi-trend-up">
-              <i className="fa-solid fa-droplet" aria-hidden /> +2.1%
-            </span>
-            <span>{t.trendUp}</span>
-          </div>
-        </article>
-        <article className="ds-kpi-card">
-          <div className="ds-kpi-label">{t.kpi3}</div>
-          <div className="ds-kpi-value">96</div>
-          <div className="ds-kpi-meta">
-            <span className="ds-kpi-trend-up">
-              <i className="fa-solid fa-shield-halved" aria-hidden /> +0.8
-            </span>
-            <span>{t.trendUp}</span>
-          </div>
-        </article>
-        <article className="ds-kpi-card">
-          <div className="ds-kpi-label">{t.kpi4}</div>
-          <div className="ds-kpi-value">14</div>
-          <div className="ds-kpi-meta">
-            <span className="ds-kpi-trend-down">
-              <i className="fa-solid fa-arrow-trend-down" aria-hidden /> −3
-            </span>
-            <span>{t.trendDown}</span>
-          </div>
-        </article>
-      </section>
+      <Box
+        component="section"
+        aria-label={t.kpiAria}
+        sx={{
+          display: 'grid',
+          gap: { xs: 2, sm: 3 },
+          gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' },
+        }}
+      >
+        {kpis.map((k) => (
+          <KpiCard key={k.title} title={k.title} value={k.value} unit={k.unit} trend={k.trend} icon={k.icon} />
+        ))}
+      </Box>
 
-      <section className="ds-chart-shell ds-surface">
-        <h2>{t.chartTitle}</h2>
-        <p style={{ margin: '-8px 0 12px', fontSize: 13, color: 'var(--ds-color-text-muted)' }}>{t.chartSubtitle}</p>
-        <div className="ds-chart-inner">
-          <Line data={chartData} options={chartOptions} />
-        </div>
-      </section>
-    </div>
+      <Paper variant="outlined" component="section" aria-label={t.chartTitle} sx={{ p: { xs: 3, sm: 4 }, borderRadius: 3.5 }}>
+        <SectionHeader title={t.chartTitle} description={t.chartSubtitle} />
+        <Box sx={{ position: 'relative', height: { xs: 260, sm: 320 } }}>
+          <Line data={chartData} options={chartOptions} aria-label={t.chartAria} role="img" />
+        </Box>
+      </Paper>
+    </PageContainer>
   )
 }

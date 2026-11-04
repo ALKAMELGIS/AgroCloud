@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useGfsRasterTimeline } from './useGfsRasterTimeline'
 import type { WeatherMapMode } from '../config/weatherMapModes'
+import type { WeatherLocationId } from '../config/weatherFarmIds'
 import type { WeatherPrecipWindow, WeatherVizMode } from '../config/weatherVizModes'
 import {
   loadWeatherOperationsThresholds,
@@ -45,7 +46,7 @@ export function useWeatherIntelligenceState(options: WeatherIntelligenceStateOpt
   const [layerManagerOpen, setLayerManagerOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedField, setSelectedField] = useState<GeoJSON.Feature | null>(null)
-  const [compareFarmIds, setCompareFarmIds] = useState<string[]>([])
+  const [compareFarmIds, setCompareFarmIds] = useState<WeatherLocationId[]>([])
   const [thresholds, setThresholds] = useState(loadWeatherOperationsThresholds)
 
   useEffect(() => subscribeWeatherOperationsThresholds(() => setThresholds(loadWeatherOperationsThresholds())), [])

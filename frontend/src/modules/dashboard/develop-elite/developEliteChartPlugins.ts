@@ -495,7 +495,9 @@ export function createDevelopEliteChartSliceFlashPlugin(
       ctx.shadowColor = `rgba(253, 224, 71, ${0.28 + 0.35 * pulse})`
       ctx.shadowBlur = 6 + 12 * pulse
 
-      if (chart.config.type === 'pie') {
+      // Custom-types-per-dataset configs have no top-level `type`; those never match pie/bar here.
+      const chartType = 'type' in chart.config ? chart.config.type : undefined
+      if (chartType === 'pie') {
         const props = (element as PieArcLike).getProps(
           ['x', 'y', 'startAngle', 'endAngle', 'outerRadius', 'innerRadius'],
           true,
@@ -519,7 +521,7 @@ export function createDevelopEliteChartSliceFlashPlugin(
           props.endAngle,
         )
         ctx.stroke()
-      } else if (chart.config.type === 'bar') {
+      } else if (chartType === 'bar') {
         const props = (element as BarLike).getProps(['x', 'y', 'base', 'width', 'height'], true)
         const left = Math.min(props.base, props.x)
         const right = Math.max(props.base, props.x)

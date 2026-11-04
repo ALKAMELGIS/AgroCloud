@@ -757,7 +757,7 @@ export function sortDevelopEliteZoneListByMapView<T extends DevelopEliteZoneList
   items: readonly T[],
   view: DevelopEliteMapView | null | undefined,
   features: DevelopEliteStructureFeature[],
-  tieBreak: (a: T, b: T) => number,
+  tieBreak: (a: NoInfer<T>, b: NoInfer<T>) => number,
 ): T[] {
   const copy = [...items]
   if (!view || !features.length) return copy.sort(tieBreak)

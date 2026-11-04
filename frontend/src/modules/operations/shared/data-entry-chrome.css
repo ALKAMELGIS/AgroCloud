@@ -1,0 +1,253 @@
+/* Shared data-entry chrome: flash, validation alert, card header, action bar.
+   Token-only colours (--ds-*) so light / dark follow <html data-theme>. Logical properties for RTL. */
+
+/* ---------- Flash (submit feedback) ---------- */
+.entry-flash {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--ds-radius-md);
+  border: 1px solid;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ds-color-text);
+  animation: entryFlashIn 200ms ease-out both;
+}
+
+.entry-flash > i {
+  margin-top: 2px;
+  font-size: 1rem;
+}
+
+.entry-flash--success {
+  border-color: color-mix(in srgb, var(--ds-color-success) 38%, transparent);
+  background: color-mix(in srgb, var(--ds-color-success) 10%, var(--ds-color-surface));
+}
+
+.entry-flash--success > i {
+  color: var(--ds-color-success);
+}
+
+.entry-flash--error {
+  border-color: color-mix(in srgb, var(--ds-color-danger) 42%, transparent);
+  background: color-mix(in srgb, var(--ds-color-danger) 9%, var(--ds-color-surface));
+}
+
+.entry-flash--error > i {
+  color: var(--ds-color-danger);
+}
+
+@keyframes entryFlashIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- Validation alert ---------- */
+.entry-validation {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: var(--ds-radius-md);
+  border: 1px solid color-mix(in srgb, var(--ds-color-danger) 40%, transparent);
+  background: color-mix(in srgb, var(--ds-color-danger) 7%, var(--ds-color-surface));
+  color: var(--ds-color-text);
+  font-size: 0.8125rem;
+}
+
+.entry-validation__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ds-color-danger);
+}
+
+.entry-validation__list {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+  display: grid;
+  gap: 2px;
+}
+
+/* ---------- Card header ---------- */
+.entry-card-header {
+  align-items: flex-start;
+}
+
+.entry-card-header__lead {
+  min-width: 0;
+}
+
+.entry-card-header__icon {
+  color: var(--ds-color-primary);
+}
+
+.entry-card-header .ec-icon-btn {
+  width: 40px;
+  height: 40px;
+}
+
+/* ---------- Action bar ---------- */
+.entry-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ds-color-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.entry-actions__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.entry-actions__group--commit {
+  margin-inline-start: auto;
+}
+
+.entry-actions__hint {
+  font-size: 0.75rem;
+  color: var(--ds-color-text-muted);
+  white-space: nowrap;
+}
+
+.entry-actions__hint kbd {
+  font: inherit;
+  font-family: var(--ds-font-mono, ui-monospace, monospace);
+  font-size: 0.6875rem;
+  padding: 1px 5px;
+  border-radius: var(--ds-radius-xs);
+  border: 1px solid var(--ds-color-border-strong);
+  background: var(--ds-color-surface-2);
+  color: var(--ds-color-text-secondary);
+}
+
+.ec-btn.entry-btn {
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: var(--ds-radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  justify-content: center;
+}
+
+.ec-btn.entry-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
+.ec-btn.entry-btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ds-color-text-secondary);
+}
+
+.ec-btn.entry-btn--quiet:hover:not(:disabled) {
+  background: var(--ds-color-surface-2);
+  color: var(--ds-color-text);
+}
+
+.ec-btn.entry-btn--link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ds-color-primary);
+}
+
+.ec-btn.entry-btn--link:hover:not(:disabled) {
+  background: var(--ds-color-primary-soft);
+}
+
+.ec-btn.entry-btn--secondary {
+  background: var(--ds-color-surface);
+  border-color: var(--ds-color-border-strong);
+  color: var(--ds-color-text);
+}
+
+.ec-btn.entry-btn--secondary:hover:not(:disabled) {
+  border-color: var(--ds-color-primary);
+  background: var(--ds-color-primary-soft);
+}
+
+.ec-btn.entry-btn--primary {
+  min-width: 156px;
+  font-weight: 700;
+  background: var(--ds-color-primary);
+  border-color: var(--ds-color-primary);
+  color: var(--ds-color-on-primary);
+  box-shadow: var(--ds-shadow-sm);
+}
+
+.ec-btn.entry-btn--primary:hover:not(:disabled) {
+  background: var(--ds-color-primary-hover);
+  border-color: var(--ds-color-primary-hover);
+}
+
+.ec-btn.entry-btn--primary i {
+  color: inherit;
+}
+
+[dir='rtl'] .entry-btn__dir-icon {
+  transform: scaleX(-1);
+}
+
+/* Phones: commit actions become a sticky bar pinned to the bottom of the scroll area. */
+@media (max-width: 640px) {
+  .entry-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin-inline: calc(-1 * clamp(14px, 2vw, 22px));
+    margin-bottom: calc(-1 * clamp(14px, 1.8vw, 22px));
+    padding: 10px clamp(14px, 2vw, 22px) calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--ds-color-surface);
+    box-shadow: 0 -6px 18px color-mix(in srgb, var(--ds-color-text) 8%, transparent);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .entry-actions__group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .entry-actions__group--commit {
+    margin-inline-start: 0;
+    order: -1;
+  }
+
+  .entry-actions__group--commit .entry-btn--primary {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  .entry-actions__hint {
+    display: none;
+  }
+
+  .ec-btn.entry-btn {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entry-flash {
+    animation: none;
+  }
+}

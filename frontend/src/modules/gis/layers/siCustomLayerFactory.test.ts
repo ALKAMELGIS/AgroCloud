@@ -33,6 +33,7 @@ describe('withSiImportedLayerDefaults', () => {
       id: 'u1',
       name: 'AOI',
       geojson: emptyPoly,
+      visible: true,
       source: 'upload',
     })
     expect(layer.color).toBe(SI_DEFAULT_VECTOR_OUTLINE_COLOR)
@@ -47,6 +48,7 @@ describe('withSiImportedLayerDefaults', () => {
         id: 'p1',
         name: 'Portal',
         geojson: emptyPoly,
+        visible: true,
         source: 'api',
       },
       {

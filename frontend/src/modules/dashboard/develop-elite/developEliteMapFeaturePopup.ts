@@ -6,7 +6,7 @@ import {
   resolveAgroStructuresCountryDisplayName,
   resolveAgroStructuresStructureTypeLabel,
 } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
-import type L from 'leaflet'
+import L from 'leaflet'
 import type { DevelopEliteMapDataLayerId } from './developEliteMapDataLayers'
 import { flyToLatLng } from './developEliteMapFly'
 import { resolveDevelopEliteMapFeatureLabel } from './developEliteMapSearch'

@@ -102,7 +102,7 @@ export function enrichAoiMaskWithWeather(
       const entry = resolveWeatherEntryForFeature(f as GeoJSON.Feature, i, entries)
       const level = weatherAlertsEnabled && entry ? entry.level : 'none'
       return {
-        ...(f as object),
+        ...f,
         properties: {
           ...props,
           __acpFieldKey: key,

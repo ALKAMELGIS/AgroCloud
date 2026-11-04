@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import './Profile.css'
+import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined'
+import { PageHeader, StatePanel } from '@/components'
 import {
   normalizeEmail,
   normalizeRole,
@@ -660,17 +662,20 @@ export default function Profile() {
   return (
     <div className={`profile-page-v2 profile-page-v2--theme-${extra.profileTheme || 'auto'}`} dir={dir}>
       <div className="profile-page-v2-inner">
-        <header className="profile-page-header">
-          <div className="profile-page-header-top">
-          </div>
-        </header>
+        <div className="profile-page-header">
+          <PageHeader
+            title={text.myProfile}
+            description={text.subtitle}
+            icon={<AccountCircleOutlinedIcon />}
+          />
+        </div>
 
         {!me ? (
-          <div className="profile-card">
-            <p style={{ margin: 0, color: '#64748b', fontSize: 14 }}>
-              {language === 'ar' ? 'يرجى تسجيل الدخول لعرض الملف الشخصي.' : 'Please sign in to view your profile.'}
-            </p>
-          </div>
+          <StatePanel
+            tone="empty"
+            icon={<AccountCircleOutlinedIcon />}
+            title={language === 'ar' ? 'يرجى تسجيل الدخول لعرض الملف الشخصي.' : 'Please sign in to view your profile.'}
+          />
         ) : (
           <>
             {/* Summary — optional LinkedIn-style cover behind hero */}
@@ -679,7 +684,7 @@ export default function Profile() {
               style={
                 coverSrc
                   ? {
-                      backgroundImage: `linear-gradient(180deg, rgba(15, 23, 42, 0.25) 0%, rgba(15, 23, 42, 0.72) 100%), url(${coverSrc})`,
+                      backgroundImage: `linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0.66) 100%), url(${coverSrc})`,
                     }
                   : undefined
               }

@@ -6,6 +6,19 @@ import type { SymbologyContext } from './symbologyHelpers'
 afterEach(cleanup)
 
 const symbologyCtx: SymbologyContext = {
+  cfg: {
+    useArcGisOnline: false,
+    style: 'unique',
+    field: 'crop',
+    classes: 2,
+    method: 'jenks',
+    colorRamp: 'viridis',
+    threshold: Number.NaN,
+    classOverrides: {},
+    breakOverrides: [],
+  },
+  geometryKind: 'polygon',
+  values: [],
   categories: ['Wheat', 'Corn'],
   categoryColors: { Wheat: '#aabbcc', Corn: '#ddeeff' },
   categoryLabels: {},

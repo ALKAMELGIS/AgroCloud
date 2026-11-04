@@ -4,7 +4,9 @@ import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
 import {
   batchExportAnalyticsReportsExcel,
   mergeAnalyticsReportLayerIds,
+  type BatchExportAnalyticsReportsExcelDeps,
 } from './batchExportAnalyticsReportsExcel'
+import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'
 import { resolveBatchPlotDisplayName, uniqueBatchPlotExcelFilename } from './aoiExcelExportShared'
 import {
   BATCH_EXPORT_CANCELLED,
@@ -27,6 +29,13 @@ const poly: GeoJSON.Polygon = {
       [0, 0],
     ],
   ],
+}
+
+type Deps = Required<BatchExportAnalyticsReportsExcelDeps>
+
+/** Daily index row — indices not given are null (fixtures are NDVI-centric). */
+function dailyRow(row: Partial<SentinelHubDailyIndexMeans> & { date: string }): SentinelHubDailyIndexMeans {
+  return { ndvi: null, ndwi: null, ndmi: null, ...row }
 }
 
 function makePlot(partial: Partial<CropAlertFieldInput> & { fieldKey: string }): CropAlertFieldInput {
@@ -77,11 +86,13 @@ describe('batchMapSnapshotMaxPerLayer', () => {
   it('requests at least as many day maps as chart periods', async () => {
     const { batchExportAnalyticsReportsExcel } = await import('./batchExportAnalyticsReportsExcel')
     const plot = makePlot({ fieldKey: 'a', farmName: 'A', geometry: poly })
-    const buildPayload = vi.fn(async () => stubPayload)
-    const daily = Array.from({ length: 18 }, (_, i) => ({
-      date: `2026-05-${String(i + 1).padStart(2, '0')}`,
-      ndvi: 0.4 + i * 0.01,
-    }))
+    const buildPayload = vi.fn<Deps['buildPayload']>(async () => stubPayload)
+    const daily = Array.from({ length: 18 }, (_, i) =>
+      dailyRow({
+        date: `2026-05-${String(i + 1).padStart(2, '0')}`,
+        ndvi: 0.4 + i * 0.01,
+      }),
+    )
 
     await batchExportAnalyticsReportsExcel(
       {
@@ -197,12 +208,12 @@ describe('batchExportAnalyticsReportsExcel', () => {
     const withGeomB = makePlot({ fieldKey: 'b', farmName: 'T-101', geometry: poly })
     const withGeomFail = makePlot({ fieldKey: 'fail', farmName: 'Broken', geometry: poly })
 
-    const fetchDaily = vi.fn(async (plot: CropAlertFieldInput) => {
+    const fetchDaily = vi.fn<Deps['fetchDaily']>(async (plot: CropAlertFieldInput) => {
       if (plot.fieldKey === 'fail') throw new Error('fetch boom')
-      return [{ date: '2024-06-01', ndvi: 0.55 }]
+      return [dailyRow({ date: '2024-06-01', ndvi: 0.55 })]
     })
-    const buildPayload = vi.fn(async () => stubPayload)
-    const writeBlob = vi.fn(async () => ({ savedToFolder: true, usedDownloadFallback: false }))
+    const buildPayload = vi.fn<Deps['buildPayload']>(async () => stubPayload)
+    const writeBlob = vi.fn<Deps['writeBlob']>(async () => ({ savedToFolder: true, usedDownloadFallback: false }))
     const buildBlob = vi.fn(async () => new Blob(['xlsx'], { type: 'application/octet-stream' }))
     const createElement = vi.spyOn(document, 'createElement')
     const onProgress = vi.fn()
@@ -243,7 +254,7 @@ describe('batchExportAnalyticsReportsExcel', () => {
 
   it('skips folder picker when exportDirectory is pre-selected', async () => {
     const plot = makePlot({ fieldKey: 'a', farmName: 'A', geometry: poly })
-    const writeBlob = vi.fn(async () => ({ savedToFolder: true, usedDownloadFallback: false }))
+    const writeBlob = vi.fn<Deps['writeBlob']>(async () => ({ savedToFolder: true, usedDownloadFallback: false }))
     const buildBlob = vi.fn(async () => new Blob(['xlsx']))
 
     await batchExportAnalyticsReportsExcel(
@@ -256,7 +267,7 @@ describe('batchExportAnalyticsReportsExcel', () => {
         folderPickAttempted: true,
       },
       {
-        fetchDaily: async () => [{ date: '2024-06-01', ndvi: 0.4 }],
+        fetchDaily: async () => [dailyRow({ date: '2024-06-01', ndvi: 0.4 })],
         buildPayload: async () => stubPayload,
         writeBlob,
         buildBlob,
@@ -315,7 +326,7 @@ describe('batchExportAnalyticsReportsExcel', () => {
 
   it('names workbooks from the Plot Label field attribute', async () => {
     const plot = makePlot({ fieldKey: 'a', farmName: 'ignored', geometry: poly })
-    const writeBlob = vi.fn(async () => ({ savedToFolder: true, usedDownloadFallback: false }))
+    const writeBlob = vi.fn<Deps['writeBlob']>(async () => ({ savedToFolder: true, usedDownloadFallback: false }))
     const buildBlob = vi.fn(async () => new Blob(['xlsx']))
 
     await batchExportAnalyticsReportsExcel(
@@ -339,7 +350,7 @@ describe('batchExportAnalyticsReportsExcel', () => {
         folderPickAttempted: true,
       },
       {
-        fetchDaily: async () => [{ date: '2024-06-01', ndvi: 0.4 }],
+        fetchDaily: async () => [dailyRow({ date: '2024-06-01', ndvi: 0.4 })],
         buildPayload: async () => stubPayload,
         writeBlob,
         buildBlob,
@@ -367,7 +378,7 @@ describe('batchExportAnalyticsReportsExcel', () => {
         folderPickAttempted: true,
       },
       {
-        fetchDaily: async () => [{ date: '2024-06-01', ndvi: 0.4 }],
+        fetchDaily: async () => [dailyRow({ date: '2024-06-01', ndvi: 0.4 })],
         buildPayload: async () => stubPayload,
         writeBlob,
         buildBlob: vi.fn(async () => new Blob(['xlsx'])),
@@ -398,7 +409,7 @@ describe('batchExportAnalyticsReportsExcel', () => {
         folderPickAttempted: true,
       },
       {
-        fetchDaily: async () => [{ date: '2024-06-01', ndvi: 0.4 }],
+        fetchDaily: async () => [dailyRow({ date: '2024-06-01', ndvi: 0.4 })],
         buildPayload: async () => stubPayload,
         writeBlob,
         buildBlob: vi.fn(async () => new Blob(['xlsx'])),
@@ -413,8 +424,8 @@ describe('batchExportAnalyticsReportsExcel', () => {
 
   it('passes aggregated multi-date chart labels to the report payload', async () => {
     const plot = makePlot({ fieldKey: 'a', farmName: 'Plot A', geometry: poly })
-    const buildPayload = vi.fn(async () => stubPayload)
-    const fetchDaily = vi.fn(async () => [
+    const buildPayload = vi.fn<Deps['buildPayload']>(async () => stubPayload)
+    const fetchDaily = vi.fn<Deps['fetchDaily']>(async () => [
       { date: '2026-05-03', ndvi: 0.42, ndmi: 0.2, ndwi: null, evi: null, savi: null, ciRe: null, ndre: null },
       { date: '2026-06-19', ndvi: 0.55, ndmi: 0.25, ndwi: null, evi: null, savi: null, ciRe: null, ndre: null },
       { date: '2026-07-08', ndvi: 0.48, ndmi: 0.22, ndwi: null, evi: null, savi: null, ciRe: null, ndre: null },
@@ -457,11 +468,11 @@ describe('batchExportAnalyticsReportsExcel', () => {
       makePlot({ fieldKey: 'a', farmName: 'A', geometry: poly }),
       makePlot({ fieldKey: 'b', farmName: 'B', geometry: poly }),
     ]
-    const fetchDaily = vi.fn(async () => {
+    const fetchDaily = vi.fn<Deps['fetchDaily']>(async () => {
       controller.abort()
-      return [{ date: '2024-06-01', ndvi: 0.4 }]
+      return [dailyRow({ date: '2024-06-01', ndvi: 0.4 })]
     })
-    const writeBlob = vi.fn(async () => ({ savedToFolder: true, usedDownloadFallback: false }))
+    const writeBlob = vi.fn<Deps['writeBlob']>(async () => ({ savedToFolder: true, usedDownloadFallback: false }))
     const buildBlob = vi.fn(async () => new Blob(['xlsx']))
 
     const result = await batchExportAnalyticsReportsExcel(

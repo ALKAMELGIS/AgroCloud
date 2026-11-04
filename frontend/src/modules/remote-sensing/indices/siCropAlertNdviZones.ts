@@ -362,5 +362,7 @@ export function resolveCropAlertBeaconPresentation(
     icon: p.icon,
     pulse: p.pulse,
     deltaAlert: p.deltaAlert,
+    landState: p.landState,
+    showCropHealthAlert: p.showCropHealthAlert,
   }
 }

@@ -206,9 +206,9 @@ export function alignIndexValuesToDates(input: {
   })
 }
 
-export function sampleDailyRows(daily: DailyWeatherRich[], maxPoints = 62): DailyWeatherRich[] {
+export function sampleDailyRows<T extends DailyWeatherRich>(daily: T[], maxPoints = 62): T[] {
   if (daily.length <= maxPoints) return daily
-  const out: DailyWeatherRich[] = []
+  const out: T[] = []
   for (let i = 0; i < maxPoints; i += 1) {
     out.push(daily[Math.round((i * (daily.length - 1)) / (maxPoints - 1))]!)
   }

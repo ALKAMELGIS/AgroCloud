@@ -4,6 +4,10 @@ import {
   sentinelHubWmsMinZoomForLatitude,
 } from './sentinelHubWmsLayers'
 
+type LeafletTileFactoryOverride = {
+  createTile: (this: L.TileLayer, coords: L.Coords, done: L.DoneCallback) => HTMLElement
+}
+
 const EARTH_CIRCUMFERENCE = 40_075_016.685_578_49
 const ORIGIN = EARTH_CIRCUMFERENCE / 2
 
@@ -74,7 +78,12 @@ export function createSentinelHubBboxTileLayer(
 
   stampSentinelHubBboxTileLayerUrl(layer, urlTemplate)
 
-  layer.createTile = function createTile(this: L.TileLayer, coords: L.Coords, done: L.DoneCallback) {
+  // Leaflet types `createTile` as protected; overriding it on the instance is the documented extension point.
+  ;(layer as unknown as LeafletTileFactoryOverride).createTile = function createTile(
+    this: L.TileLayer,
+    coords: L.Coords,
+    done: L.DoneCallback,
+  ) {
     const el = L.DomUtil.create('img', '') as HTMLImageElement
     el.alt = ''
     el.className = SENTINEL_HUB_WMS_TILE_CLASS

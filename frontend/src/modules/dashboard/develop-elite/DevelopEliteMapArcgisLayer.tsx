@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ForwardRefExoticComponent, type RefAttributes } from 'react'
 import type { LatLngExpression, Layer } from 'leaflet'
 import L from 'leaflet'
-import { GeoJSON, useMap, useMapEvents } from 'react-leaflet'
+import { GeoJSON, useMap, useMapEvents, type GeoJSONProps } from 'react-leaflet'
+
 import {
   collectIrrigationMainPipeArrowPlacements,
   irrigationMainPipeArrowIconHtml,
@@ -28,6 +29,14 @@ import {
   geoJsonFeatureHasPointGeometry,
   isDevelopElitePointOnlyArcgisGeoJson,
 } from './developEliteMapGeoJsonGeometry'
+
+/**
+ * Leaflet's `L.GeoJSON` forwards its options to the vector layers it creates, so `renderer` and
+ * `smoothFactor` (Path / Polyline options) are honored at runtime; `GeoJSONOptions` typings omit them.
+ */
+const GeoJSONWithRenderer = GeoJSON as ForwardRefExoticComponent<
+  GeoJSONProps & Pick<L.PolylineOptions, 'renderer' | 'smoothFactor'> & RefAttributes<L.GeoJSON>
+>
 
 /** Slightly larger map markers for AgroLocation (picture / simple points). */
 const DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE = 1.42
@@ -238,7 +247,7 @@ export function DevelopEliteMapArcgisLayer({
   }`
 
   return (
-    <GeoJSON
+    <GeoJSONWithRenderer
       key={layerKeySig}
       data={geojson as GeoJSON.GeoJsonObject}
       pane={pointOnlyLayer ? undefined : vectorPane}

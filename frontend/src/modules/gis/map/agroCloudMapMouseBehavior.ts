@@ -73,8 +73,23 @@ export {
 export type AgroCloudMapPointerHandlers = {
   onMouseDown: (evt: { originalEvent?: MouseEvent }) => boolean
   onMouseMove: (evt: { originalEvent?: MouseEvent }) => boolean
-  onTouchStart: (evt: { originalEvent?: MouseEvent }) => boolean
-  onTouchMove: (evt: { originalEvent?: MouseEvent }) => boolean
+  onTouchStart: (evt: { originalEvent?: MouseEvent | TouchEvent }) => boolean
+  onTouchMove: (evt: { originalEvent?: MouseEvent | TouchEvent }) => boolean
+}
+
+/**
+ * Touch map events carry a `TouchEvent`; the orbit handlers read MouseEvent fields
+ * (`clientX`, `button`). Only forward real mouse events — touch input never starts
+ * an orbit (no Shift / right button), so this matches previous behaviour.
+ */
+function mouseOnly(
+  handler: (evt: { originalEvent?: MouseEvent }) => boolean,
+): (evt: { originalEvent?: MouseEvent | TouchEvent }) => boolean {
+  return evt => {
+    const orig = evt?.originalEvent
+    if (typeof MouseEvent !== 'undefined' && orig && !(orig instanceof MouseEvent)) return false
+    return handler({ originalEvent: orig as MouseEvent | undefined })
+  }
 }
 
 /** مواصفات سلوك الماوس — للنسخ إلى أنظمة أخرى (Mapbox GL / react-map-gl). */
@@ -149,8 +164,8 @@ export function useAgroCloudMapboxMouseHost({
     () => ({
       onMouseDown: orbit.tryStartOrbitFromMapEvent,
       onMouseMove: orbit.applyOrbitMoveFromMapEvent,
-      onTouchStart: orbit.tryStartOrbitFromMapEvent,
-      onTouchMove: orbit.applyOrbitMoveFromMapEvent,
+      onTouchStart: mouseOnly(orbit.tryStartOrbitFromMapEvent),
+      onTouchMove: mouseOnly(orbit.applyOrbitMoveFromMapEvent),
     }),
     [orbit.tryStartOrbitFromMapEvent, orbit.applyOrbitMoveFromMapEvent],
   )
@@ -174,7 +189,7 @@ export function getAgroCloudMapboxPointerHandlers(orbit: {
   return {
     onMouseDown: orbit.tryStartOrbitFromMapEvent,
     onMouseMove: orbit.applyOrbitMoveFromMapEvent,
-    onTouchStart: orbit.tryStartOrbitFromMapEvent,
-    onTouchMove: orbit.applyOrbitMoveFromMapEvent,
+    onTouchStart: mouseOnly(orbit.tryStartOrbitFromMapEvent),
+    onTouchMove: mouseOnly(orbit.applyOrbitMoveFromMapEvent),
   }
 }

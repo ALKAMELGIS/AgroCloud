@@ -11,7 +11,9 @@ export type GeoAiChatMapHost = {
   flyTo?: (lng: number, lat: number, zoom?: number) => void
 }
 
-function statsToTable(stats: Record<string, unknown>): GeoExplorerDataTablePayload | null {
+type StatsTable = { payload: GeoExplorerDataTablePayload; headers: string[]; cells: string[][] }
+
+function statsToTable(stats: Record<string, unknown>): StatsTable | null {
   const flat: Array<{ key: string; value: string }> = []
   for (const [k, v] of Object.entries(stats)) {
     if (v == null) continue
@@ -23,9 +25,17 @@ function statsToTable(stats: Record<string, unknown>): GeoExplorerDataTablePaylo
   }
   if (!flat.length) return null
   return {
-    title: 'GIS Statistics',
-    columns: ['Metric', 'Value'],
-    rows: flat.map(r => [r.key, r.value]),
+    payload: {
+      title: 'GIS Statistics',
+      kind: 'statistics',
+      columns: [
+        { key: 'metric', label: 'Metric' },
+        { key: 'value', label: 'Value' },
+      ],
+      rows: flat.map(r => ({ values: { metric: r.key, value: r.value } })),
+    },
+    headers: ['Metric', 'Value'],
+    cells: flat.map(r => [r.key, r.value]),
   }
 }
 
@@ -59,7 +69,7 @@ export function applyGeoAiChatResult(
   const table = statsToTable(stats)
 
   if (table && Object.keys(stats).length) {
-    const md = formatGeoAiMarkdownTable(table.columns, table.rows)
+    const md = formatGeoAiMarkdownTable(table.headers, table.cells)
     if (md && !replyText.includes(md)) {
       replyText = replyText ? `${replyText}\n\n${md}` : md
     }
@@ -84,5 +94,5 @@ export function applyGeoAiChatResult(
     }
   }
 
-  return { replyText, table: table ?? undefined, mapQueryLngLat }
+  return { replyText, table: table?.payload, mapQueryLngLat }
 }

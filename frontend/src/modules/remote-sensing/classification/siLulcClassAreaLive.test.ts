@@ -33,7 +33,7 @@ describe('LULC class-area math', () => {
       count: i === 3 ? 250 : i === 0 ? 50 : 0, // crops=3, water=0
     }))
     const { rows, totalCount, analyzedAreaM2 } = computeClassAreaRows(
-      { bins, underflow: 0, overflow: 0, sampleCount: 300 },
+      { date: '2026-01-01', bins, underflow: 0, overflow: 0, sampleCount: 300 },
       classCount,
       100,
     )

@@ -777,7 +777,16 @@ export async function fetchOpenMeteoWeatherMapPick(
         const max = payload.dailyMaxC
         if (typeof min === 'number' && typeof max === 'number' && Number.isFinite(min) && Number.isFinite(max)) {
           const today = new Date().toISOString().slice(0, 10)
-          snap.daily = [{ date: today, tempMinC: min, tempMaxC: max, weatherCode: snap.weatherCode, precipMm: null, windSpeedKmh: null, windDirectionDeg: null, humidityPct: null }]
+          snap.daily = [
+            {
+              date: today,
+              tempMinC: min,
+              tempMaxC: max,
+              weatherCode: snap.weatherCode,
+              precipMm: null,
+              conditionLabel: wmoWeatherLabel(snap.weatherCode),
+            },
+          ]
         }
         return snap
       }

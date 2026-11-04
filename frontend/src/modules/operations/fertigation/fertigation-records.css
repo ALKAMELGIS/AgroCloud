@@ -1,0 +1,272 @@
+/* Fertigation Records (/data/fertigation-records) — token-only colours, logical properties. */
+
+.fert-page .ec-container {
+  gap: clamp(14px, 2vw, 20px);
+}
+
+.fert-header__title {
+  margin: 0;
+  font: inherit;
+  color: var(--ds-color-text);
+}
+
+.fert-icon--info {
+  color: var(--ds-color-info);
+}
+
+.fert-icon--muted {
+  color: var(--ds-color-text-muted);
+}
+
+/* ---------- Entry form ---------- */
+.fert-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 14px 16px;
+}
+
+/* Inputs must read as fields in both themes (global light rule paints borders with the glass token). */
+.fert-page .fert-form .ec-input,
+.fert-page .fert-form .ec-select {
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text);
+  font-size: 0.9375rem;
+}
+
+.fert-page .fert-form .ec-input:hover:not(:disabled),
+.fert-page .fert-form .ec-select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ds-color-primary) 45%, var(--ds-color-border-strong));
+}
+
+.fert-page .fert-form .ec-input:focus-visible,
+.fert-page .fert-form .ec-select:focus-visible {
+  outline: none;
+  border-color: var(--ds-color-primary);
+  box-shadow: var(--ds-focus-ring);
+}
+
+.fert-page .fert-form .ec-label {
+  color: var(--ds-color-text-secondary);
+}
+
+.fert-req {
+  color: var(--ds-color-danger);
+}
+
+.fert-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fert-form__actions {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ds-color-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.fert-form__hint {
+  margin-inline-end: auto;
+  font-size: 0.75rem;
+  color: var(--ds-color-text-muted);
+}
+
+.fert-form__hint > span {
+  color: var(--ds-color-danger);
+}
+
+/* ---------- Records ---------- */
+.fert-count {
+  min-width: 28px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--ds-color-surface-2);
+  border: 1px solid var(--ds-color-border);
+  color: var(--ds-color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.fert-records {
+  padding-top: 12px;
+}
+
+.fert-table-wrap {
+  max-height: min(60vh, 560px);
+  overflow: auto;
+}
+
+.fert-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.fert-table thead th {
+  text-align: start;
+  padding: 10px 12px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ds-color-text-muted);
+  background: var(--ds-color-surface-2);
+  border-bottom: 1px solid var(--ds-color-border);
+  white-space: nowrap;
+}
+
+.fert-table tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ds-color-border);
+  color: var(--ds-color-text-secondary);
+  white-space: nowrap;
+}
+
+.fert-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.fert-table tbody tr:hover td {
+  background: var(--ds-color-primary-soft);
+}
+
+.fert-table__date {
+  color: var(--ds-color-text) !important;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fert-table__num {
+  text-align: end !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.fert-table__actions {
+  text-align: end;
+}
+
+.ec-btn.fert-delete {
+  min-height: 32px;
+  padding: 4px 10px;
+  color: var(--ds-color-text-muted);
+  border-color: transparent;
+  background: transparent;
+}
+
+.ec-btn.fert-delete:hover:not(:disabled) {
+  color: var(--ds-color-danger);
+  background: color-mix(in srgb, var(--ds-color-danger) 8%, transparent);
+}
+
+.fert-delete:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
+.fert-status {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.fert-status--planned {
+  color: var(--ds-color-info);
+  background: var(--ds-color-secondary-soft, var(--ds-color-surface-2));
+}
+
+.fert-status--progress {
+  color: var(--ds-color-warning);
+  background: var(--ds-color-accent-soft, var(--ds-color-surface-2));
+}
+
+.fert-status--done {
+  color: var(--ds-color-success);
+  background: var(--ds-color-primary-soft);
+}
+
+/* ---------- Empty state ---------- */
+.fert-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 28px 16px 24px;
+}
+
+.fert-empty__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 6px;
+  color: var(--ds-color-primary);
+  background: var(--ds-color-primary-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ds-color-primary) 18%, transparent);
+  font-size: 1.125rem;
+}
+
+.fert-empty__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--ds-color-text);
+}
+
+.fert-empty__body {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ds-color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .fert-form__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fert-form__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fert-form__hint {
+    grid-column: 1 / -1;
+  }
+
+  .fert-form__actions .entry-btn--primary {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .fert-form__actions .entry-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ec-btn.fert-delete {
+    min-height: 44px;
+  }
+
+  .fert-page .fert-form .ec-input,
+  .fert-page .fert-form .ec-select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}

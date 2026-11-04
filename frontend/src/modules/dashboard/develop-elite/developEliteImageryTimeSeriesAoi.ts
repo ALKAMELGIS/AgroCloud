@@ -38,9 +38,8 @@ export function developEliteStructuresToAoiFields(
   return out
 }
 
-export function developEliteCommittedAoiGeometry(
-  clip: GeoJSON.FeatureCollection | null | undefined,
-): GeoJSON.Geometry | null {
+/** Accepts any drawn clip shape (FeatureCollection / Feature / Polygon) — see `getDrawnGeometry`. */
+export function developEliteCommittedAoiGeometry(clip: unknown): GeoJSON.Geometry | null {
   const geometry = getDrawnGeometry(clip ?? null)
   return geometry ?? null
 }

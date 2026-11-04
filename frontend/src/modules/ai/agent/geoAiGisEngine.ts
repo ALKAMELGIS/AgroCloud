@@ -4,7 +4,7 @@
  */
 
 import * as turf from '@turf/turf'
-import type { Feature, FeatureCollection, Geometry, Position } from 'geojson'
+import type { Feature, FeatureCollection, Geometry, MultiPolygon, Point, Polygon, Position } from 'geojson'
 import type { GeoJsonFeatureCollection } from './geoAiGisLayerResolve'
 
 export type GisDistanceUnit = 'meters' | 'kilometers' | 'miles' | 'feet'
@@ -21,6 +21,13 @@ export type GisEngineResult = {
     rows: Array<{ values: Record<string, string | number | null> }>
   }
   featureCount?: number
+}
+
+type PolyFeature = Feature<Polygon | MultiPolygon>
+
+/** Turf polygon ops are typed for polygon features; callers guard geometry and wrap in try/catch. */
+function polyPair(a: Feature, b: Feature) {
+  return turf.featureCollection([a as PolyFeature, b as PolyFeature])
 }
 
 function toFc(input: GeoJsonFeatureCollection | FeatureCollection): FeatureCollection {
@@ -139,9 +146,7 @@ function pairwiseOverlay(
       if (mode === 'intersect') {
         for (const fb of clipParts) {
           if (!fb.geometry) continue
-          const hit = turf.intersect(
-            turf.featureCollection([fa as Feature, fb as Feature]),
-          )
+          const hit = turf.intersect(polyPair(fa, fb))
           if (hit) {
             hit.properties = { ...(fa.properties || {}), ...(fb.properties || {}) }
             out.push(hit)
@@ -153,7 +158,7 @@ function pairwiseOverlay(
         for (const fb of clipParts) {
           if (!current?.geometry || !fb.geometry) continue
           try {
-            const diff = turf.difference(turf.featureCollection([current, fb as Feature]))
+            const diff = turf.difference(polyPair(current, fb))
             current = diff
             if (!current) break
           } catch {
@@ -251,7 +256,7 @@ export function runGisUnionOrMerge(input: {
   try {
     let combined: Feature = polys[0] as Feature
     for (let i = 1; i < polys.length; i++) {
-      const next = turf.union(turf.featureCollection([combined, polys[i] as Feature]))
+      const next = turf.union(polyPair(combined, polys[i]))
       if (next) combined = next
     }
     combined.properties = { ...(combined.properties || {}), merged_count: polys.length }
@@ -298,7 +303,7 @@ export function runGisDissolve(input: {
     try {
       let combined: Feature = feats[0]!
       for (let i = 1; i < feats.length; i++) {
-        const next = turf.union(turf.featureCollection([combined, feats[i]!]))
+        const next = turf.union(polyPair(combined, feats[i]!))
         if (next) combined = next
       }
       combined.properties = { ...(combined.properties || {}), [field]: key, dissolved_count: feats.length }
@@ -343,7 +348,7 @@ export function runGisVoronoi(input: {
 }): GisEngineResult {
   const outputName = sanitizeOutputName(input.outputName, `${input.inputName || 'Layer'}_Voronoi`)
   const fc = toFc(input.collection)
-  const points: Feature[] = []
+  const points: Feature<Point>[] = []
   for (const f of fc.features) {
     try {
       const c = turf.centroid(f as Feature)

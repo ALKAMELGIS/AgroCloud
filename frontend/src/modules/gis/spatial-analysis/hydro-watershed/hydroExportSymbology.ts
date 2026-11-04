@@ -32,7 +32,7 @@ export function streamLineColor(value: number, model: HydroStreamModel, maxVal: 
   const max = Math.max(2, maxVal)
   const mid = 1 + (max - 1) / 2
   const v = Math.min(max, Math.max(1, value))
-  const stops =
+  const stops: Array<[number, string]> =
     model === 'shreve'
       ? [
           [1, '#bae6fd'],

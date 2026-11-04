@@ -38,6 +38,7 @@ describe('resolveDashboardWebMapPreview', () => {
           name: layerRow.title,
           type: 'geojson',
           visible: true,
+          opacity: 1,
           url: `gis-content://${layerRow.id}`,
           data: { type: 'FeatureCollection', features: [] },
         },

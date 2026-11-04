@@ -320,10 +320,13 @@ export async function buildTreeImageryMosaic(
   }
 }
 
-/** Axis-aligned lng/lat bbox of a GeoJSON Polygon/MultiPolygon (or Feature). */
-export function geometryBBox(input: GeoJSON.Geometry | GeoJSON.Feature | null | undefined): LngLatBBox | null {
+/** Axis-aligned lng/lat bbox of a GeoJSON Polygon/MultiPolygon (or Feature / FeatureCollection). */
+export function geometryBBox(
+  input: GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection | null | undefined,
+): LngLatBBox | null {
   if (!input) return null
-  const geom = (input as GeoJSON.Feature).type === 'Feature' ? (input as GeoJSON.Feature).geometry : (input as GeoJSON.Geometry)
+  const geom: GeoJSON.Geometry | GeoJSON.FeatureCollection | null =
+    input.type === 'Feature' ? input.geometry : input
   if (!geom) return null
   let west = Infinity
   let south = Infinity
@@ -342,7 +345,7 @@ export function geometryBBox(input: GeoJSON.Geometry | GeoJSON.Feature | null | 
   if (geom.type === 'Polygon') (geom.coordinates as number[][][]).forEach(visitRing)
   else if (geom.type === 'MultiPolygon') (geom.coordinates as number[][][][]).forEach(poly => poly.forEach(visitRing))
   else if (geom.type === 'FeatureCollection') {
-    for (const feat of (geom as GeoJSON.FeatureCollection).features) {
+    for (const feat of geom.features) {
       const sub = feat.geometry
       if (!sub) continue
       if (sub.type === 'Polygon') (sub.coordinates as number[][][]).forEach(visitRing)

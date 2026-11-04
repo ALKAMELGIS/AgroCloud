@@ -42,6 +42,7 @@ import {
   DEVELOP_ELITE_GLOBE_COCKPIT_VIEW,
 
 } from './developEliteGlobeCockpitView'
+import { asDevelopEliteGlobeNudgeMap, asDevelopEliteProjectionMap, asMapLibreRequestParameters } from './developEliteMapLibreCompat'
 
 
 
@@ -71,7 +72,7 @@ function resolveGlobeCockpitStyle(): StyleSpecification {
 
 function applyGlobeEnvironment(map: maplibregl.Map): void {
 
-  setMapLibreGlobeProjection(map)
+  setMapLibreGlobeProjection(asDevelopEliteProjectionMap(map))
 
   applyMapLibreGlobeGalaxySky(map)
 
@@ -141,8 +142,6 @@ export function DevelopEliteGlobeCockpitCanvas({ active }: Props) {
 
       maxPitch: DEVELOP_ELITE_GLOBE_COCKPIT_MAX_PITCH,
 
-      projection: { type: 'globe' },
-
       attributionControl: false,
 
       fadeDuration: 0,
@@ -155,13 +154,7 @@ export function DevelopEliteGlobeCockpitCanvas({ active }: Props) {
 
       transformRequest: (url, resourceType) =>
 
-        agroCloudMapboxTransformRequest(url, resourceType ?? undefined) as {
-
-          url: string
-
-          credentials?: 'omit' | 'same-origin' | 'include'
-
-        },
+        asMapLibreRequestParameters(agroCloudMapboxTransformRequest(url, resourceType ?? undefined)),
 
     })
 
@@ -177,7 +170,7 @@ export function DevelopEliteGlobeCockpitCanvas({ active }: Props) {
 
       applyGlobeEnvironment(map)
 
-      nudgeSiMapboxGlobeCanvas(map, el)
+      nudgeSiMapboxGlobeCanvas(asDevelopEliteGlobeNudgeMap(map), el)
 
       unbindSpin()
 
@@ -213,7 +206,7 @@ export function DevelopEliteGlobeCockpitCanvas({ active }: Props) {
 
       if (!activeRef.current) return
 
-      nudgeSiMapboxGlobeCanvas(map, el)
+      nudgeSiMapboxGlobeCanvas(asDevelopEliteGlobeNudgeMap(map), el)
 
     })
 
@@ -255,7 +248,7 @@ export function DevelopEliteGlobeCockpitCanvas({ active }: Props) {
 
       applyGlobeEnvironment(map)
 
-      nudgeSiMapboxGlobeCanvas(map, el)
+      nudgeSiMapboxGlobeCanvas(asDevelopEliteGlobeNudgeMap(map), el)
 
       map.resize()
 

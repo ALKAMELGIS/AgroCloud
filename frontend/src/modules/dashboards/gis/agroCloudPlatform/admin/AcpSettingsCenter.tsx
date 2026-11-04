@@ -106,19 +106,22 @@ export function AcpSettingsCenter() {
     for (const row of acp.scopedFieldRows) {
       if (row.countryCode && row.countryCode !== '—') codes.add(row.countryCode)
     }
+    const countryMap = acp.countryDescriptionMap
     const sorted = [...codes].sort((a, b) =>
-      resolveAgroStructuresCountryLabel(a).localeCompare(resolveAgroStructuresCountryLabel(b), undefined, {
-        sensitivity: 'base',
-      }),
+      resolveAgroStructuresCountryLabel(a, countryMap).localeCompare(
+        resolveAgroStructuresCountryLabel(b, countryMap),
+        undefined,
+        { sensitivity: 'base' },
+      ),
     )
     return [
       { value: 'all', label: 'All countries' },
       ...sorted.map(code => ({
         value: code,
-        label: resolveAgroStructuresCountryLabel(code),
+        label: resolveAgroStructuresCountryLabel(code, countryMap),
       })),
     ]
-  }, [acp.scopedFieldRows])
+  }, [acp.countryDescriptionMap, acp.scopedFieldRows])
 
   const portalLayerRows = useMemo(() => {
     return registry.activeItemIds

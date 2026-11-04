@@ -10,6 +10,7 @@ export type ArcgisLayerDefLite = {
   typeIdField?: string
   geometryType?: string
   name?: string
+  drawingInfo?: unknown
 }
 
 export function readCodedValueDescription(coded: any): string {

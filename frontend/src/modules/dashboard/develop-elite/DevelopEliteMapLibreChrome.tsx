@@ -329,7 +329,9 @@ export function DevelopEliteMapLibreFlyBridge({
         flyCountry()
       }
       map.once('idle', onReady)
-      return () => map.off('idle', onReady)
+      return () => {
+        map.off('idle', onReady)
+      }
     }
     flyCountry()
   }, [
@@ -372,7 +374,9 @@ export function DevelopEliteMapLibreFlyBridge({
         fly()
       }
       map.once('idle', onReady)
-      return () => map.off('idle', onReady)
+      return () => {
+        map.off('idle', onReady)
+      }
     }
     fly()
   }, [geojson, highlightFieldKey, mapFlyToRequest, mapReady, mapRef, viewMode3d])
@@ -401,7 +405,9 @@ export function DevelopEliteMapLibreFlyBridge({
       fly()
     }
     map.once('idle', onReady)
-    return () => map.off('idle', onReady)
+    return () => {
+      map.off('idle', onReady)
+    }
   }, [mapExtentFly?.fc, mapExtentFly?.nonce, mapReady, mapRef, viewMode3d])
 
   const portfolioBasemapAppliedRef = useRef<string | null>(null)

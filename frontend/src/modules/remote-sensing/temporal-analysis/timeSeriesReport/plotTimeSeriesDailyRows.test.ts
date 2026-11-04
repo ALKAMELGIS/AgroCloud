@@ -24,7 +24,7 @@ describe('plotTimeSeriesDailyRows', () => {
   })
 
   it('requires at least one finite layer value in window', () => {
-    const rows: SentinelHubDailyIndexMeans[] = [{ date: '2026-06-01' }]
+    const rows: SentinelHubDailyIndexMeans[] = [{ date: '2026-06-01', ndvi: null, ndwi: null, ndmi: null }]
     expect(dailyRowsSatisfyExportWindow(rows, '2026-05-01', '2026-08-26', ['NDVI'])).toBe(false)
   })
 

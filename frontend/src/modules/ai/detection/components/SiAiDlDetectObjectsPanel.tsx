@@ -245,7 +245,7 @@ export function SiAiDlDetectObjectsPanel({
       onStatus?.(`Validating model — ${file.name}…`)
 
       const result = await validateAndLoadModel(file, modelType)
-      if (!result.ok) {
+      if (result.ok === false) {
         setModelLoadStatus('error')
         setModelError(result.error)
         onStatus?.(result.error)

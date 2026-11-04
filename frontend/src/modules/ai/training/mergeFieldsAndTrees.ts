@@ -134,7 +134,7 @@ export function polygonIou(a: GeoJSON.Feature, b: GeoJSON.Feature): number {
  */
 export function nmsFieldFeatures(
   features: GeoJSON.Feature[],
-  overlapIou = FIELD_CLEANUP_DEFAULTS.overlapIou,
+  overlapIou: number = FIELD_CLEANUP_DEFAULTS.overlapIou,
 ): GeoJSON.Feature[] {
   const sorted = [...features].sort((a, b) => fieldConfidence(b) - fieldConfidence(a))
   const kept: GeoJSON.Feature[] = []

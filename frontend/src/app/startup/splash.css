@@ -10,8 +10,8 @@
   pointer-events: auto;
   isolation: isolate;
   overflow: hidden;
-  background: #020617;
-  color: #e5e7eb;
+  background: #07110d;
+  color: #e6ede9;
   font-family: 'Inter', 'IBM Plex Sans Arabic', system-ui, -apple-system, Segoe UI, Tahoma, sans-serif;
   -webkit-tap-highlight-color: transparent;
   animation: agro-splash-in 220ms ease-out both;
@@ -33,7 +33,7 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: #020617;
+  background: #07110d;
 }
 
 .agro-splash__video {
@@ -52,7 +52,7 @@
 .agro-splash__overlay {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.5) 0%, rgba(2, 6, 23, 0.88) 70%, #020617 100%);
+  background: radial-gradient(circle at center, rgba(6, 40, 26, 0.45) 0%, rgba(7, 17, 13, 0.9) 70%, #07110d 100%);
 }
 
 .agro-splash__stage {
@@ -199,7 +199,7 @@
   .agro-splash__video-wrap {
     background:
       radial-gradient(circle at 20% 10%, rgba(34, 197, 94, 0.18), transparent 55%),
-      linear-gradient(180deg, #020617 0%, #020617 100%);
+      linear-gradient(180deg, #07110d 0%, #0b1210 100%);
   }
 
   .agro-splash {

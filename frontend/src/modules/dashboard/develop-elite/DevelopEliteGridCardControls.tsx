@@ -11,7 +11,7 @@ type Props = {
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
   onMenuAction: (action: DevelopEliteGridWidgetMenuAction) => void
-  onMovePointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void
+  onMovePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
   onResizeStart: (edge: GridResizeEdge) => void
   onResizeMove: (edge: GridResizeEdge, totalDeltaX: number, totalDeltaY: number) => void
   onResizeEnd: (edge: GridResizeEdge) => void
@@ -89,7 +89,7 @@ export function DevelopEliteGridCardControls({
   )
 
   const onGrabBarDown = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>) => {
+    (e: ReactPointerEvent<HTMLElement>) => {
       if (!layoutEditMode) return
       e.preventDefault()
       e.stopPropagation()

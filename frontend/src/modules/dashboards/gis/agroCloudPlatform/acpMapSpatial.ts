@@ -710,6 +710,7 @@ export function applyAcpMapFocusTarget(
     getCenter: () => { lng: number; lat: number }
     easeTo: (o: { center: [number, number]; zoom: number; duration?: number }) => void
     once: (event: string, listener: () => void) => void
+    getContainer?: () => HTMLElement
   },
   target: AcpMapFocusTarget,
   options?: { animate?: boolean; onSettled?: () => void },
@@ -738,11 +739,26 @@ export function applyAcpMapFocusTarget(
     return
   }
 
-  map.fitBounds(target.bounds, {
-    padding: 48,
-    maxZoom: target.maxZoom ?? ACP_FITBOUNDS_MAX_ZOOM,
-    duration,
-  })
+  // Small / still-hidden containers (phones, collapsed panels): MapLibre's camera solver returns
+  // undefined when padding exceeds the viewport and fitBounds then throws reading `.center`.
+  const el = map.getContainer?.()
+  const minSide = el ? Math.min(el.clientWidth, el.clientHeight) : Number.POSITIVE_INFINITY
+  const padding = Math.max(0, Math.min(48, Math.floor(minSide / 4)))
+  try {
+    if (minSide < 8) throw new Error('map container not laid out')
+    map.fitBounds(target.bounds, {
+      padding,
+      maxZoom: target.maxZoom ?? ACP_FITBOUNDS_MAX_ZOOM,
+      duration,
+    })
+  } catch {
+    const [[w, s], [e, n]] = target.bounds
+    map.flyTo({
+      center: [(w + e) / 2, (s + n) / 2],
+      zoom: Math.min(target.maxZoom ?? ACP_FITBOUNDS_MAX_ZOOM, Math.max(target.minZoom ?? 0, map.getZoom())),
+      duration: 0,
+    })
+  }
   const minZoom = target.minZoom
   if (minZoom == null || !Number.isFinite(minZoom)) {
     armSettledFallback()

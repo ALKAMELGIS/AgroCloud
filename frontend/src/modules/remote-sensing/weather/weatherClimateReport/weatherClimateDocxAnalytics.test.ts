@@ -26,6 +26,8 @@ function minimalPayload(overrides: Partial<WeatherClimateReportPayload> = {}): W
   })
   const hourly = daily.flatMap(d =>
     Array.from({ length: 4 }, (_, h) => ({
+      weatherCode: null,
+      snowfallCm: null,
       time: `${d.date}T${String(h * 6).padStart(2, '0')}:00`,
       temperatureC: (d.tempMinC! + d.tempMaxC!) / 2,
       precipitationMm: (d.rainfallMm ?? 0) / 4,
@@ -65,7 +67,15 @@ function minimalPayload(overrides: Partial<WeatherClimateReportPayload> = {}): W
     annualSeries: [],
     forecastRows: [],
     climateRisks: [],
-    overallImpact: 'Low',
+    impactAssessment: {
+      overallImpact: 'Low',
+      temperatureIncreaseC: null,
+      rainfallChangePct: null,
+      droughtProbabilityPct: null,
+      waterStressLevel: 'Low',
+      agriculturalImpact: '',
+      bullets: [],
+    },
     ...overrides,
   }
 }

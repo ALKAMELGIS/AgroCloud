@@ -16,8 +16,7 @@ export type UseSen2srControlsOptions = {
   enabled?: boolean
   /** Optional AOI clip for enhance requests. */
   resolveAoi?: () =>
-    | GeoJSON.Polygon
-    | GeoJSON.MultiPolygon
+    | GeoJSON.Geometry
     | GeoJSON.Feature
     | GeoJSON.FeatureCollection
     | null
@@ -49,9 +48,13 @@ export function useSen2srControls(opts: UseSen2srControlsOptions = {}) {
     }
     const ac = new AbortController()
     const probe = () => {
-      void fetchSen2srStatus(ac.signal).then(s => {
-        if (!ac.signal.aborted) setStatus(s)
-      })
+      fetchSen2srStatus(ac.signal)
+        .then(s => {
+          if (!ac.signal.aborted) setStatus(s)
+        })
+        .catch(() => {
+          /* aborted on unmount, or status endpoint offline — keep last known status */
+        })
     }
     probe()
     const id = window.setInterval(probe, STATUS_POLL_MS)

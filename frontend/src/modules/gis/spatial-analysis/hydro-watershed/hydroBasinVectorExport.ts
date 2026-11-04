@@ -1,4 +1,4 @@
-import type { Feature, FeatureCollection } from 'geojson'
+import type { Feature, FeatureCollection, Position } from 'geojson'
 import { worldPxToLngLat } from '@/modules/ai/detection/tree/webMercatorTiles'
 import { downloadVectorShapefile } from '@/modules/data-management/export/vectorLayerExport'
 import type { GeoBand } from './geoTiffExport'
@@ -158,7 +158,8 @@ export function buildBasinPolygonFeatureCollection(
   const features: Feature[] = []
   for (const [basinId, adj] of graphs) {
     const rings = traceRings(adj)
-    const polys: number[][][] = []
+    /** One closed ring per basin polygon (no holes). */
+    const polys: Position[][] = []
     for (const ring of rings) {
       const coordsRing = gridRingToLngLat(ring, band)
       if (coordsRing.length < 3) continue
@@ -184,7 +185,7 @@ export function buildBasinPolygonFeatureCollection(
       },
       geometry:
         polys.length === 1
-          ? { type: 'Polygon', coordinates: polys[0]! }
+          ? { type: 'Polygon', coordinates: [polys[0]!] }
           : { type: 'MultiPolygon', coordinates: polys.map(p => [p]) },
     })
   }

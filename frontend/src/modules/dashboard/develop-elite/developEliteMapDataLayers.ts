@@ -194,7 +194,7 @@ export function normalizeDevelopEliteMapLayerOpacity(
 }
 
 export function developEliteMapDataLayerOpacityValue(
-  opacity: Record<DevelopEliteMapDataLayerId, number>,
+  opacity: Partial<Record<DevelopEliteMapDataLayerId, number>>,
   id: DevelopEliteMapDataLayerId,
 ): number {
   const v = opacity[id]

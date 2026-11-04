@@ -77,7 +77,14 @@ describe('arcgisDrawingInfoToCirclePaint', () => {
     const paint = arcgisDrawingInfoToCirclePaint(drawingInfo);
     const match = paint?.['circle-color'] as unknown[];
     expect(match?.[0]).toBe('match');
-    expect(JSON.stringify(match)).not.toContain('169');
+    // ['match', keyExpr, ...key/value pairs, fallback] — the esriPMS class (value 1) gets no circle
+    // entry; only the esriSMS class (value 2) is mapped to its own colour.
+    const pairs = match.slice(2, -1);
+    const keys = pairs.filter((_, i) => i % 2 === 0);
+    expect(keys).not.toContain('1');
+    expect(keys).toContain('2');
+    expect(pairs[pairs.indexOf('2') + 1]).toBe('rgb(169,0,230)');
+    expect(JSON.stringify(paint)).not.toContain('esriPMS');
   });
 
   it('builds match paint for uniqueValue without defaultSymbol', () => {

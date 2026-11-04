@@ -24,6 +24,8 @@ describe('siCropAlertEngine', () => {
     farmName: 'Field A',
     farmCode: 'MH101',
     structureType: 'Farm Plots',
+    country: '',
+    city: '',
     centroid: [55.1, 25.2] as [number, number],
   }
 
@@ -70,6 +72,7 @@ describe('siCropAlertEngine', () => {
       notifySms: false,
       notifyPush: false,
       refreshMinutes: 5,
+      showLegend: true,
     })
     expect(r.status).toBeTruthy()
     expect(r.current.ndvi).toBeGreaterThan(0)
@@ -197,6 +200,7 @@ describe('siCropAlertEngine', () => {
       notifySms: false,
       notifyPush: false,
       refreshMinutes: 5,
+      showLegend: true,
     })
     expect(results).toHaveLength(1)
   })
@@ -215,6 +219,9 @@ describe('siCropAlertEngine', () => {
       ndviChangePct2: -9.3,
       ndwiCurrent: 0.18,
       ndmiCurrent: 0.28,
+      anchorDate: '2026-06-05',
+      requestedDate: '2026-06-08',
+      fallbackUsed: false,
     }
     const r = evaluateCropAlertField(field, '2026-06-08', DEFAULT_CROP_ALERT_ENGINE_SETTINGS, {
       current: { ndvi: 0.78, ndwi: 0.18, ndmi: 0.28, evi: 0 },

@@ -60,11 +60,11 @@ function resolveCategoryAxisIso(
   const labels = chart.data.labels
   let idx = index
   if (typeof value === 'number' && Number.isFinite(value)) idx = value
-  let raw = labels?.[idx]
-  if (typeof raw !== 'string') {
-    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) raw = value
-    else return null
-  }
+  const label = labels?.[idx]
+  let raw: string
+  if (typeof label === 'string') raw = label
+  else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) raw = value
+  else return null
   const prev = idx > 0 && typeof labels?.[idx - 1] === 'string' ? (labels[idx - 1] as string) : undefined
   return { iso: raw, prevIso: prev }
 }
@@ -148,6 +148,25 @@ export function arcgisLineDatasetStyle(mode: AgroThemeMode = readDocumentThemeMo
 /** @deprecated Use arcgisLineDatasetStyle() for theme-aware stroke color. */
 export const ARCGIS_LINE_DATASET_STYLE = arcgisLineDatasetStyle('dark')
 
+type ArcgisScaleOptions = NonNullable<ChartOptions['scales']>[string]
+
+/**
+ * Shallow-merge base + override scale options (override wins), with merged ticks.
+ * Chart.js types each scale as a union keyed by `type`; spreading two such unions
+ * yields a cross-product TS cannot map back, so the merged object is re-typed here.
+ */
+function mergeArcgisScale(
+  base: ArcgisScaleOptions | undefined,
+  extra: ArcgisScaleOptions | undefined,
+  defaultTicks: ArcgisScaleOptions['ticks'],
+): ArcgisScaleOptions {
+  return {
+    ...base,
+    ...extra,
+    ticks: { ...defaultTicks, ...extra?.ticks },
+  } as ArcgisScaleOptions
+}
+
 export function arcgisStackChartOptions(
   title: string,
   extra?: Partial<ChartOptions>,
@@ -229,16 +248,8 @@ export function arcgisStackChartOptions(
         : extra.plugins?.weatherArcgisGuides,
     },
     scales: {
-      x: {
-        ...base.scales?.x,
-        ...extra.scales?.x,
-        ticks: { ...xTicks, ...extra.scales?.x?.ticks },
-      },
-      y: {
-        ...base.scales?.y,
-        ...extra.scales?.y,
-        ticks: { ...yTicks, ...extra.scales?.y?.ticks },
-      },
+      x: mergeArcgisScale(base.scales?.x, extra.scales?.x, xTicks),
+      y: mergeArcgisScale(base.scales?.y, extra.scales?.y, yTicks),
     },
   }
 }

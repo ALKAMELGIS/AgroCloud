@@ -5,6 +5,7 @@ import { canManageDataSourceSettings } from '@/core/auth/auth'
 import { Modal } from '@/shared/components/ui/Modal'
 import { useLanguage } from '@/core/localization/i18n'
 import { WorkflowHeroStepper } from '@/modules/forms/components/WorkflowHeroStepper'
+import { EntryActionBar, EntryFlash, EntryFormCardHeader, EntryValidationAlert } from '@/modules/operations/shared/DataEntryChrome'
 import { getWorkflowShellMeta, stepLabels } from '@/modules/forms/templates/workflowMeta'
 import '../fertigation/EC.css'
 
@@ -359,37 +360,14 @@ export default function Harvest() {
           onNavigateToRecipes={() => attemptNavigate(recipesPath)}
         />
 
-        {flash ? (
-          <div
-            className="ec-card"
-            style={{
-              borderColor: flash.kind === 'success' ? '#bbf7d0' : '#fecaca',
-              background: flash.kind === 'success' ? '#f0fdf4' : '#fef2f2',
-            }}
-          >
-            <div className="ec-card-body" style={{ color: '#0f172a', fontWeight: 700 }}>
-              {flash.message}
-            </div>
-          </div>
-        ) : null}
+        <EntryFlash flash={flash} />
 
-        <div className="ec-card">
-          <div className="ec-card-header">
-            <div>
-              <div className="ec-card-title">
-                <i className="fa-solid fa-circle-info" style={{ color: 'var(--ec-primary)' }}></i>
-                Data Entry Form
-              </div>
-              <div className="ec-card-subtitle-small">Configured in Settings (Manager and Admin only)</div>
-            </div>
-            <div className="ec-card-header-actions">
-              {canManageSettings ? (
-                <button type="button" className="ec-icon-btn" aria-label="Open workflow settings" title="Settings" onClick={() => attemptNavigate(`/master/workflow-settings?form=${formKey}`)}>
-                  <i className="fa-solid fa-gear"></i>
-                </button>
-              ) : null}
-            </div>
-          </div>
+        <div className="ec-card entry-form-card">
+          <EntryFormCardHeader
+            title="Data Entry Form"
+            settingsAriaLabel="Open workflow settings"
+            onOpenSettings={canManageSettings ? () => attemptNavigate(`/master/workflow-settings?form=${formKey}`) : undefined}
+          />
           <div className="ec-card-body">
             <DataSourceFieldsPanel
               key={panelKey}
@@ -400,48 +378,16 @@ export default function Harvest() {
               externalValuesBySource={quickFillValuesBySource}
               externalApplyKey={quickFillApplyKey}
             />
-            {validationErrors.length ? (
-              <div style={{ marginTop: 12, padding: 12, borderRadius: 12, border: '1px solid #fecaca', background: '#fef2f2', color: '#7f1d1d', fontSize: 13 }}>
-                <div style={{ fontWeight: 900, marginBottom: 6 }}>Validation issues</div>
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                  {validationErrors.slice(0, 50).map((e) => (
-                    <li key={e}>{e}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            <EntryValidationAlert messages={validationErrors} />
 
-            <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <button type="button" className="ec-btn" onClick={onQuickFill} disabled={Boolean(busy)} aria-label="Quick Fill" title="Quick Fill">
-                <i className="fa-solid fa-bolt" aria-hidden="true" /> Quick Fill
-              </button>
-              <button type="button" className="ec-btn ec-btn-ghost" onClick={onClear} disabled={Boolean(busy)} aria-label="Clear" title="Clear">
-                <i className="fa-solid fa-eraser" aria-hidden="true" /> Clear
-              </button>
-              <button
-                type="button"
-                className="ec-btn"
-                onClick={() => void onSaveAddAnother()}
-                disabled={Boolean(busy)}
-                aria-label="Save and add another"
-                title="Ctrl+S"
-              >
-                <i className={busy === 'saveAdd' ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-plus'} aria-hidden="true" /> Save & Add Another
-              </button>
-              <button
-                type="button"
-                className="ec-btn ec-btn-primary"
-                onClick={() => void onSubmit()}
-                disabled={Boolean(busy)}
-                aria-label="Submit entry"
-                title="Submit Entry"
-              >
-                <i className={busy === 'submit' ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'} aria-hidden="true" /> Submit Entry
-              </button>
-              <button type="button" className="ec-btn" onClick={onNext} disabled={Boolean(busy)} aria-label="Recipes" title="Recipes">
-                Next <i className="fa-solid fa-arrow-right" aria-hidden="true" />
-              </button>
-            </div>
+            <EntryActionBar
+              busy={busy}
+              onQuickFill={() => void onQuickFill()}
+              onClear={onClear}
+              onSaveAddAnother={() => void onSaveAddAnother()}
+              onSubmit={() => void onSubmit()}
+              onNext={onNext}
+            />
           </div>
         </div>
       </div>

@@ -280,10 +280,6 @@ export function reprojectBoundsToWebMercator(bounds: AiDlRasterBounds, sourceCrs
   return wgs84ToWebMercatorBounds(wgs)
 }
 
-function rasterExtension(fileName: string): string {
-  return (fileName.split('.').pop() || '').toLowerCase()
-}
-
 async function extractRasterBundleFromZip(zipFile: File): Promise<File[]> {
   const zip = await JSZip.loadAsync(await zipFile.arrayBuffer())
   const out: File[] = []

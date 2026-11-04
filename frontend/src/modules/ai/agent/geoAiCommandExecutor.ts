@@ -34,6 +34,8 @@ export type GeoAiToolboxPanelId =
   | 'remote-sensing'
   | 'imagery-time-series'
   | 'map-swipe'
+  /** SWMM2D flood simulation (modules/gis/flood-simulation); not yet a Satellite dock section. */
+  | 'flood-simulation'
   | 'flood-monitoring'
   | 'well-site'
   | 'hydro-watershed'
@@ -56,7 +58,7 @@ export function normalizeGeoAiToolboxPanelId(raw: string): GeoAiToolboxPanelId |
   if (/^(map-swipe|mapswipe|swipe|compare|swipe-compare)$/.test(t)) return 'map-swipe'
   if (/^(flood-simulation|simulate-flood|swmm2d|flood-sim)$/.test(t)) return 'flood-simulation'
   if (/^(flood-monitoring|sar-flood|sar)$/.test(t)) return 'flood-monitoring'
-  if (/^(flood)$/.test(t)) return 'flood-simulation'
+  if (/^(flood)$/.test(t)) return 'flood-monitoring'
   if (/^(well-site|well|hydro-ai|drilling)$/.test(t)) return 'well-site'
   if (/^(hydro-watershed|hydro|watershed|basin)$/.test(t)) return 'hydro-watershed'
   if (/^(cut-fill-analysis|cut-fill|cutfill|earthwork|cut-and-fill)$/.test(t)) return 'cut-fill-analysis'

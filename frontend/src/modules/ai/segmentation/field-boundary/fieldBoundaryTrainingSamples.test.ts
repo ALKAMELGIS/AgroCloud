@@ -42,7 +42,7 @@ describe('fieldBoundaryTrainingSamples', () => {
     const drafts = predictionsToDraftSamples(fc)
     const result = downloadApprovedFieldTrainingSamples(drafts)
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.reason).toMatch(/No approved/i)
+    if (result.ok === false) expect(result.reason).toMatch(/No approved/i)
   })
 
   it('counts statuses', () => {

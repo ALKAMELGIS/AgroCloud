@@ -4,6 +4,7 @@ import {
   MAPLIBRE_GLOBE_PORTFOLIO_MAX_ZOOM,
   MAPLIBRE_GLOBE_SKY_GALAXY,
 } from '@/modules/gis/map/maplibreGlobeEnvironment'
+import { asDevelopEliteFogCapableMap, type DevelopEliteFogCapableMap } from './developEliteMapLibreCompat'
 
 /** Zoom at which the space backdrop is fully visible (far from Earth). */
 export const DEVELOP_ELITE_SPACE_ZOOM_FULL = 0.85
@@ -28,6 +29,11 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
+}
+
+/** Galaxy sky blends are plain numbers; `SkySpecification` types them as property values. */
+function skyNumber(v: unknown, fallback: number): number {
+  return typeof v === 'number' ? v : fallback
 }
 
 /**
@@ -89,16 +95,17 @@ export function applyDevelopEliteMapSpaceEnvironment(
   const bearing = map.getBearing()
   const blend = applyDevelopEliteMapSpaceCssVars(host, { zoom, pitch, bearing })
 
+  const fogMap = asDevelopEliteFogCapableMap(map)
   try {
     if (blend <= 0.02) {
-      map.setFog?.(null as never)
+      fogMap.setFog?.(null)
       map.setSky?.(undefined as never)
     } else {
-      map.setFog?.(interpolateDevelopEliteSpaceFog(blend))
+      fogMap.setFog?.(interpolateDevelopEliteSpaceFog(blend))
       map.setSky?.({
         ...MAPLIBRE_GLOBE_SKY_GALAXY,
-        'sky-horizon-blend': lerp(0.02, MAPLIBRE_GLOBE_SKY_GALAXY['sky-horizon-blend'], blend),
-        'horizon-fog-blend': lerp(0.04, MAPLIBRE_GLOBE_SKY_GALAXY['horizon-fog-blend'], blend),
+        'sky-horizon-blend': lerp(0.02, skyNumber(MAPLIBRE_GLOBE_SKY_GALAXY['sky-horizon-blend'], 0.04), blend),
+        'horizon-fog-blend': lerp(0.04, skyNumber(MAPLIBRE_GLOBE_SKY_GALAXY['horizon-fog-blend'], 0.08), blend),
       })
     }
   } catch {
@@ -106,7 +113,7 @@ export function applyDevelopEliteMapSpaceEnvironment(
   }
 }
 
-type SpaceBindMap = Pick<MaplibreMap, 'getZoom' | 'getPitch' | 'getBearing' | 'on' | 'off' | 'setFog' | 'setSky'>
+type SpaceBindMap = Pick<DevelopEliteFogCapableMap, 'getZoom' | 'getPitch' | 'getBearing' | 'on' | 'off' | 'setFog' | 'setSky'>
 
 /** Phase 3 — spherical stars + Milky Way CSS vars; fog cross-fade while zooming away from Earth. */
 export function bindDevelopEliteMapSpaceEnvironment(
@@ -126,7 +133,7 @@ export function bindDevelopEliteMapSpaceEnvironment(
   }
 
   const refreshFogAndSky = () => {
-    applyDevelopEliteMapSpaceEnvironment(map as MaplibreMap, host)
+    applyDevelopEliteMapSpaceEnvironment(map as DevelopEliteFogCapableMap, host)
   }
 
   const scheduleCss = () => {

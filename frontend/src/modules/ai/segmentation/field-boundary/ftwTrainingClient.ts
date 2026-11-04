@@ -41,6 +41,8 @@ export type FtwTrainingJobResponse = {
   progress?: number
   epoch?: number
   epochs?: number
+  /** Effective LR for the run (set by the in-browser builtin trainer). */
+  learning_rate?: number
   train_loss?: number | null
   val_loss?: number | null
   stage?: string

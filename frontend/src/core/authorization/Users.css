@@ -9,7 +9,7 @@
   justify-content: center;
   padding: clamp(12px, 3vw, 28px);
   box-sizing: border-box;
-  background: rgba(15, 23, 42, 0.52);
+  background: var(--ds-scrim, rgba(15, 23, 20, 0.45));
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   animation: users-modal-overlay-in 0.2s ease both;
@@ -55,7 +55,7 @@ html[data-theme='dark'] .users-modal-overlay {
 }
 
 html[data-theme='dark'] .users-modal-dialog {
-  background: rgba(15, 23, 42, 0.98);
+  background: var(--ds-color-surface-raised);
   box-shadow:
     0 25px 50px -12px rgba(0, 0, 0, 0.55),
     0 0 0 1px rgba(51, 65, 85, 0.65);
@@ -73,7 +73,7 @@ html[data-theme='dark'] .users-modal-dialog {
 
 html[data-theme='dark'] .users-modal-header {
   border-bottom-color: rgba(51, 65, 85, 0.65);
-  background: rgba(15, 23, 42, 0.4);
+  background: var(--ds-color-surface-2);
 }
 
 .users-modal-title {
@@ -122,7 +122,7 @@ html[data-theme='dark'] .users-modal-title i {
 
 html[data-theme='dark'] .users-modal-close-btn {
   border-color: rgba(71, 85, 105, 0.65);
-  background: rgba(30, 41, 59, 0.85);
+  background: var(--ds-color-surface-2);
   color: #94a3b8;
 }
 
@@ -169,7 +169,7 @@ html[data-theme='dark'] .users-modal-body .ec-label {
 
 html[data-theme='dark'] .users-modal-footer {
   border-top-color: rgba(51, 65, 85, 0.65);
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--ds-color-surface-2);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -183,28 +183,18 @@ html[data-theme='dark'] .users-modal-footer {
 /* User Management — layout, table, filters (light + dark)                     */
 /* -------------------------------------------------------------------------- */
 
+/* Local aliases onto the AgroCloud design tokens (agro-premium.css) — follows light/dark automatically. */
 .admin-users {
-  --au-surface: #ffffff;
-  --au-surface-2: #f8fafc;
-  --au-border: #e2e8f0;
-  --au-text: #0f172a;
-  --au-muted: #64748b;
-  --au-strong: #334155;
-  --au-accent: #0369a1;
-  --au-warn: #c2410c;
-  --au-primary: #10b981;
-}
-
-html[data-theme='dark'] .admin-users {
-  --au-surface: rgba(30, 41, 59, 0.72);
-  --au-surface-2: rgba(15, 23, 42, 0.55);
-  --au-border: rgba(71, 85, 105, 0.55);
-  --au-text: #e2e8f0;
-  --au-muted: #94a3b8;
-  --au-strong: #cbd5e1;
-  --au-accent: #38bdf8;
-  --au-warn: #fb923c;
-  --au-primary: #34d399;
+  --au-surface: var(--ds-color-surface);
+  --au-surface-2: var(--ds-color-surface-2);
+  --au-border: var(--ds-color-border-strong);
+  --au-text: var(--ds-color-text);
+  --au-muted: var(--ds-color-text-muted);
+  --au-strong: var(--ds-color-text-secondary);
+  --au-accent: var(--ds-color-secondary);
+  --au-warn: var(--ds-color-warning);
+  --au-primary: var(--ds-color-primary);
+  --au-on-primary: var(--ds-color-on-primary, #fff);
 }
 
 .admin-users__toolbar {
@@ -239,7 +229,7 @@ html[data-theme='dark'] .admin-users {
 
 .admin-users__btn {
   padding: 8px 14px;
-  border-radius: 999px;
+  border-radius: var(--ds-radius-sm, 8px);
   border: 1px solid var(--au-border);
   background: var(--au-surface);
   font-size: 13px;
@@ -308,13 +298,15 @@ html[data-theme='dark'] .admin-users__btn--warn {
   padding: 8px 16px;
   border: none;
   background: var(--au-primary);
-  color: #fff;
+  color: var(--au-on-primary);
   font-weight: 600;
-  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), var(--ds-shadow-sm);
 }
 
-html[data-theme='dark'] .admin-users__btn--primary {
-  box-shadow: 0 10px 28px rgba(52, 211, 153, 0.22);
+/* Bright dark-mode green needs dark ink for 4.5:1 contrast. */
+html[data-theme='dark'] .admin-users .admin-users__btn--primary,
+html[data-theme='dark'] .admin-users .admin-users__btn--primary i {
+  color: var(--ds-color-on-primary) !important;
 }
 
 .admin-users__btn--primary:not(:disabled):hover {
@@ -332,7 +324,7 @@ html[data-theme='dark'] .admin-users__btn--primary {
 .admin-users__search,
 .admin-users__select {
   padding: 8px 12px;
-  border-radius: 999px;
+  border-radius: var(--ds-radius-sm, 8px);
   border: 1px solid var(--au-border);
   outline: none;
   font-size: 13px;
@@ -354,7 +346,7 @@ html[data-theme='dark'] .admin-users__btn--primary {
 
 .admin-users__search:focus,
 .admin-users__select:focus {
-  border-color: rgba(14, 165, 233, 0.55);
+  border-color: var(--ds-color-primary);
   box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
 }
 
@@ -383,7 +375,7 @@ html[data-theme='dark'] .admin-users__select:focus {
 }
 
 html[data-theme='dark'] .admin-users__batch {
-  background: rgba(15, 23, 42, 0.65);
+  background: var(--ds-color-surface-2);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -454,7 +446,7 @@ html[data-theme='dark'] .admin-users__table-wrap {
 }
 
 html[data-theme='dark'] .admin-users__thead-row {
-  background: rgba(15, 23, 42, 0.85);
+  background: var(--ds-color-surface-2);
 }
 
 .admin-users__th {
@@ -656,7 +648,7 @@ html[data-theme='dark'] .admin-users__icon-btn--toggle {
 }
 
 html[data-theme='dark'] .admin-users__pager {
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--ds-color-surface-2);
 }
 
 .admin-users__pager-meta {

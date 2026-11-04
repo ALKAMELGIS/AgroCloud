@@ -79,6 +79,6 @@ export function floodMapCompositeDataUrl(
   canvas.height = result.height
   const ctx = canvas.getContext('2d')
   if (!ctx) return ''
-  ctx.putImageData(new ImageData(rgba, result.width, result.height), 0, 0)
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(rgba), result.width, result.height), 0, 0)
   return canvas.toDataURL('image/png')
 }

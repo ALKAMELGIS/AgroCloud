@@ -11,7 +11,7 @@ import { apiUrl, noteApiResponse } from '@/core/api/apiOrigin'
 import {
   WEATHER_CHART_DEFAULT_LOOKBACK_DAYS,
   addDaysToYmd,
-  daysBetweenYmdInclusive,
+  openMeteoPastForecastDaysForChartRange,
   filterHourlyByDateRange,
   getWeatherChartTodayYmd,
   type WeatherChartDateRange,
@@ -672,8 +672,7 @@ export async function fetchOpenMeteoHourlyForDateRange(
   }
 
   if (!merged.length) {
-    const pastDays = Math.min(92, daysBetweenYmdInclusive(startDate, today) + 1)
-    const forecastDays = Math.min(16, daysBetweenYmdInclusive(today, endDate) + 1)
+    const { pastDays, forecastDays } = openMeteoPastForecastDaysForChartRange({ startDate, endDate }, today)
     try {
       merged = await fetchWith429Retry(() =>
         fetchForecastHourlyWindow(lat, lng, signal, { pastDays, forecastDays }),

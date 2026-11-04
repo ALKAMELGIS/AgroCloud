@@ -1,0 +1,129 @@
+/*
+ * Account → Data Management (route /account/settings).
+ * The page keeps the shared `.settings-page` class so the Data Source Fields panel styling in
+ * EC.css still applies; this file re-points those light-only values at the --ds-* tokens so the
+ * page follows the app palette in both themes.
+ */
+
+.settings-page.account-settings-page {
+  --settings-bg: var(--ds-color-bg);
+  --settings-surface: var(--ds-color-surface);
+  --settings-surface-strong: var(--ds-color-surface);
+  --settings-ink: var(--ds-color-text);
+  --settings-muted: var(--ds-color-text-secondary);
+  --settings-subtle: var(--ds-color-text-muted);
+  --settings-line: var(--ds-color-border);
+  --settings-line-strong: var(--ds-color-border-strong);
+  --settings-green: var(--ds-color-primary);
+  --settings-green-dark: var(--ds-color-primary-hover);
+  --settings-green-soft: var(--ds-color-primary-soft);
+  padding: 0;
+  background: var(--ds-color-bg) !important;
+  background-image: none !important;
+  font-family: var(--ds-font-sans);
+  color: var(--ds-color-text);
+}
+
+.account-settings-page .account-settings-back-icon {
+  font-size: 14px;
+}
+
+[dir='rtl'] .account-settings-page .account-settings-back-icon {
+  transform: scaleX(-1);
+}
+
+/* Surfaces inside the Data Source Fields panel */
+.account-settings-page .dsf-settings-panel {
+  background: var(--ds-color-surface-2) !important;
+  border-color: var(--ds-color-border) !important;
+  box-shadow: none;
+}
+
+.account-settings-page .dsf-source-section,
+.account-settings-page .dsf-order-column,
+.account-settings-page .dsf-layer-card,
+.account-settings-page .dsf-field-list .dsf-field-row,
+.account-settings-page .dsf-order-list > div {
+  background: var(--ds-color-surface) !important;
+  border-color: var(--ds-color-border) !important;
+  color: var(--ds-color-text) !important;
+  box-shadow: none;
+}
+
+.account-settings-page .dsf-field-column {
+  background: var(--ds-color-surface-2) !important;
+  border-color: var(--ds-color-border) !important;
+}
+
+.account-settings-page .dsf-layer-card--selected,
+.account-settings-page .dsf-field-row--selected {
+  background: var(--ds-color-primary-soft) !important;
+  border-color: color-mix(in srgb, var(--ds-color-primary) 40%, transparent) !important;
+}
+
+.account-settings-page .dsf-settings-panel input:not([type='checkbox'], [type='radio']),
+.account-settings-page .dsf-settings-panel select,
+.account-settings-page .dsf-layer-search,
+.account-settings-page .dsf-field-search {
+  background: var(--ds-color-surface) !important;
+  border-color: var(--ds-color-border-strong) !important;
+  color: var(--ds-color-text) !important;
+}
+
+.account-settings-page .dsf-settings-panel input::placeholder {
+  color: var(--ds-color-text-muted);
+}
+
+.account-settings-page .dsf-settings-panel input:focus-visible,
+.account-settings-page .dsf-settings-panel select:focus-visible,
+.account-settings-page .dsf-settings-panel button:focus-visible {
+  outline: none;
+  border-color: var(--ds-color-primary) !important;
+  box-shadow: 0 0 0 3px var(--ds-focus-ring) !important;
+}
+
+.account-settings-page .dsf-shortcuts {
+  color: var(--ds-color-text-muted) !important;
+}
+
+/* Inline-styled light boxes inside the legacy panel */
+html[data-theme='dark'] .account-settings-page .dsf-settings-panel [style*='background: #fff'],
+html[data-theme='dark'] .account-settings-page .dsf-settings-panel [style*='background: rgb(255, 255, 255)'],
+html[data-theme='dark'] .account-settings-page .dsf-settings-panel [style*='background: #f8fafc'],
+html[data-theme='dark'] .account-settings-page .dsf-settings-panel [style*='background: rgb(248, 250, 252)'] {
+  background: var(--ds-color-surface-2) !important;
+  color: var(--ds-color-text) !important;
+}
+
+html[data-theme='dark'] .account-settings-page .dsf-settings-panel [style*='color: rgb(15, 23, 42)'],
+html[data-theme='dark'] .account-settings-page .dsf-settings-panel [style*='color: rgb(30, 41, 59)'],
+html[data-theme='dark'] .account-settings-page .dsf-settings-panel [style*='color: rgb(51, 65, 85)'] {
+  color: var(--ds-color-text) !important;
+}
+
+/* Dark: primary green fills need dark ink */
+html[data-theme='dark'] .account-settings-page .dsf-settings-panel button[style*='rgb(4, 120, 87)'],
+html[data-theme='dark'] .account-settings-page .dsf-settings-head__btn--primary {
+  color: var(--ds-color-on-primary) !important;
+}
+
+/* Shared Data Source Fields chrome (dsf-fill-modern.css is light-only): re-point on this page */
+.account-settings-page :is(.dsf-layer-toolbar, .dsf-shortcuts, .dsf-layer-grid-empty) {
+  background: var(--ds-color-surface-2) !important;
+  border-color: var(--ds-color-border) !important;
+  color: var(--ds-color-text-muted) !important;
+}
+
+.account-settings-page :is(.dsf-settings-head__btn--secondary, .dsf-layer-toolbar__btn) {
+  background: var(--ds-color-surface) !important;
+  border-color: var(--ds-color-border-strong) !important;
+  color: var(--ds-color-text) !important;
+}
+
+.account-settings-page :is(.dsf-settings-head__btn--secondary, .dsf-layer-toolbar__btn):disabled {
+  color: var(--ds-color-text-muted) !important;
+}
+
+.account-settings-page .dsf-layer-toolbar :is(span, label) {
+  color: var(--ds-color-text-secondary);
+}

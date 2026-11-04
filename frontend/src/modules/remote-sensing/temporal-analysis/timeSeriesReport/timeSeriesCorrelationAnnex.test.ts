@@ -96,7 +96,7 @@ describe('correlation annex charts', () => {
         coverageLine: 'c',
         actionsLine: 'a',
         actions: [],
-        lines: [],
+        lines: ['s'],
         areasFromHistogram: false,
       },
       ndviMean: 0.4,
@@ -106,6 +106,8 @@ describe('correlation annex charts', () => {
       ndwiEstimated: false,
       saviEstimated: false,
       acquisitionDate: '2026-01-01',
+      ndviStats: null,
+      ndmiStats: null,
     })
 
     const payload: TimeSeriesReportPayload = {

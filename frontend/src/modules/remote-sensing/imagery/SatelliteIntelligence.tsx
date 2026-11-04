@@ -12,6 +12,7 @@ import React, {
 import { createPortal } from 'react-dom';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import MapGL, { Source, Layer, Marker } from 'react-map-gl/mapbox';
+import type { Map as MapboxGlMap, RequestTransformFunction as MapboxRequestTransformFunction } from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './SatelliteIntelligence.css';
 import '@/assets/styles/map-overlay-theme.css';
@@ -644,7 +645,6 @@ import { type SamPanelTab } from '@/modules/ai/segmentation/sam/SamDetectionPane
 import { useSamDetection, type SamAoiSource } from '@/modules/ai/segmentation/sam/useSamDetection';
 import { AgriFieldBoundaryPanel, type FieldBoundaryAoiMode } from '@/modules/ai/segmentation/field-boundary/AgriFieldBoundaryPanel';
 import { pickFtwTrainingAoi } from '@/modules/ai/segmentation/field-boundary/resolveFtwTrainingAoi';
-import type { FtwPipelineStepId } from '@/modules/ai/segmentation/field-boundary/useAgriFieldBoundary';
 import { useAgriFieldBoundary } from '@/modules/ai/segmentation/field-boundary/useAgriFieldBoundary';
 import type { FieldImagerySource } from '@/modules/ai/segmentation/field-boundary/fieldBoundaryClient';
 import {
@@ -2323,6 +2323,13 @@ async function resolveCropAiMapImageUrl(url: string): Promise<string> {
   }
 }
 
+/** Mapbox GL maps always expose these; the structural canvas type marks them optional. */
+function siCanReorderAnalysisLayers(
+  map: SiMapboxCanvasLike,
+): map is SiMapboxCanvasLike & Required<Pick<SiMapboxCanvasLike, 'moveLayer' | 'setPaintProperty'>> {
+  return typeof map.moveLayer === 'function' && typeof map.setPaintProperty === 'function';
+}
+
 /** Imperative Mapbox image layer for Crop AI (stable ids for analysis layer stacking). */
 function syncCropAiPredictionOnMapbox(
   map: SiMapboxCanvasLike | null | undefined,
@@ -2340,11 +2347,13 @@ function syncCropAiPredictionOnMapbox(
       opacity: overlay.opacity,
     });
     siRaiseCustomLayersAboveBasemap(map, [CROP_AI_PREDICTION_SOURCE_ID]);
-    syncSiMapAnalysisLayerOrder(map, {
-      agroLineId: map.getLayer?.('drawn-index-geometry-line')
-        ? 'drawn-index-geometry-line'
-        : undefined,
-    });
+    if (siCanReorderAnalysisLayers(map)) {
+      syncSiMapAnalysisLayerOrder(map, {
+        agroLineId: map.getLayer?.('drawn-index-geometry-line')
+          ? 'drawn-index-geometry-line'
+          : undefined,
+      });
+    }
     map.triggerRepaint?.();
     return Boolean(map.getLayer?.(SI_CROP_AI_PREDICTION_RASTER_LAYER_ID));
   } catch {
@@ -2760,6 +2769,20 @@ function siMapboxZoomScaledLinePaint(linePaint: Record<string, unknown>, op: num
   return out;
 }
 
+/**
+ * mapbox-gl types `RequestParameters.credentials` without `'omit'`, but the value is handed
+ * straight to `fetch()` where `'omit'` is valid — keep the runtime value, align typing only.
+ */
+const siMapboxTransformRequest = agroCloudMapboxTransformRequest as unknown as MapboxRequestTransformFunction;
+
+/**
+ * mapbox-gl `setProjection(ProjectionSpecification)` vs the shared nudge helper's `{ name: string }`
+ * shape — same runtime map, type-level bridge only.
+ */
+function asSiGlobeNudgeMap(map: MapboxGlMap): Parameters<typeof nudgeSiMapboxGlobeCanvas>[0] {
+  return map as unknown as Parameters<typeof nudgeSiMapboxGlobeCanvas>[0];
+}
+
 /** Default vector look for GIS Content / portal layers — outline only (ArcGIS Pro hollow). */
 const SI_PORTAL_LAYER_VISIBLE_OUTLINE = '#000000';
 const SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA = 0;
@@ -2790,6 +2813,8 @@ type SiMapboxCanvasLike = {
   hasImage?(id: string): boolean;
   loadImage?(url: string, callback: (error?: Error, image?: HTMLImageElement | ImageBitmap) => void): void;
   addImage?(id: string, image: unknown, options?: { pixelRatio?: number }): void;
+  isStyleLoaded?(): boolean;
+  setLayerZoomRange?(layerId: string, minzoom: number, maxzoom: number): void;
 };
 
 /**
@@ -5011,7 +5036,7 @@ export default function SatelliteIntelligence() {
   const searchAbortRef = useRef<AbortController | null>(null);
   const [timeSeriesStart, setTimeSeriesStart] = useState(() => getDefaultSentinelTimeSeriesRange().start);
   const [timeSeriesEnd, setTimeSeriesEnd] = useState(() => getDefaultSentinelTimeSeriesRange().end);
-  const [fieldAnalysisStatus, setFieldAnalysisStatus] = useState('');
+  const [, setFieldAnalysisStatus] = useState('');
   const [wmsLayers, setWmsLayers] = useState<WmsLayerInfo[]>(() => getBootstrapSentinelWmsLayers());
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
 
@@ -5298,7 +5323,7 @@ export default function SatelliteIntelligence() {
     () => ({ ...DEFAULT_CROP_CLASSIFICATION_SETTINGS }),
   );
   const [cropClassificationRunning, setCropClassificationRunning] = useState(false);
-  const cropClassificationRunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cropClassificationRunTimerRef = useRef<number | null>(null);
   /** Isolated study AOI for Crop Classification â€” never mixed with Remote Sensing sketch. */
   const [cropClassAoiGeometry, setCropClassAoiGeometry] = useState<any | null>(null);
   const cropClassAoiGeometryRef = useRef<any | null>(null);
@@ -14177,7 +14202,7 @@ export default function SatelliteIntelligence() {
     e.target.value = '';
     if (!file) return;
     const validated = validateGeoAiAttachFile(file);
-    if (!validated.ok) {
+    if (validated.ok === false) {
       setGeoExplorerChatError(validated.error);
       return;
     }
@@ -23949,7 +23974,9 @@ export default function SatelliteIntelligence() {
           <div className="si-mt-layer-list si-mt-layer-list--user">
             {userLayerEntries.map(layer => {
               const reorderId =
-                'sourceLayerId' in layer && layer.sourceLayerId ? layer.sourceLayerId : null;
+                'sourceLayerId' in layer && typeof layer.sourceLayerId === 'string' && layer.sourceLayerId
+                  ? layer.sourceLayerId
+                  : null;
               const canReorder = !!reorderId && userLayerEntries.length > 1;
               return (
               <div
@@ -24049,7 +24076,7 @@ export default function SatelliteIntelligence() {
                           open={layerOptionsMenuLayerId === layer.sourceLayerId}
                           layerLabel={layer.label}
                           onToggleOpen={() =>
-                            setLayerOptionsMenuLayerId(v => (v === layer.sourceLayerId ? null : layer.sourceLayerId!))
+                            setLayerOptionsMenuLayerId(v => (v === reorderId ? null : reorderId))
                           }
                         >
                         {layerOptionsMenuLayerId === layer.sourceLayerId
@@ -25986,7 +26013,7 @@ export default function SatelliteIntelligence() {
             }}
             mapStyle={glMapStyle}
             mapboxAccessToken={mapboxAccessTokenForMap}
-            transformRequest={agroCloudMapboxTransformRequest}
+            transformRequest={siMapboxTransformRequest}
             attributionControl={false}
             {...AGRO_CLOUD_MAPBOX_NAVIGATION_PROPS}
             dragRotate={false}
@@ -26072,13 +26099,13 @@ export default function SatelliteIntelligence() {
                 terrainLayerEnabled: terrainLayerEnabledRef.current,
               });
               syncLiveViewport(true);
-              nudgeSiMapboxGlobeCanvas(evt.target, siMapContainerRef.current);
+              nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(evt.target), siMapContainerRef.current);
               requestAnimationFrame(() => {
-                nudgeSiMapboxGlobeCanvas(evt.target, siMapContainerRef.current);
+                nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(evt.target), siMapContainerRef.current);
               });
               [80, 320, 900].forEach(ms =>
                 window.setTimeout(() => {
-                  nudgeSiMapboxGlobeCanvas(evt.target, siMapContainerRef.current);
+                  nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(evt.target), siMapContainerRef.current);
                 }, ms),
               );
             }}
@@ -28121,7 +28148,6 @@ export default function SatelliteIntelligence() {
               if (isAddLayerModalOpen) closeAddLayerModal();
               else openAddLayerModal({ tab: 'upload', wizard: 'home', category: 'vector' });
             }}
-            mapToolboxAddGisPanelOpen={isAddLayerModalOpen || isAddArcGisLayerPanelOpen}
             mapToolboxBrowseLayersPanel={mapToolboxBrowseLayersPanel}
             mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
             imageryTimeSeriesOpen={imageryTimeSeriesOpen}
@@ -28822,7 +28848,6 @@ export default function SatelliteIntelligence() {
                         layerLegendOpen={layerLiveLegendOpen}
                         fieldTimelineActive={fieldTimelineSessionActive}
                         onTimelinePrimaryClick={onFieldAnalysisTimelinePrimaryClick}
-                        fieldAnalysisStatus={fieldAnalysisStatus || null}
                         onExportGeoTiff={handleRsExportGeoTiff}
                         exportGeoTiffBusy={rsGeoTiffBusy}
                         exportGeoTiffLabel={rsGeoTiffLabel}
@@ -28888,7 +28913,6 @@ export default function SatelliteIntelligence() {
                           onImageryChange={agriFieldBoundary.setImagery}
                           imageryOptions={agriFieldBoundary.imageryOptions}
                           onSourceChange={agriFieldBoundary.setSource}
-                          sourceOptions={agriFieldBoundary.sourceOptions}
                           sceneDateFrom={agriFieldBoundary.sceneDateFrom}
                           sceneDateTo={agriFieldBoundary.sceneDateTo}
                           onSceneDateFromChange={agriFieldBoundary.setSceneDateFrom}
@@ -28915,7 +28939,6 @@ export default function SatelliteIntelligence() {
                           busy={agriFieldBoundary.busy}
                           error={agriFieldBoundary.error}
                           errorDetail={agriFieldBoundary.errorDetail}
-                          notice={agriFieldBoundary.notice}
                           offline={agriFieldBoundary.offline}
                           health={agriFieldBoundary.health}
                           fieldCount={agriFieldBoundary.fieldCount}
@@ -28935,21 +28958,6 @@ export default function SatelliteIntelligence() {
                           ftwGlobalOpacity={agriFieldBoundary.ftwGlobalOpacity}
                           onFtwGlobalOpacityChange={agriFieldBoundary.setFtwGlobalOpacity}
                           ftwGlobalVisible={agriFieldBoundary.ftwGlobalVisible}
-                          ftwPipeline={agriFieldBoundary.ftwPipeline}
-                          onRunFtwStep={(step: FtwPipelineStepId) => {
-                            const afb = agriFieldBoundaryRef.current
-                            const runStep =
-                              step === 'extract'
-                                ? afb.runExtractFields
-                                : step === 'vector'
-                                  ? afb.runConvertToVector
-                                  : afb.runLinkAttributes
-                            void runStep().finally(() => {
-                              if (step === 'extract' && agriFieldBoundaryRef.current.ftwGlobalVisible) {
-                                restoreFtwGlobalMapNavigation();
-                              }
-                            });
-                          }}
                           activeAoi={activeAoi}
                           ftwTrainingAoi={fieldBoundaryFtwTrainingAoi}
                           aoiLabel={
@@ -28988,7 +28996,7 @@ export default function SatelliteIntelligence() {
                           attributesBusy={agriFieldBoundary.attributesBusy}
                           onRefreshAttributes={() =>
                             agriFieldBoundary.model === 'ftw'
-                              ? void agriFieldBoundary.runLinkAttributes()
+                              ? void agriFieldBoundary.resolveExportGeojson({ persistResult: true })
                               : void agriFieldBoundary.ensureAttributes({ force: true })
                           }
                           sen2srStatus={agriFieldBoundary.sen2sr.status}
@@ -29172,7 +29180,9 @@ export default function SatelliteIntelligence() {
                           onContourIntervalChange={setHydroContourInterval}
                           basinCount={hydroBasinCount}
                           onBasinCountChange={setHydroBasinCount}
-                          onExportStep={(id, format, streamModel) => hydro.exportStep(id, format, streamModel)}
+                          onExportStep={async (id, format, streamModel) => {
+                            await hydro.exportStep(id, format, streamModel);
+                          }}
                           onRunAll={handleHydroRunAll}
                           onExportReport={handleHydroExportReport}
                           exportReportBusy={hydroExportBusy}

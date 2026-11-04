@@ -10,6 +10,9 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+/** Read-only access for components that may render outside <AuthProvider> (tests, embeds). */
+export const AuthContextOptional = AuthContext
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(() => readCurrentUser())
 

@@ -28,7 +28,7 @@ function DataLayerCard({
 }) {
   const trimmed = url.trim()
   const serviceLabel = developEliteArcGisUrlShortLabel(trimmed || def.defaultUrl)
-  const isDefault = trimmed === def.defaultUrl || (!trimmed && def.defaultUrl)
+  const isDefault = trimmed === def.defaultUrl || (!trimmed && Boolean(def.defaultUrl))
 
   return (
     <article className="develop-elite-settings__data-layer">

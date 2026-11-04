@@ -2,6 +2,7 @@ import type { GeoJSONSource, Map as MaplibreMap } from 'maplibre-gl'
 import { findFeatureIndexByStableKey } from '@/modules/gis/layers/gisFeatureStableKey'
 import { DE_MAPLIBRE_POLY_FILTER, DE_MAPLIBRE_POLY_LINE_FILTER } from './developEliteMapLibreArcgisSymbology'
 import { developEliteMapLibreHasLayer, isDevelopEliteMapLibreStyleReady } from './developEliteMapLibreStyle'
+import { asMapLibreFilter } from './developEliteMapLibreCompat'
 
 const SRC_HIGHLIGHT = 'de-agro-structures-highlight'
 const LAYER_HIGHLIGHT_FILL = 'de-agro-structures-highlight-fill'
@@ -37,7 +38,7 @@ function ensureHighlightLayers(map: MaplibreMap, viewMode3d: boolean) {
       id: LAYER_HIGHLIGHT_FILL,
       type: 'fill',
       source: SRC_HIGHLIGHT,
-      filter: DE_MAPLIBRE_POLY_FILTER,
+      filter: asMapLibreFilter(DE_MAPLIBRE_POLY_FILTER),
       paint: {
         'fill-color': '#39ff14',
         'fill-opacity': BASE_FILL_OPACITY,
@@ -49,7 +50,7 @@ function ensureHighlightLayers(map: MaplibreMap, viewMode3d: boolean) {
       id: LAYER_HIGHLIGHT_EXTRUDE,
       type: 'fill-extrusion',
       source: SRC_HIGHLIGHT,
-      filter: DE_MAPLIBRE_POLY_FILTER,
+      filter: asMapLibreFilter(DE_MAPLIBRE_POLY_FILTER),
       paint: {
         'fill-extrusion-color': '#b8ff6a',
         'fill-extrusion-height': 8,
@@ -62,7 +63,7 @@ function ensureHighlightLayers(map: MaplibreMap, viewMode3d: boolean) {
       id: LAYER_HIGHLIGHT_LINE,
       type: 'line',
       source: SRC_HIGHLIGHT,
-      filter: DE_MAPLIBRE_POLY_LINE_FILTER,
+      filter: asMapLibreFilter(DE_MAPLIBRE_POLY_LINE_FILTER),
       paint: {
         'line-color': '#39ff14',
         'line-width': BASE_LINE_WIDTH,

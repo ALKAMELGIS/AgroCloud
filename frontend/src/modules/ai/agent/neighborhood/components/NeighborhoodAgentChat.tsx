@@ -566,7 +566,7 @@ export function NeighborhoodAgentChat({
         },
       ] satisfies NeighborhoodAgentQuickPrompt[];
     }
-    const lastModel = [...messages].reverse().find(m => m.role === 'model' || m.role === 'assistant')
+    const lastModel = [...messages].reverse().find(m => m.role === 'model')
     const lastUser = [...messages].reverse().find(m => m.role === 'user')
     if (!lastModel && !lastUser) return []
 

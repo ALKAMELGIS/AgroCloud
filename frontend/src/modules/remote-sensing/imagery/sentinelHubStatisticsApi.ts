@@ -158,9 +158,10 @@ export type SentinelHubDailyIndexMeans = {
   ndmi: number | null
   /** NDII: (B08−B11)/(B08+B11) when returned as a dedicated Statistical API band. */
   ndii?: number | null
-  evi: number | null
-  savi: number | null
-  ciRe: number | null
+  /** Optional: sample / synthetic rows (Crop Alerts fallback, cached partial rows) omit it. */
+  evi?: number | null
+  savi?: number | null
+  ciRe?: number | null
   /** Salinity NDSI: (B11−B08)/(B11+B08) — matches Layer Live Soil & Salinity. */
   ndsi?: number | null
   /** Salinity Index √(B03·B04). */

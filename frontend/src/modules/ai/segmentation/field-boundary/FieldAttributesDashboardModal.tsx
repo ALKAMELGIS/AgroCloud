@@ -291,7 +291,7 @@ export function FieldAttributesDashboardModal({
     setMaximized(true)
   }
 
-  const startDrag = (kind: 'move' | 'resize') => (e: ReactPointerEvent) => {
+  const startDrag = (kind: 'move' | 'resize') => (e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0) return
     if (maximized && kind === 'resize') return
     if (kind === 'move' && (e.target as HTMLElement).closest('button')) return

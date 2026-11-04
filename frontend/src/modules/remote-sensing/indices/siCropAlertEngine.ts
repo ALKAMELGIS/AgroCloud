@@ -17,6 +17,7 @@ import {
   CROP_ALERT_DATA_SOURCE,
   type CropAlertDataQuality,
   type CropAlertFieldImageryMeta,
+  type CropAlertDataSourceLabel,
   type CropAlertImageryContext,
 } from './siCropAlertImageryValidation'
 import type { NdviSceneSeriesAnalysis } from './siCropAlertNdviTimeSeries'
@@ -27,6 +28,7 @@ import {
   resolveDchasOrbPresentation,
 } from './siCropAlertDchasBeacon'
 import { resolveUnifiedFieldPresentation } from './siCropAlertNdviZones'
+import type { DominantNdviSummary } from './siCropAlertDominantNdvi'
 
 export const SI_CROP_ALERT_ENGINE_LS_KEY = 'si_crop_alert_engine_v1'
 export const SI_CROP_ALERT_RESULTS_LS_KEY = 'si_crop_alert_results_v6'
@@ -62,6 +64,8 @@ export type CropAlertStatus =
   | 'harvest-completed'
   | 'no-vegetation'
   | 'bare-soil'
+  /** Land-activity gate: bare / fallow land with no crop establishment (no crop-health alert). */
+  | 'no-crop-activity'
 
 export type CropAlertSeverity = 'normal' | 'warning' | 'high' | 'critical'
 
@@ -91,6 +95,8 @@ export type CropAlertEngineSettings = {
   refreshMinutes: number
   /** Show color legend (panel + map overlay). */
   showLegend: boolean
+  /** NDVI decision mode; defaults to current plant health when absent. */
+  analysisMode?: 'current-plant-health' | 'change-detection'
 }
 
 export type CropAlertFieldInput = {
@@ -110,6 +116,8 @@ export type CropAlertIndexSnapshot = {
   ndwi: number
   ndmi: number
   evi: number
+  /** SAVI when measured; CHAS estimates it from NDVI when absent. */
+  savi?: number | null
   /** Red Edge Chlorophyll Index (RE/NIR − 1) for CHAS. */
   ciRe?: number
   /** NDRE = (NIR−RE)/(NIR+RE) — derives CI_RE when ciRe absent. */
@@ -144,7 +152,7 @@ export type CropAlertFieldResult = {
   usedDate: string | null
   /** Calendar date when analysis was executed. */
   analysisDate: string
-  dataSource: typeof CROP_ALERT_DATA_SOURCE | 'Unavailable'
+  dataSource: CropAlertDataSourceLabel
   dataQuality: CropAlertDataQuality
   dataWarning: string | null
   /** Why a fallback scene was used (null when requested date matched). */
@@ -183,7 +191,7 @@ export type CropAlertFieldResult = {
     evi?: { min: number; max: number; mean: number }
     ciRe?: { min: number; max: number; mean: number }
   }
-}
+} & Partial<DominantNdviSummary>
 
 export const DEFAULT_CROP_ALERT_ENGINE_SETTINGS: CropAlertEngineSettings = {
   schemaVersion: CROP_ALERT_ENGINE_SETTINGS_SCHEMA_VERSION,
@@ -219,6 +227,7 @@ export const CROP_ALERT_STATUS_COLORS: Record<CropAlertStatus, string> = {
   'harvest-completed': '#9e9e9e',
   'no-vegetation': '#d32f2f',
   'bare-soil': '#d32f2f',
+  'no-crop-activity': '#90a4ae',
 }
 
 export const CROP_ALERT_STATUS_LABELS: Record<CropAlertStatus, string> = {
@@ -232,6 +241,7 @@ export const CROP_ALERT_STATUS_LABELS: Record<CropAlertStatus, string> = {
   'harvest-completed': 'Post-Harvest',
   'no-vegetation': 'Critical',
   'bare-soil': 'Critical',
+  'no-crop-activity': 'No Crop Activity',
 }
 
 export {
@@ -272,7 +282,6 @@ import {
   chasInputsFromDaily,
   computeDeltaChas,
   resolveDchasMetrics,
-  resolveDchasOrbPresentation,
   type DchasOrbPresentation,
   type DchasRiskTier,
 } from './siCropAlertDchasBeacon'
@@ -309,6 +318,7 @@ export const CROP_ALERT_STATUS_ICONS: Record<CropAlertStatus, string> = {
   'harvest-completed': 'fa-circle-check',
   'no-vegetation': 'fa-circle',
   'bare-soil': 'fa-mountain-sun',
+  'no-crop-activity': 'fa-mound',
 }
 
 export function loadCropAlertEngineSettings(options?: { engineKey?: string }): CropAlertEngineSettings {
@@ -836,7 +846,7 @@ export function evaluateCropAlertField(
 }
 
 export function extractCropAlertFieldsFromMask(
-  mask: { features?: unknown[] } | null | undefined,
+  mask: { type?: string; features?: unknown[] } | null | undefined,
 ): CropAlertFieldInput[] {
   if (!mask?.features?.length) return []
   const out: CropAlertFieldInput[] = []

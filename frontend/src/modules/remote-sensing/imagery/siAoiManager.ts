@@ -79,7 +79,7 @@ export function siActiveAoiToAnalysisFeature(
   const fc = aoi.geometry
   if (!hasClipFeatures(fc)) return null
   const multiCoords: number[][][][] = []
-  for (const f of fc.features) {
+  for (const f of fc.features as ReadonlyArray<{ geometry?: GeoJSON.Geometry | null } | null | undefined>) {
     const g = f?.geometry
     if (!g) continue
     if (g.type === 'Polygon') multiCoords.push(g.coordinates as number[][][])

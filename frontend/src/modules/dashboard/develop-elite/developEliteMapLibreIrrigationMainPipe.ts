@@ -10,7 +10,7 @@ import {
   resolveArcgisRendererSymbol,
 } from '@/modules/gis/layers/arcgisDrawingInfoLeaflet'
 import { sanitizeMapboxPaint } from '@/modules/gis/layers/mapboxPaintSanitize'
-import type { GeoJSONSource, Map as MaplibreMap } from 'maplibre-gl'
+import type { GeoJSONSource, Map as MaplibreMap, SymbolLayerSpecification } from 'maplibre-gl'
 import {
   collectIrrigationMainPipeArrowPlacements,
   irrigationMainPipeArrowSpacingMeters,
@@ -183,7 +183,7 @@ export function syncDevelopEliteMainPipeArrowLayer(
     map.addSource(SRC_ARROWS, { type: 'geojson', data: arrowGeoJson })
   }
 
-  const layout = {
+  const layout: NonNullable<SymbolLayerSpecification['layout']> = {
     visibility: visible ? 'visible' : 'none',
     'text-field': '▶',
     'text-size': ['get', 'size'],
@@ -194,7 +194,7 @@ export function syncDevelopEliteMainPipeArrowLayer(
     'text-ignore-placement': true,
     'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
   }
-  const paint = {
+  const paint: NonNullable<SymbolLayerSpecification['paint']> = {
     'text-color': ['get', 'color'],
     'text-opacity': 0.95,
   }

@@ -89,7 +89,7 @@ export function matchDevelopEliteMapSourceFeature(
     })
     if (match) return match
   }
-  const key = computeStableGisFeatureKey(hit)
+  const key = computeStableGisFeatureKey(hit, -1)
   if (key) {
     const idx = findFeatureIndexByStableKey(collection.features, key)
     if (idx >= 0) return collection.features[idx] ?? null

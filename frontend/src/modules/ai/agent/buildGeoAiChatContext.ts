@@ -15,9 +15,9 @@ export type BuildGeoAiChatContextInput = {
 
 function extractGeometry(raw: GeoAiLiveMapState['aoiGeometry']): GeoJSON.Geometry | null {
   if (!raw) return null
-  const g = raw as GeoJSON.Geometry & { geometry?: GeoJSON.Geometry }
+  const g = raw as { type?: string; geometry?: GeoJSON.Geometry }
   if (g.type === 'Feature' && g.geometry) return g.geometry
-  if (g.type && g.type !== 'Feature') return g as GeoJSON.Geometry
+  if (g.type && g.type !== 'Feature') return g as unknown as GeoJSON.Geometry
   return null
 }
 
@@ -38,7 +38,7 @@ export function buildGeoAiChatContext(input: BuildGeoAiChatContextInput): GeoAiC
     .filter(l => l.visible !== false)
     .slice(0, 24)
     .map(l => ({
-      id: l.clientLayerId || l.name,
+      id: ('clientLayerId' in l ? l.clientLayerId : undefined) || l.name,
       name: l.name,
       type: l.source || 'vector',
       visible: l.visible !== false,

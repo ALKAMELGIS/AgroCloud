@@ -1,5 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Divider,
+  LinearProgress,
+  Link,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material'
+import GitHubIcon from '@mui/icons-material/GitHub'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import RefreshIcon from '@mui/icons-material/Refresh'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import { PageContainer, PageHeader, SectionHeader, StatePanel } from '@/components'
 import { connectRealtime } from '../api/realtime'
 
 type Repo = {
@@ -33,6 +53,50 @@ type GhEvent = {
   action?: string
   repo?: string
   sender?: string
+}
+
+const errorMessage = (e: unknown, fallback: string) =>
+  e instanceof Error && typeof e.message === 'string' && e.message ? e.message : fallback
+
+const REQUIRED_ENV = ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'APP_ORIGIN', 'GITHUB_OAUTH_REDIRECT_URL']
+
+function ListRow({ href, title, state }: { href: string; title: string; state: string }) {
+  return (
+    <Link
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      underline="none"
+      color="inherit"
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 1.5,
+        minHeight: 44,
+        px: 1.5,
+        borderRadius: 2,
+        '&:hover': { bgcolor: 'action.hover' },
+        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+      }}
+    >
+      <Typography variant="body2" fontWeight={600} noWrap sx={{ minWidth: 0 }}>
+        {title}
+      </Typography>
+      <Chip size="small" variant="outlined" label={state} sx={{ flexShrink: 0 }} />
+    </Link>
+  )
+}
+
+function PanelCard({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+  return (
+    <Card variant="outlined" sx={{ height: '100%' }}>
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        <SectionHeader title={title} actions={action} />
+        {children}
+      </CardContent>
+    </Card>
+  )
 }
 
 const getWsUrl = () => {
@@ -111,8 +175,8 @@ export default function GitHubIntegration() {
       try {
         await loadStatus()
         setError(null)
-      } catch (e: any) {
-        setError(typeof e?.message === 'string' ? e.message : 'Failed to load status.')
+      } catch (e: unknown) {
+        setError(errorMessage(e, 'Failed to load status.'))
       }
     })()
   }, [location.search])
@@ -124,8 +188,8 @@ export default function GitHubIntegration() {
       try {
         await Promise.all([loadRepos(), loadEvents()])
         setError(null)
-      } catch (e: any) {
-        setError(typeof e?.message === 'string' ? e.message : 'Failed to load GitHub data.')
+      } catch (e: unknown) {
+        setError(errorMessage(e, 'Failed to load GitHub data.'))
       } finally {
         setBusy(false)
       }
@@ -140,8 +204,8 @@ export default function GitHubIntegration() {
       try {
         await loadRepoDetails(selectedRepoFullName)
         setError(null)
-      } catch (e: any) {
-        setError(typeof e?.message === 'string' ? e.message : 'Failed to load repo details.')
+      } catch (e: unknown) {
+        setError(errorMessage(e, 'Failed to load repo details.'))
       } finally {
         setBusy(false)
       }
@@ -151,7 +215,7 @@ export default function GitHubIntegration() {
   useEffect(() => {
     const disconnect = connectRealtime(getWsUrl(), (u) => {
       if (u?.topic !== 'github') return
-      const ev = u.payload as any
+      const ev = u.payload as GhEvent | null | undefined
       if (!ev || typeof ev !== 'object') return
       setEvents(prev => [{ ...ev }, ...prev].slice(0, 50))
       if (ev.repo && typeof ev.repo === 'string' && selectedRepoFullName && ev.repo === selectedRepoFullName) {
@@ -202,162 +266,189 @@ export default function GitHubIntegration() {
       setNewIssueBody('')
       await loadRepoDetails(selectedRepoFullName)
       setError(null)
-    } catch (e: any) {
-      setError(typeof e?.message === 'string' ? e.message : 'Failed to create issue.')
+    } catch (e: unknown) {
+      setError(errorMessage(e, 'Failed to create issue.'))
     } finally {
       setBusy(false)
     }
   }
 
+  const issuesHref = selectedRepo ? selectedRepo.html_url + '/issues' : ''
+  const pullsHref = selectedRepo ? selectedRepo.html_url + '/pulls' : ''
+
   return (
-    <div className="page">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'grid', gap: 4 }}>
-          <div style={{ fontSize: 16, fontWeight: 900 }}>GitHub Integration</div>
-          <div style={{ color: 'var(--ds-color-text-muted)', fontSize: 13 }}>
-            OAuth connection, repos, issues, pull requests, and real-time sync via webhooks.
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button type="button" className="ds-btn ds-btn-ghost" onClick={() => navigate('/', { state: { openGroup: 'admin' } })}>
-            Back
-          </button>
-          {connected ? (
-            <button type="button" className="ds-btn ds-btn-danger" onClick={() => void onDisconnect()} disabled={busy}>
-              Disconnect
-            </button>
-          ) : (
-            <button type="button" className="ds-btn ds-btn-primary" onClick={onConnect} disabled={busy}>
-              Connect GitHub
-            </button>
-          )}
-        </div>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="GitHub Integration"
+        description="OAuth connection, repos, issues, pull requests, and real-time sync via webhooks."
+        icon={<GitHubIcon />}
+        actions={
+          <>
+            <Button variant="text" startIcon={<ArrowBackIcon sx={{ '[dir="rtl"] &': { transform: 'scaleX(-1)' } }} />} onClick={() => navigate('/', { state: { openGroup: 'admin' } })}>
+              Back
+            </Button>
+            {connected ? (
+              <Button variant="outlined" color="error" onClick={() => void onDisconnect()} disabled={busy}>
+                Disconnect
+              </Button>
+            ) : (
+              <Button variant="contained" startIcon={<GitHubIcon />} onClick={onConnect} disabled={busy}>
+                Connect GitHub
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {error ? (
-        <div className="ds-card ds-card-pad" role="status" aria-live="polite" style={{ borderColor: 'rgba(220, 38, 38, 0.35)' }}>
-          <div style={{ fontWeight: 900, marginBottom: 6 }}>Error</div>
-          <div style={{ color: 'rgba(127, 29, 29, 1)' }}>{error}</div>
-        </div>
+        <Alert severity="error" role="status" aria-live="polite" onClose={() => setError(null)}>
+          {error}
+        </Alert>
       ) : null}
 
-      <div className="ds-card ds-card-pad" style={{ display: 'grid', gap: 12 }}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="ds-badge">{connected ? 'Connected' : 'Not connected'}</span>
-          {scope ? <span className="ds-badge">Scopes: {scope || '—'}</span> : null}
-        </div>
-
-        {connected ? (
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 800 }}>Repository</span>
-            <select
-              className="ds-input"
-              value={selectedRepoFullName}
-              onChange={e => setSelectedRepoFullName(e.target.value)}
-              disabled={busy || repos.length === 0}
-              aria-label="Select repository"
-            >
-              {repos.length === 0 ? <option value="">No repos</option> : null}
-              {repos.map(r => (
-                <option key={r.id} value={r.full_name}>
-                  {r.full_name}{r.private ? ' (private)' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <div style={{ color: 'var(--ds-color-text-muted)', fontSize: 13 }}>
-            Configure these server environment variables then click Connect: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, APP_ORIGIN, GITHUB_OAUTH_REDIRECT_URL.
-          </div>
-        )}
-      </div>
+      {connected ? (
+        <Card variant="outlined">
+          {busy ? <LinearProgress aria-label="Loading GitHub data" /> : null}
+          <CardContent>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'flex-start' }}>
+              <TextField
+                select
+                label="Repository"
+                value={selectedRepoFullName}
+                onChange={e => setSelectedRepoFullName(e.target.value)}
+                disabled={busy || repos.length === 0}
+                helperText="Issues, pull requests and events below follow this repository."
+                sx={{ flex: 1, minWidth: 0 }}
+                SelectProps={{ displayEmpty: true }}
+              >
+                {repos.length === 0 ? <MenuItem value="">No repos</MenuItem> : null}
+                {repos.map(r => (
+                  <MenuItem key={r.id} value={r.full_name}>
+                    {r.full_name}{r.private ? ' (private)' : ''}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ pt: { md: 1 } }}>
+                <Chip color="success" variant="outlined" label="Connected" />
+                {scope ? <Chip variant="outlined" label={`Scopes: ${scope || '—'}`} /> : null}
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : (
+        <StatePanel
+          tone="offline"
+          icon={<GitHubIcon />}
+          title="GitHub is not connected"
+          description={
+            <>
+              Configure these server environment variables, then click Connect GitHub:
+              <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 0.75, mt: 1.5 }}>
+                {REQUIRED_ENV.map(v => (
+                  <Box
+                    key={v}
+                    component="code"
+                    sx={{ fontFamily: 'monospace', fontSize: '0.8125rem', px: 1, py: 0.25, borderRadius: 1, bgcolor: 'action.hover', color: 'text.primary' }}
+                  >
+                    {v}
+                  </Box>
+                ))}
+              </Box>
+            </>
+          }
+          actionLabel="Connect GitHub"
+          onAction={onConnect}
+        />
+      )}
 
       {connected && selectedRepo ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
-          <div className="ds-card ds-card-pad" style={{ display: 'grid', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontWeight: 900 }}>Open Issues</div>
-              <a className="ds-btn ds-btn-ghost" href={selectedRepo.html_url + '/issues'} target="_blank" rel="noreferrer">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
+          <PanelCard
+            title="Open Issues"
+            action={
+              <Button size="small" endIcon={<OpenInNewIcon />} href={issuesHref} target="_blank" rel="noreferrer">
                 Open on GitHub
-              </a>
-            </div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {issues.length === 0 ? <div style={{ color: 'var(--ds-color-text-muted)', fontSize: 13 }}>No open issues.</div> : null}
+              </Button>
+            }
+          >
+            <Stack spacing={0.5}>
+              {issues.length === 0 ? <Typography variant="body2" color="text.secondary">No open issues.</Typography> : null}
               {issues.slice(0, 15).map(i => (
-                <a key={i.id} href={i.html_url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                    <div style={{ color: 'var(--ds-color-text)', fontWeight: 800, fontSize: 13, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      #{i.number} {i.title}
-                    </div>
-                    <span className="ds-badge">{i.state}</span>
-                  </div>
-                </a>
+                <ListRow key={i.id} href={i.html_url} title={`#${i.number} ${i.title}`} state={i.state} />
               ))}
-            </div>
-            <div className="ds-divider" />
-            <div style={{ fontWeight: 900 }}>Create Issue</div>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 800 }}>Title</span>
-              <input className="ds-input" value={newIssueTitle} onChange={e => setNewIssueTitle(e.target.value)} disabled={busy} />
-            </label>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 800 }}>Body</span>
-              <textarea className="ds-textarea" value={newIssueBody} onChange={e => setNewIssueBody(e.target.value)} disabled={busy} />
-            </label>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button type="button" className="ds-btn ds-btn-primary" onClick={() => void onCreateIssue()} disabled={busy}>
+            </Stack>
+            <Divider />
+            <Typography variant="subtitle2" component="h3">Create Issue</Typography>
+            <TextField
+              label="Title"
+              required
+              value={newIssueTitle}
+              onChange={e => setNewIssueTitle(e.target.value)}
+              disabled={busy}
+              fullWidth
+            />
+            <TextField
+              label="Body"
+              value={newIssueBody}
+              onChange={e => setNewIssueBody(e.target.value)}
+              disabled={busy}
+              fullWidth
+              multiline
+              minRows={3}
+              helperText="Markdown is supported."
+            />
+            <Stack direction="row" justifyContent="flex-end">
+              <Button variant="contained" onClick={() => void onCreateIssue()} disabled={busy}>
                 Create
-              </button>
-            </div>
-          </div>
+              </Button>
+            </Stack>
+          </PanelCard>
 
-          <div className="ds-card ds-card-pad" style={{ display: 'grid', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontWeight: 900 }}>Open Pull Requests</div>
-              <a className="ds-btn ds-btn-ghost" href={selectedRepo.html_url + '/pulls'} target="_blank" rel="noreferrer">
+          <PanelCard
+            title="Open Pull Requests"
+            action={
+              <Button size="small" endIcon={<OpenInNewIcon />} href={pullsHref} target="_blank" rel="noreferrer">
                 Open on GitHub
-              </a>
-            </div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {pulls.length === 0 ? <div style={{ color: 'var(--ds-color-text-muted)', fontSize: 13 }}>No open pull requests.</div> : null}
+              </Button>
+            }
+          >
+            <Stack spacing={0.5}>
+              {pulls.length === 0 ? <Typography variant="body2" color="text.secondary">No open pull requests.</Typography> : null}
               {pulls.slice(0, 15).map(p => (
-                <a key={p.id} href={p.html_url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                    <div style={{ color: 'var(--ds-color-text)', fontWeight: 800, fontSize: 13, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      #{p.number} {p.title}
-                    </div>
-                    <span className="ds-badge">{p.state}</span>
-                  </div>
-                </a>
+                <ListRow key={p.id} href={p.html_url} title={`#${p.number} ${p.title}`} state={p.state} />
               ))}
-            </div>
-          </div>
+            </Stack>
+          </PanelCard>
 
-          <div className="ds-card ds-card-pad" style={{ display: 'grid', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ fontWeight: 900 }}>Real-time Events</div>
-              <button type="button" className="ds-btn ds-btn-ghost" onClick={() => void loadEvents()} disabled={busy}>
+          <PanelCard
+            title="Real-time Events"
+            action={
+              <Button size="small" startIcon={<RefreshIcon />} onClick={() => void loadEvents()} disabled={busy}>
                 Refresh
-              </button>
-            </div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {events.length === 0 ? <div style={{ color: 'var(--ds-color-text-muted)', fontSize: 13 }}>No events received yet.</div> : null}
+              </Button>
+            }
+          >
+            <Stack spacing={1}>
+              {events.length === 0 ? <Typography variant="body2" color="text.secondary">No events received yet.</Typography> : null}
               {events.slice(0, 20).map(e => (
-                <div key={e.id} style={{ border: '1px solid var(--ds-color-border)', borderRadius: 12, padding: 10, background: 'var(--ds-color-surface)' }}>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontWeight: 900, fontSize: 13 }}>{e.event}{e.action ? ` • ${e.action}` : ''}</div>
-                    <span className="ds-badge">{new Date(e.at).toLocaleString()}</span>
-                  </div>
-                  <div style={{ marginTop: 6, color: 'var(--ds-color-text-muted)', fontSize: 12 }}>
+                <Box key={e.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, p: 1.25, bgcolor: 'background.default' }}>
+                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                    <Typography variant="body2" fontWeight={700} sx={{ minWidth: 0 }} noWrap>
+                      {e.event}{e.action ? ` • ${e.action}` : ''}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                      {new Date(e.at).toLocaleString()}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                     {(e.repo || '—') + (e.sender ? ` • ${e.sender}` : '')}
-                  </div>
-                </div>
+                  </Typography>
+                </Box>
               ))}
-            </div>
-          </div>
-        </div>
+            </Stack>
+          </PanelCard>
+        </Box>
       ) : null}
-    </div>
+    </PageContainer>
   )
 }
-

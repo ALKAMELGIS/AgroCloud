@@ -1,3 +1,4 @@
+import type { DevelopEliteFormattedTableRow } from './developEliteMapCropTablePopup'
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type ArcGisTableRow, type DevelopEliteLayerMeta } from './developEliteArcgisFetch'
 import { ensureDevelopEliteArcgisSnapshot } from './developEliteArcgisDataLoad'
@@ -847,7 +848,7 @@ export function useDevelopEliteDashboardData() {
     )
     return sorted.slice(0, 200).map((row, i) => {
       const dedupeKey = developEliteCropTableRowDedupeKey(row, joinField)
-      const out: Record<string, string> = {
+      const out: DevelopEliteFormattedTableRow = {
         _rowId: String(row.OBJECTID ?? row.objectid ?? dedupeKey),
       }
       const rawFc = readArcGisField(row, joinField)

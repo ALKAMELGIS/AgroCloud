@@ -730,10 +730,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
         onMapSwipeOpenChange?.(!mapSwipeOpen);
         return;
       }
-      if (isMapVariant && id === 'go-to-xy') {
-        onGoToXyOpenChange?.(!goToXyOpen);
-        return;
-      }
       if (isMapVariant && id === 'crop-classification') {
         onCropAiPanelOpenChange?.(!cropAiPanelOpen);
         return;

@@ -38,7 +38,8 @@ export function SiMapDockAwareMarker({
   const lastShiftRef = useRef(0);
 
   useEffect(() => {
-    const map = mapRef?.current?.getMap?.() ?? mapRef?.getMap?.();
+    // useMap() returns a MapCollection ({ current, [id] }), never a MapRef itself.
+    const map = mapRef?.current?.getMap?.();
     if (!map) return;
 
     const syncDockReserve = () => {

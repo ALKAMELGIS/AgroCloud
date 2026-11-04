@@ -7,17 +7,16 @@
   --pf-accent: var(--ds-color-primary, #047857);
   --pf-accent-glow: color-mix(in srgb, var(--pf-accent) 35%, transparent);
   --pf-surface: color-mix(in srgb, var(--ds-color-surface, #fff) 92%, transparent);
-  --pf-text: var(--ds-color-text, #0f172a);
-  --pf-muted: var(--ds-color-text-muted, #64748b);
-  --pf-border: var(--ds-color-border, rgba(148, 163, 184, 0.35));
-  --pf-orange: #ea580c;
-  --pf-orange-hover: #c2410c;
+  --pf-text: var(--ds-color-text);
+  --pf-muted: var(--ds-color-text-muted);
+  --pf-border: var(--ds-color-border);
+  --pf-on-accent: var(--ds-color-on-primary);
   --pf-radius-lg: 22px;
   --pf-radius-xl: 28px;
   --pf-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --pf-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05), 0 12px 26px rgba(15, 23, 42, 0.08);
-  --pf-shadow-md: 0 8px 20px rgba(15, 23, 42, 0.07), 0 26px 60px rgba(15, 23, 42, 0.12);
-  --pf-shadow-lg: 0 34px 86px rgba(15, 23, 42, 0.18);
+  --pf-shadow-sm: var(--ds-shadow-sm);
+  --pf-shadow-md: var(--ds-shadow-md);
+  --pf-shadow-lg: var(--ds-shadow-lg);
 
   min-height: calc(100dvh - 100px);
   margin: 0;
@@ -25,17 +24,11 @@
   box-sizing: border-box;
 
   /* Fit layout: readable gutters; light theme uses a clean white wash */
-  background:
-    radial-gradient(1200px 420px at 15% -8%, rgba(16, 185, 129, 0.13), transparent 65%),
-    radial-gradient(1000px 360px at 92% -6%, rgba(59, 130, 246, 0.13), transparent 68%),
-    #ffffff;
+  background: var(--ds-color-bg);
 }
 
 html[data-theme='dark'] .profile-page-v2 {
-  background:
-    radial-gradient(1200px 420px at 15% -8%, rgba(16, 185, 129, 0.16), transparent 65%),
-    radial-gradient(1000px 360px at 92% -6%, rgba(99, 102, 241, 0.18), transparent 68%),
-    var(--ds-color-bg, #0b1220);
+  background: var(--ds-color-bg);
 }
 
 .profile-page-v2--theme-light {
@@ -43,9 +36,10 @@ html[data-theme='dark'] .profile-page-v2 {
 }
 
 .profile-page-v2--theme-dark {
-  --pf-surface: rgba(15, 23, 42, 0.58);
-  --pf-text: #e2e8f0;
-  --pf-muted: #94a3b8;
+  /* Per-profile dark preference (independent of app theme): AgroCloud dark palette values. */
+  --pf-surface: color-mix(in srgb, #121b17 92%, transparent);
+  --pf-text: #e6ede9;
+  --pf-muted: #a9b8b0;
 }
 
 .profile-page-v2-inner {
@@ -103,14 +97,14 @@ html[data-theme='dark'] .profile-page-v2 {
   font-weight: 800;
   letter-spacing: -0.045em;
   font-feature-settings: 'ss01' on;
-  background: linear-gradient(135deg, var(--pf-accent) 0%, color-mix(in srgb, var(--pf-accent) 65%, #0f172a) 100%);
+  background: linear-gradient(135deg, var(--pf-accent) 0%, color-mix(in srgb, var(--pf-accent) 65%, var(--ds-color-text)) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 html[data-theme='dark'] .profile-page-title {
-  background: linear-gradient(135deg, #4ade80 0%, #22c55e 45%, #86efac 100%);
+  background: linear-gradient(135deg, var(--ds-color-primary-hover) 0%, var(--ds-color-primary) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -198,7 +192,7 @@ html[data-theme='dark'] .profile-card {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--ds-shadow-sm);
   transition:
     transform 0.2s var(--pf-ease),
     background 0.2s ease,
@@ -227,24 +221,24 @@ html[data-theme='dark'] .profile-card {
 
 .profile-hero-cover-btn:focus-visible {
   outline: none;
-  border-color: color-mix(in srgb, #166534 55%, var(--pf-border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, #166534 35%, transparent);
+  border-color: var(--ds-color-primary);
+  box-shadow: 0 0 0 3px var(--ds-focus-ring);
 }
 
 .profile-hero-cover-btn--ghost {
-  border-color: rgba(148, 163, 184, 0.45);
-  background: rgba(248, 250, 252, 0.95);
+  border-color: var(--ds-color-border-strong);
+  background: var(--ds-color-surface-2);
 }
 
 .profile-hero-cover-btn--apply {
   border-color: color-mix(in srgb, var(--pf-accent) 45%, var(--pf-border));
   background: color-mix(in srgb, var(--pf-accent) 16%, var(--ds-color-surface, #fff));
-  color: color-mix(in srgb, var(--pf-accent) 72%, #fff);
+  color: var(--pf-accent);
 }
 
 html[data-theme='dark'] .profile-hero-cover-btn--ghost {
-  background: rgba(15, 23, 42, 0.75);
-  border-color: rgba(71, 85, 105, 0.6);
+  background: var(--ds-color-surface-2);
+  border-color: var(--ds-color-border-strong);
 }
 
 .profile-card--hero-cover .profile-hero-cover-btn {
@@ -269,13 +263,13 @@ html[data-theme='dark'] .profile-hero-cover-btn--ghost {
 }
 
 .profile-card--hero-cover .profile-hero-cover-btn--ghost {
-  border-color: rgba(15, 23, 42, 0.45);
-  background: rgba(15, 23, 42, 0.45);
-  color: #f8fafc;
+  border-color: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
 }
 
 .profile-card--hero-cover .profile-hero-cover-btn--ghost:hover {
-  background: rgba(15, 23, 42, 0.62);
+  background: rgba(0, 0, 0, 0.56);
 }
 
 .profile-hero-cover-body {
@@ -295,7 +289,7 @@ html[data-theme='dark'] .profile-hero-cover-btn--ghost {
   inset: auto 14px 14px 14px;
   z-index: 3;
   border: 1px dashed rgba(255, 255, 255, 0.6);
-  background: rgba(15, 23, 42, 0.38);
+  background: rgba(0, 0, 0, 0.4);
   color: #fff;
   border-radius: 12px;
   padding: 10px 12px;
@@ -364,7 +358,7 @@ html[data-theme='dark'] .profile-hero-cover-btn--ghost {
   height: 1.1em;
   margin-inline-end: 10px;
   border-radius: 4px;
-  background: linear-gradient(180deg, var(--pf-accent), color-mix(in srgb, var(--pf-accent) 40%, #22d3ee));
+  background: linear-gradient(180deg, var(--pf-accent), color-mix(in srgb, var(--pf-accent) 40%, var(--ds-color-secondary)));
   vertical-align: -0.15em;
 }
 
@@ -376,7 +370,7 @@ html[data-theme='dark'] .profile-hero-cover-btn--ghost {
 }
 
 html[data-theme='dark'] .profile-card--mgmt {
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--ds-color-surface-2);
 }
 
 .profile-card-head {
@@ -426,7 +420,7 @@ html[data-theme='dark'] .profile-card--mgmt {
   transform: scale(1.02);
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--pf-accent) 38%, transparent),
-    0 12px 32px rgba(15, 23, 42, 0.18);
+    var(--ds-shadow-md);
 }
 
 html[data-theme='dark'] .profile-avatar-wrap--drop-active .profile-avatar-ring {
@@ -438,15 +432,14 @@ html[data-theme='dark'] .profile-avatar-wrap--drop-active .profile-avatar-ring {
 .profile-avatar-ring {
   padding: 3px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--ds-color-surface);
   box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.08),
-    0 1px 2px rgba(15, 23, 42, 0.06),
-    0 12px 28px rgba(15, 23, 42, 0.12);
+    0 0 0 1px var(--ds-color-border),
+    var(--ds-shadow-md);
 }
 
 html[data-theme='dark'] .profile-avatar-ring {
-  background: #1e293b;
+  background: var(--ds-color-surface-raised);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.1),
     0 2px 8px rgba(0, 0, 0, 0.35),
@@ -495,18 +488,17 @@ html[data-theme='dark'] .profile-avatar-img {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 2px solid #fff;
-  background: #f1f5f9;
-  color: #475569;
+  border: 2px solid var(--ds-color-surface);
+  background: var(--ds-color-surface-2);
+  color: var(--ds-color-text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   font-size: 14px;
   box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.06),
-    0 2px 4px rgba(15, 23, 42, 0.08),
-    0 8px 20px rgba(15, 23, 42, 0.12);
+    0 0 0 1px var(--ds-color-border),
+    var(--ds-shadow-md);
   transition:
     transform 0.2s var(--pf-ease),
     box-shadow 0.2s var(--pf-ease),
@@ -515,9 +507,9 @@ html[data-theme='dark'] .profile-avatar-img {
 }
 
 html[data-theme='dark'] .profile-avatar-camera {
-  background: #334155;
-  color: #e2e8f0;
-  border-color: #1e293b;
+  background: var(--ds-color-surface-raised);
+  color: var(--ds-color-text);
+  border-color: var(--ds-color-surface);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.08),
     0 4px 14px rgba(0, 0, 0, 0.35);
@@ -525,17 +517,16 @@ html[data-theme='dark'] .profile-avatar-camera {
 
 .profile-avatar-camera:hover {
   transform: scale(1.04);
-  background: #e2e8f0;
-  color: #0f172a;
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-primary);
   box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.08),
-    0 4px 10px rgba(15, 23, 42, 0.12),
-    0 10px 24px rgba(15, 23, 42, 0.14);
+    0 0 0 1px var(--ds-color-border-strong),
+    var(--ds-shadow-md);
 }
 
 html[data-theme='dark'] .profile-avatar-camera:hover {
-  background: #475569;
-  color: #f8fafc;
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-primary-hover);
 }
 
 .profile-avatar-camera:active {
@@ -545,9 +536,8 @@ html[data-theme='dark'] .profile-avatar-camera:hover {
 .profile-avatar-camera:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--pf-accent) 45%, transparent),
-    0 2px 4px rgba(15, 23, 42, 0.08),
-    0 8px 20px rgba(15, 23, 42, 0.12);
+    0 0 0 3px var(--ds-focus-ring),
+    var(--ds-shadow-md);
 }
 
 .profile-avatar-camera i {
@@ -623,7 +613,7 @@ html[data-theme='dark'] .profile-avatar-camera:hover {
   border: 1px solid var(--pf-border);
   background: color-mix(in srgb, var(--ds-color-surface, #fff) 88%, transparent);
   color: var(--pf-text);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--ds-shadow-sm);
   transition:
     transform 0.22s var(--pf-ease),
     box-shadow 0.22s var(--pf-ease),
@@ -649,14 +639,14 @@ html[data-theme='dark'] .profile-avatar-camera:hover {
 
 .profile-link-btn-primary {
   border: none;
-  color: #fff;
+  color: var(--pf-on-accent);
   background: linear-gradient(135deg, color-mix(in srgb, var(--pf-accent) 92%, #000), var(--pf-accent));
   box-shadow: 0 10px 28px color-mix(in srgb, var(--pf-accent) 38%, transparent);
 }
 
 .profile-link-btn-primary:hover,
 .profile-link-btn-primary:focus-visible {
-  color: #fff;
+  color: var(--pf-on-accent);
   text-decoration: none;
   /* Avoid filter() — keeps label + FA icons reliably painted vs global link styles */
   background: linear-gradient(
@@ -685,7 +675,7 @@ html[data-theme='dark'] .profile-link-btn:focus-visible {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--ds-shadow-sm);
   transition:
     transform 0.2s var(--pf-ease),
     box-shadow 0.2s ease,
@@ -699,7 +689,7 @@ html[data-theme='dark'] .profile-link-btn:focus-visible {
   color: var(--pf-text);
   border-color: color-mix(in srgb, var(--pf-accent) 38%, var(--pf-border));
   background: var(--ds-color-surface);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--ds-shadow-md);
 }
 
 .profile-btn-edit-secondary {
@@ -750,7 +740,7 @@ html[data-theme='dark'] .profile-link-btn:focus-visible {
 .profile-field-cell {
   padding: 14px 14px;
   border-radius: 16px;
-  background: color-mix(in srgb, var(--ds-color-surface-2, #f8fafc) 80%, transparent);
+  background: color-mix(in srgb, var(--ds-color-surface-2) 80%, transparent);
   border: 1px solid color-mix(in srgb, var(--pf-border) 65%, transparent);
   transition:
     border-color 0.22s ease,
@@ -761,13 +751,13 @@ html[data-theme='dark'] .profile-link-btn:focus-visible {
 
 .profile-field-cell:hover {
   border-color: color-mix(in srgb, var(--pf-accent) 22%, var(--pf-border));
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-  background: color-mix(in srgb, var(--pf-accent) 6%, var(--ds-color-surface-2, #f8fafc));
+  box-shadow: var(--ds-shadow-md);
+  background: color-mix(in srgb, var(--pf-accent) 6%, var(--ds-color-surface-2));
   transform: translateY(-1px);
 }
 
 html[data-theme='dark'] .profile-field-cell {
-  background: rgba(30, 41, 59, 0.35);
+  background: var(--ds-color-surface-2);
 }
 
 .profile-field-label {
@@ -870,7 +860,7 @@ html[data-theme='dark'] .profile-field-cell {
   border-radius: 999px;
   border: none;
   background: linear-gradient(135deg, var(--pf-accent), color-mix(in srgb, var(--pf-accent) 75%, #000));
-  color: #fff;
+  color: var(--pf-on-accent);
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
@@ -940,7 +930,7 @@ html[data-theme='dark'] .profile-field-cell {
 
 .profile-page-action-btn--primary {
   border: none;
-  color: #fff;
+  color: var(--pf-on-accent);
   background: linear-gradient(135deg, color-mix(in srgb, var(--pf-accent) 96%, #000), var(--pf-accent));
   box-shadow: 0 12px 26px color-mix(in srgb, var(--pf-accent) 36%, transparent);
 }
@@ -1052,7 +1042,7 @@ html[data-theme='dark'] .profile-field-cell {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   border: 1px solid transparent;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--ds-shadow-sm);
 }
 
 /* Premium finishing touches */
@@ -1088,25 +1078,24 @@ html[data-theme='dark'] .profile-card::before {
 
 .profile-pill--active {
   background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(34, 197, 94, 0.1));
-  color: #15803d;
-  border-color: rgba(34, 197, 94, 0.35);
+  color: var(--ds-color-success);
+  border-color: color-mix(in srgb, var(--ds-color-success) 35%, transparent);
 }
 
 html[data-theme='dark'] .profile-pill--active {
-  color: #86efac;
-  border-color: rgba(34, 197, 94, 0.45);
+  border-color: color-mix(in srgb, var(--ds-color-success) 45%, transparent);
 }
 
 .profile-pill--danger {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.08));
-  color: #b91c1c;
-  border-color: rgba(239, 68, 68, 0.35);
+  background: color-mix(in srgb, var(--ds-color-danger) 12%, transparent);
+  color: var(--ds-color-danger);
+  border-color: color-mix(in srgb, var(--ds-color-danger) 35%, transparent);
 }
 
 .profile-pill--info {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(59, 130, 246, 0.07));
-  color: #1d4ed8;
-  border-color: rgba(59, 130, 246, 0.35);
+  background: color-mix(in srgb, var(--ds-color-info) 12%, transparent);
+  color: var(--ds-color-info);
+  border-color: color-mix(in srgb, var(--ds-color-info) 35%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1122,5 +1111,23 @@ html[data-theme='dark'] .profile-pill--active {
   .profile-card--hero:hover,
   .profile-card--hero.profile-hero-row:hover {
     transform: none;
+  }
+}
+
+/* —— Page header (shared MUI PageHeader sits in .profile-page-header) —— */
+.profile-page-header:empty,
+.profile-page-header-top:empty {
+  display: none;
+}
+
+/* Visible keyboard focus for all profile controls */
+.profile-page-v2 :is(button, input, a):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ds-focus-ring);
+}
+
+@media (max-width: 599.98px) {
+  .profile-page-v2 :is(.profile-btn-save, .profile-btn-cancel, .profile-btn-edit-primary, .profile-btn-edit-secondary, .profile-page-action-btn, .profile-theme-chip) {
+    min-height: 44px;
   }
 }

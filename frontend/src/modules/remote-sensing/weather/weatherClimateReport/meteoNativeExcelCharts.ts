@@ -43,7 +43,7 @@ export type MeteoNativeChartSpec = {
   /** Doughnut hole size 1–90 (default 50). */
   holeSize?: number
   /** Per-slice sRGB colors for pie/doughnut charts (without alpha prefix). */
-  sliceColors?: string[]
+  sliceColors?: readonly string[]
 }
 
 function escXml(s: string): string {
@@ -63,7 +63,7 @@ function seriesSpPr(color?: string, bar = false): string {
   return `<c:spPr><a:solidFill><a:srgbClr val="${hex}"/></a:solidFill><a:ln w="0"><a:noFill/></a:ln></c:spPr>`
 }
 
-function pieSliceOverrides(colors: string[] | undefined): string {
+function pieSliceOverrides(colors: readonly string[] | undefined): string {
   if (!colors?.length) return ''
   return colors
     .map(

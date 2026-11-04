@@ -344,7 +344,8 @@ export function SiImportedCustomLayersOverlay({ layers, suppressFillOpacityLayer
             paint.line = { ...paint.line, 'line-opacity': 1 }
           }
         }
-        const visibility = layer.visible === false ? 'none' : 'visible'
+        // Hidden layers return early above, so every rendered layer is visible.
+        const visibility = 'visible'
         const geometryKind = resolveOverlayGeometryKind(layer)
         const paintCircles = shouldPaintImportedLayerCircles(geometryKind)
 

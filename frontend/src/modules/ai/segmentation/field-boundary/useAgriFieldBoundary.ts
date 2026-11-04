@@ -255,6 +255,11 @@ async function loadFieldImageFile(file: File): Promise<FieldUploadedImage> {
   return { name: file.name, dataUrl }
 }
 
+/** `coordinates` of any non-collection geometry (GeometryCollection → undefined). */
+function geometryCoords(g: GeoJSON.Geometry): unknown {
+  return g.type === 'GeometryCollection' ? undefined : g.coordinates
+}
+
 function walkCoords(c: unknown, out: number[][]) {
   if (!c) return
   if (typeof (c as number[])[0] === 'number' && typeof (c as number[])[1] === 'number') {
@@ -270,10 +275,10 @@ export function bboxOfGeometry(
   const coords: number[][] = []
   if (geom.type === 'FeatureCollection') {
     for (const f of geom.features) {
-      if (f?.geometry) walkCoords((f.geometry as GeoJSON.Geometry).coordinates, coords)
+      if (f?.geometry) walkCoords(geometryCoords(f.geometry), coords)
     }
   } else {
-    walkCoords(geom.coordinates, coords)
+    walkCoords(geometryCoords(geom), coords)
   }
   if (!coords.length) return null
   let w = Infinity

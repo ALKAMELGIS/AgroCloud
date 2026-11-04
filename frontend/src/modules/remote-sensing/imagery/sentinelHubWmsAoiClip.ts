@@ -466,7 +466,7 @@ export function getDrawnGeometry(geo: unknown): DrawnAoiGeometry | null {
     features?: Array<{ geometry?: DrawnAoiGeometry }>;
   };
   if (g.type === 'Feature' && g.geometry) {
-    const fromFeature = drawnAoiFromFeature(g as { geometry: g.geometry; properties?: unknown });
+    const fromFeature = drawnAoiFromFeature(g);
     if (fromFeature) return fromFeature;
     return getDrawnGeometry(g.geometry);
   }

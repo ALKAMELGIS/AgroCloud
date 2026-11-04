@@ -586,10 +586,10 @@ html:not([data-theme]) .agri-header .header-left .logo-text {
   }
 
   .header-brand-lockup {
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 2px;
-    padding: 2px 0;
+    gap: 8px;
+    padding: 0;
   }
 
   .header-brand-lockup .logo-icon .logo-icon__mark,
@@ -602,11 +602,11 @@ html:not([data-theme]) .agri-header .header-left .logo-text {
   .header-brand-lockup .logo-text {
     display: block;
     font-family: 'Sora', var(--header-logo-font-family, var(--ds-font-sans));
-    font-size: 10px;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-    line-height: 1.15;
-    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-align: start;
     white-space: nowrap;
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
@@ -638,8 +638,8 @@ html:not([data-theme]) .agri-header .header-left .logo-text {
   }
 
   .header-brand-lockup .logo-text {
-    font-size: 9px;
-    letter-spacing: 0.07em;
+    font-size: 13px;
+    letter-spacing: 0;
   }
 
   .header-brand-lockup .logo-icon .logo-icon__mark,

@@ -214,7 +214,7 @@ async function fetchCloudRgbRgba(
   width: number,
   height: number,
   signal?: AbortSignal,
-): Promise<Uint8ClampedArray> {
+): Promise<Uint8ClampedArray<ArrayBuffer>> {
   const res = await fetch(url, { headers: { Accept: 'image/png' }, signal })
   if (!res.ok) throw new Error(`WMS GetMap failed (${res.status})`)
   const blob = await res.blob()
@@ -315,7 +315,7 @@ function deckCoordinatesFromBbox3857(
 }
 
 async function cloudRgbaToObjectUrl(
-  rgba: Uint8ClampedArray,
+  rgba: Uint8ClampedArray<ArrayBuffer>,
   width: number,
   height: number,
 ): Promise<string> {
@@ -337,7 +337,7 @@ async function fetchSentinel3dCloudMaskRgba(
   sceneDate: string,
   px: number,
   signal?: AbortSignal,
-): Promise<{ rgba: Uint8ClampedArray; bbox3857: [number, number, number, number] } | null> {
+): Promise<{ rgba: Uint8ClampedArray<ArrayBuffer>; bbox3857: [number, number, number, number] } | null> {
   const geometry = getDrawnGeometry(clipSource as Parameters<typeof getDrawnGeometry>[0])
   if (!geometry) return null
   const bbox3857 = bbox3857FromGeometry(geometry)

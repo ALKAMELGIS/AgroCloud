@@ -81,7 +81,7 @@ main.content > .si-page {
 }
 
 html[data-theme='light'] .si-page {
-  background: #f1f5f9;
+  background: var(--ds-color-surface-2);
   --si-panel-border: rgba(15, 23, 42, 0.1);
   --si-panel-glow: rgba(4, 120, 87, 0.06);
   --si-map-ctrl-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.9) 100%);
@@ -118,7 +118,7 @@ html[data-theme='light'] .si-page {
 }
 
 html[data-theme='light'] .si-main-content {
-  background: #f1f5f9;
+  background: var(--ds-color-surface-2);
 }
 
 .si-main-content {
@@ -2813,13 +2813,13 @@ html[data-theme='light'] .si-proc-mb-row {
 }
 
 html[data-theme='light'] .si-proc-mb-btn {
-  color: #334155;
+  color: var(--ds-color-text-secondary);
   border-inline-end-color: rgba(148, 163, 184, 0.45);
 }
 
 html[data-theme='light'] .si-proc-mb-btn:hover {
   background: rgba(241, 245, 249, 0.95);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-proc-mb-btn--active {
@@ -2828,12 +2828,12 @@ html[data-theme='light'] .si-proc-mb-btn--active {
 }
 
 html[data-theme='light'] .si-proc-mb-btn-label {
-  color: #475569;
+  color: var(--ds-color-text-secondary);
 }
 
 html[data-theme='light'] .si-proc-mb-toggle {
   background: rgba(241, 245, 249, 0.9);
-  color: #64748b;
+  color: var(--ds-color-text-muted);
   border-inline-start-color: rgba(148, 163, 184, 0.45);
 }
 
@@ -3048,64 +3048,64 @@ html[data-theme='light'] .si-env-toolbox-nav {
 
 html[data-theme='light'] .si-env-toolbox-back {
   background: rgba(255, 255, 255, 0.95);
-  color: #0f172a;
+  color: var(--ds-color-text);
   border-color: rgba(148, 163, 184, 0.4);
 }
 
 html[data-theme='light'] .si-env-toolbox-back:hover {
-  background: #f8fafc;
+  background: var(--ds-color-surface-2);
   border-color: rgba(99, 102, 241, 0.45);
 }
 
 html[data-theme='light'] .si-env-toolbox-breadcrumb-current {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-env-toolbox-breadcrumb {
-  color: #64748b;
+  color: var(--ds-color-text-muted);
 }
 
 /* Light theme â€” layer picker + field controls inside map toolbox (matches si-sat-ctx-dock--light) */
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-select,
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-field input[type='date'] {
   background: rgba(255, 255, 255, 0.92) !important;
-  color: #0f172a !important;
+  color: var(--ds-color-text) !important;
   border-color: rgba(148, 163, 184, 0.32) !important;
   color-scheme: light !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-label,
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-kicker {
-  color: #475569 !important;
+  color: var(--ds-color-text-secondary) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-title,
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-checkbox-row {
-  color: #0f172a !important;
+  color: var(--ds-color-text) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__abbr,
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__option {
-  color: #0f172a !important;
+  color: var(--ds-color-text) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__science {
-  color: #475569 !important;
+  color: var(--ds-color-text-secondary) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__menu {
   background: rgba(255, 255, 255, 0.98) !important;
-  border-color: rgba(148, 163, 184, 0.28) !important;
+  border-color: var(--ds-color-border-strong) !important;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__search-wrap {
   background: rgba(255, 255, 255, 0.98) !important;
-  border-bottom-color: rgba(148, 163, 184, 0.18) !important;
+  border-bottom-color: var(--ds-color-border-strong) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__search {
-  color: #0f172a !important;
+  color: var(--ds-color-text) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__search::placeholder {
@@ -3117,7 +3117,7 @@ html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-s
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__group-label {
-  color: #64748b !important;
+  color: var(--ds-color-text-muted) !important;
 }
 
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-rs-layer-select__option:hover,
@@ -3228,12 +3228,12 @@ html[data-theme='light'] .si-env-side-strip {
 }
 
 html[data-theme='light'] .si-env-side-row {
-  color: #475569;
+  color: var(--ds-color-text-secondary);
 }
 
 html[data-theme='light'] .si-env-side-row:hover {
   background: rgba(241, 245, 249, 0.95);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-env-side-row--selected {
@@ -3750,7 +3750,7 @@ html[data-theme='light'] .si-env-layer-options-menu {
 }
 
 html[data-theme='light'] .si-env-layer-options-menu__item {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .si-env-layer-options-menu__item > i {
@@ -12619,7 +12619,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
 
 html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-explore-collections-search {
   background: rgba(241, 245, 249, 0.9);
-  border-color: rgba(148, 163, 184, 0.28);
+  border-color: var(--ds-color-border-strong);
 }
 
 /* ------------------------------------------------------------------
@@ -13623,4 +13623,172 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   background: rgba(16, 185, 129, 0.14) !important;
   border-color: rgba(22, 163, 74, 0.5) !important;
   color: #15803d !important;
+}
+
+/* ============================================================================
+   Design-system harmonization (map chrome only — no map canvas / control internals)
+   Re-points the page-level chrome variables at --ds-* tokens so the floating map
+   controls, search, basemap gallery and weather toggles share the green-tinted glass
+   used across AgroCloud in both themes. Data colours (index ramps, alerts) untouched.
+   ========================================================================== */
+.si-page {
+  --si-accent: var(--ds-color-primary);
+  --si-accent-strong: var(--ds-color-primary-hover);
+  --si-accent-soft: var(--ds-color-primary-soft);
+  --si-panel-border: var(--ds-color-border-strong);
+  --si-map-ctrl-bg: var(--ds-glass-bg);
+  --si-map-ctrl-bg-hover: var(--ds-color-surface-raised);
+  --si-map-ctrl-border: var(--ds-glass-border);
+  --si-map-ctrl-text: var(--ds-color-text-secondary);
+  --si-map-ctrl-shadow: var(--ds-shadow-md);
+  --si-map-ctrl-tag-bg: var(--ds-color-surface);
+  --si-map-ctrl-tag-border: var(--ds-color-border-strong);
+  --si-map-ctrl-tag-text: var(--ds-color-text-secondary);
+  --si-map-search-bg: var(--ds-glass-bg);
+  --si-map-search-bg-hover: var(--ds-color-surface-raised);
+  --si-map-search-border: var(--ds-glass-border);
+  --si-map-search-inner-bg: var(--ds-color-surface);
+  --si-map-search-inner-border: var(--ds-color-border-strong);
+  --si-map-search-inner-text: var(--ds-color-text);
+  --si-map-search-inner-muted: var(--ds-color-text-muted);
+  --si-map-search-btn-bg: var(--ds-color-surface-2);
+  --si-map-search-btn-text: var(--ds-color-text-secondary);
+  --si-map-search-results-bg: var(--ds-color-surface);
+  --si-map-search-results-border: var(--ds-color-border-strong);
+  --si-map-search-result-text: var(--ds-color-text);
+  --si-map-search-result-muted: var(--ds-color-text-muted);
+  --si-map-search-result-hover: var(--ds-color-primary-soft);
+  --si-basemap-widget-bg: var(--ds-color-surface);
+  --si-basemap-widget-border: var(--ds-color-border-strong);
+  --si-basemap-card-bg: var(--ds-color-surface-2);
+  --si-basemap-card-border: var(--ds-color-border);
+  --si-basemap-card-label: var(--ds-color-text-secondary);
+  --si-map-opts-bg: var(--ds-glass-bg);
+  --si-map-opts-text: var(--ds-color-text-secondary);
+}
+
+/* Page background behind the map follows the app surface instead of slate/navy. */
+html[data-theme='light'] .si-page,
+html[data-theme='light'] .si-main-content {
+  background: var(--ds-color-bg);
+}
+html[data-theme='dark'] .si-page,
+html[data-theme='dark'] .si-main-content {
+  background: var(--ds-color-bg);
+}
+
+/* Left floating map-control column: one glass surface, 36px targets, sm radius. */
+.si-map-floating-controls__left {
+  gap: 6px;
+}
+.si-map-floating-controls__left .si-basemap-button,
+.si-map-floating-controls__left .si-map-search-toggle,
+.si-map-floating-controls__left .si-map-page-refresh-button,
+.si-map-floating-controls__left .si-map-gps-locate-button,
+.si-map-floating-controls__left .si-weather-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  max-width: 36px;
+  max-height: 36px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-glass-bg);
+  border: 1px solid var(--ds-glass-border);
+  color: var(--ds-color-text-secondary);
+  box-shadow: var(--ds-shadow-md);
+  -webkit-backdrop-filter: saturate(160%) blur(var(--ds-glass-blur));
+  backdrop-filter: saturate(160%) blur(var(--ds-glass-blur));
+  transition:
+    background-color var(--ds-motion-fast) ease,
+    border-color var(--ds-motion-fast) ease,
+    color var(--ds-motion-fast) ease,
+    box-shadow var(--ds-motion-fast) ease;
+}
+.si-map-floating-controls__left .si-basemap-button > i,
+.si-map-floating-controls__left .si-map-search-toggle > i,
+.si-map-floating-controls__left .si-map-page-refresh-button > i,
+.si-map-floating-controls__left .si-map-gps-locate-button > i,
+.si-map-floating-controls__left .si-weather-button > i {
+  font-size: 14px;
+}
+.si-map-floating-controls__left .si-basemap-button:hover:not(:disabled):not(.active),
+.si-map-floating-controls__left .si-map-search-toggle:hover:not(:disabled):not(.is-active),
+.si-map-floating-controls__left .si-weather-button:hover:not(:disabled):not(.active) {
+  background: var(--ds-color-surface);
+  border-color: var(--ds-color-border-strong);
+  color: var(--ds-color-primary);
+  box-shadow: var(--ds-shadow-md), inset 0 0 0 100px var(--ds-color-primary-soft);
+}
+.si-map-floating-controls__left .si-basemap-button.active,
+.si-map-floating-controls__left .si-map-search-toggle.is-active,
+.si-map-floating-controls__left .si-weather-button.active {
+  background: var(--ds-color-primary);
+  border-color: transparent;
+  color: var(--ds-color-on-primary);
+  box-shadow: var(--ds-shadow-md);
+}
+.si-map-floating-controls__left .si-basemap-button:focus-visible,
+.si-map-floating-controls__left .si-map-search-toggle:focus-visible,
+.si-map-floating-controls__left .si-weather-button:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring), var(--ds-shadow-md);
+}
+/* Badge tags (3D / Relief / Key / Swipe) sit on the new 36px cell. */
+.si-map-floating-controls__left .si-view3d-button__tag {
+  font-size: 7.5px;
+  border-radius: var(--ds-radius-xs);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text-secondary);
+  box-shadow: inset 0 0 0 1px var(--ds-color-border-strong);
+}
+.si-map-floating-controls__left .active .si-view3d-button__tag,
+.si-map-floating-controls__left .si-view3d-button.active .si-view3d-button__tag,
+.si-map-floating-controls__left .si-legend-button.active .si-view3d-button__tag,
+.si-map-floating-controls__left .si-map-swipe-button.active .si-view3d-button__tag,
+.si-map-floating-controls__left .si-view3d-opts-btn.active .si-view3d-button__tag {
+  background: var(--ds-color-primary-hover);
+  color: var(--ds-color-on-primary);
+  box-shadow: none;
+}
+
+/* Popovers anchored to the left column (basemap gallery, search results). */
+.si-basemap-widget {
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-lg);
+}
+.si-map-search-results {
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-shadow-lg);
+}
+
+@media (pointer: coarse), (max-width: 767px) {
+  .si-map-floating-controls__left .si-basemap-button,
+  .si-map-floating-controls__left .si-map-search-toggle,
+  .si-map-floating-controls__left .si-map-page-refresh-button,
+  .si-map-floating-controls__left .si-map-gps-locate-button,
+  .si-map-floating-controls__left .si-weather-button,
+  html.agro-touch .si-map-floating-controls__left .si-weather-button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    max-width: 44px;
+    max-height: 44px;
+  }
+  .si-map-floating-controls__left .si-basemap-button > i,
+  .si-map-floating-controls__left .si-map-search-toggle > i,
+  .si-map-floating-controls__left .si-map-page-refresh-button > i,
+  .si-map-floating-controls__left .si-map-gps-locate-button > i,
+  .si-map-floating-controls__left .si-weather-button > i {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-map-floating-controls__left .si-basemap-button,
+  .si-map-floating-controls__left .si-map-search-toggle,
+  .si-map-floating-controls__left .si-weather-button {
+    transition: none;
+  }
 }

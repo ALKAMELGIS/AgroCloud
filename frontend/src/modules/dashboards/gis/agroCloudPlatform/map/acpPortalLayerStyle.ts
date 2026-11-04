@@ -1,4 +1,4 @@
-import type { FilterSpecification } from 'maplibre-gl'
+import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl'
 import type { GisContentMapLayerConfig } from '@/modules/gis/layers/gisContentRepository'
 import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import { resolveAcpPortalLayerPaint, type AcpPortalMapLayerPaint } from './acpPortalMapLayers'
@@ -61,5 +61,6 @@ export function combineAcpPortalFilters(
   attributeFilter?: FilterSpecification,
 ): FilterSpecification {
   if (!attributeFilter) return geometryFilter
-  return ['all', geometryFilter, attributeFilter]
+  // Both inputs are expression-form filters (`match` / `==` + `['get', …]`), so `all` is the expression variant.
+  return ['all', geometryFilter as ExpressionSpecification, attributeFilter as ExpressionSpecification]
 }

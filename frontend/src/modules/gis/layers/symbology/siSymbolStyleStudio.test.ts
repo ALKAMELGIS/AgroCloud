@@ -119,7 +119,7 @@ describe('buildSiCustomVectorStylePack', () => {
         style: 'color',
         field: 'area_ha',
         classes: 3,
-        method: 'equal',
+        method: 'equal_interval',
         colorRamp: 'viridis',
         breakOverrides: [{ min: 0, max: 5, color: '#00ff00' }],
       },

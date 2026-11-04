@@ -22,6 +22,13 @@ export type SiLayerImportMetadata = {
   bands?: number;
   sourceUrl?: string;
   importedAt?: string;
+  /** Server raster tile service id (Image Classification "Existing Map Raster"). */
+  rasterServiceId?: string;
+  resolutionMeters?: number;
+  acquisitionDate?: string;
+  sensor?: string;
+  wmsUrl?: string;
+  wmtsUrl?: string;
 };
 
 export type SiCustomLayerBase = {
@@ -228,7 +235,21 @@ export function createSiRasterImportLayer(input: {
   arcgisRasterTiles?: ArcGisRasterTilesConfig;
   arcgisVectorTiles?: ArcGisVectorTilesConfig;
   ephemeral?: boolean;
+  /** Server raster service metadata — stored on `importMetadata`. */
+  rasterServiceId?: string;
+  resolutionMeters?: number;
+  acquisitionDate?: string;
+  sensor?: string;
+  wmsUrl?: string;
+  wmtsUrl?: string;
 }): SiCustomLayerBase {
+  const serverRasterMeta: Partial<SiLayerImportMetadata> = {};
+  if (input.rasterServiceId) serverRasterMeta.rasterServiceId = input.rasterServiceId;
+  if (input.resolutionMeters != null) serverRasterMeta.resolutionMeters = input.resolutionMeters;
+  if (input.acquisitionDate) serverRasterMeta.acquisitionDate = input.acquisitionDate;
+  if (input.sensor) serverRasterMeta.sensor = input.sensor;
+  if (input.wmsUrl) serverRasterMeta.wmsUrl = input.wmsUrl;
+  if (input.wmtsUrl) serverRasterMeta.wmtsUrl = input.wmtsUrl;
   return withSiImportedLayerDefaults({
     id: input.id ?? siNewCustomLayerId('raster'),
     name: input.name,
@@ -243,17 +264,20 @@ export function createSiRasterImportLayer(input: {
     arcgisRasterTiles: input.arcgisRasterTiles,
     arcgisVectorTiles: input.arcgisVectorTiles,
     ephemeral: input.ephemeral ?? true,
-    importMetadata: buildSiLayerImportMetadata({
-      format: input.format ?? 'Raster',
-      crs: input.crs,
-      bytes: input.bytes,
-      geojson: input.geojson,
-      renderMode: 'raster',
-      widthPx: input.widthPx,
-      heightPx: input.heightPx,
-      bands: input.bands,
-      sourceUrl: input.sourceUrl,
-    }),
+    importMetadata: {
+      ...buildSiLayerImportMetadata({
+        format: input.format ?? 'Raster',
+        crs: input.crs,
+        bytes: input.bytes,
+        geojson: input.geojson,
+        renderMode: 'raster',
+        widthPx: input.widthPx,
+        heightPx: input.heightPx,
+        bands: input.bands,
+        sourceUrl: input.sourceUrl,
+      }),
+      ...serverRasterMeta,
+    },
     mapOpacity: 1,
   });
 }
@@ -277,7 +301,6 @@ export function createSiBimImportLayer(input: {
       format: 'IFC (BIM)',
       geojson: input.geojson,
       bytes: input.bytes,
-      geometryType: 'polygon',
     }),
   });
 }

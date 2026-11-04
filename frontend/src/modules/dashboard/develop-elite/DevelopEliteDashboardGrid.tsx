@@ -376,7 +376,7 @@ export function DevelopEliteDashboardGrid({
   )
 
   const onCardMovePointerDown = useCallback(
-    (item: DevelopEliteGridLayoutItem, e: ReactPointerEvent<HTMLDivElement>) => {
+    (item: DevelopEliteGridLayoutItem, e: ReactPointerEvent<HTMLElement>) => {
       if (!layoutEditMode) return
       e.preventDefault()
       e.stopPropagation()

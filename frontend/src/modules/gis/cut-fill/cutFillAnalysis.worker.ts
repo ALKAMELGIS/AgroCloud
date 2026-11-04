@@ -55,7 +55,8 @@ self.onmessage = (ev: MessageEvent<CutFillWorkerRequest>) => {
       summary: out.summary,
       rows: out.rows,
     }
-    self.postMessage(result, [out.difference.buffer, out.classification.buffer])
+    // Worker postMessage(message, { transfer }) — tsconfig lib is DOM, so use the options form both libs accept.
+    self.postMessage(result, { transfer: [out.difference.buffer, out.classification.buffer] })
   } catch (e) {
     const err: CutFillWorkerError = {
       type: 'error',

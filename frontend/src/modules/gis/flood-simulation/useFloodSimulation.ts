@@ -19,7 +19,7 @@ import { DEFAULT_FLOOD_FINE_TUNE, DEFAULT_SIMULATION_CONFIG } from './floodTypes
 import { sampleFloodAtLngLat } from './floodMapSample'
 import { downloadFloodDepthPng, exportFloodConfigJson, exportFloodExtentGeoJson } from './floodExports'
 import { floodMapCompositeDataUrl } from './floodMapComposite'
-import { floodImageCoordinates } from './floodRasterPreview'
+import { depthFieldForMode, floodImageCoordinates } from './floodRasterPreview'
 import type { Map as MapboxMap } from 'mapbox-gl'
 
 type Params = {

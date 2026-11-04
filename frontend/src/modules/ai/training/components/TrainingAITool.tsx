@@ -733,8 +733,6 @@ export function TrainingAITool({
           onLearningRateChange={setLearningRate}
           valSplit={valSplit}
           onValSplitChange={setValSplit}
-          args={inferArgs}
-          onArgsChange={setInferArgs}
           busy={trainBusy}
           job={trainJob}
           error={trainError}
@@ -746,12 +744,7 @@ export function TrainingAITool({
       ) : null}
 
       {step === 3 ? (
-        <ModelValidationPanel
-          job={trainJob}
-          onOpenQuickDashboard={
-            mapContainerRef ? () => setValidationDashOpen(true) : undefined
-          }
-        />
+        <ModelValidationPanel job={trainJob} />
       ) : null}
       {mapContainerRef ? (
         <ValidationQuickDashboard

@@ -26,6 +26,7 @@ export type GeoAiMapLayer = {
 }
 
 type GeoAiFeature = {
+  type?: string
   properties?: Record<string, unknown>
   geometry?: { type?: string; coordinates?: unknown }
 }

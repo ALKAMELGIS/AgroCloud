@@ -525,7 +525,7 @@ const MAP_IDLE_FALLBACK_MS = 700
 
 function runOnMapIdle(map: MapboxMapLike, generation: number, run: () => void): void {
   let ran = false
-  let fallbackTimer: ReturnType<typeof setTimeout> | undefined
+  let fallbackTimer: number | undefined
   const invoke = () => {
     if (ran) return
     ran = true
@@ -705,7 +705,7 @@ function whenDemSourceReady(map: MapboxMapLike, generation: number, run: () => v
   }
 
   let done = false
-  let pollTimer: ReturnType<typeof setTimeout> | undefined
+  let pollTimer: number | undefined
 
   const finish = () => {
     if (done) return
@@ -802,7 +802,7 @@ export function syncAgroCloudTerrain3d(
   const showHillshade = is3dTopographicBasemapId(basemapId)
 
   // No mesh wanted for this view → tear down immediately, no probe needed.
-  if (!wantsTerrainForView(basemapId, livePitch, terrainOn)) {
+  if (!wantsTerrainForView(basemapId, livePitch, terrainOn, opts?.terrainExplicitToolbarGate === true)) {
     disableTerrainMesh(map)
     return
   }

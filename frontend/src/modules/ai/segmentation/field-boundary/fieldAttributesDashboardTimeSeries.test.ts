@@ -13,6 +13,7 @@ function row(date: string, overrides: Partial<SentinelHubDailyIndexMeans> = {}):
     ndmi: 0.05,
     evi: 0.35,
     savi: 0.38,
+    ciRe: null,
     ndre: 0.32,
     ...overrides,
   }

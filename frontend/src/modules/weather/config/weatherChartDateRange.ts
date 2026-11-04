@@ -48,6 +48,19 @@ export function getDefaultWeatherChartDateRange(): WeatherChartDateRange {
   }
 }
 
+/**
+ * Open-Meteo forecast API `past_days` / `forecast_days` covering a chart range
+ * (fallback when `start_date`/`end_date` is rejected). past_days ≤ 92, forecast_days ≤ 16.
+ */
+export function openMeteoPastForecastDaysForChartRange(
+  range: WeatherChartDateRange,
+  todayYmd: string = getWeatherChartTodayYmd(),
+): { pastDays: number; forecastDays: number } {
+  const pastDays = Math.min(92, daysBetweenYmdInclusive(range.startDate, todayYmd) + 1)
+  const forecastDays = Math.min(16, daysBetweenYmdInclusive(todayYmd, range.endDate) + 1)
+  return { pastDays, forecastDays }
+}
+
 function clampYmd(ymd: string, min: string, max: string): string {
   if (ymd < min) return min
   if (ymd > max) return max

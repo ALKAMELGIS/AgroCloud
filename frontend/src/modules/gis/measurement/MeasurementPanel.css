@@ -311,33 +311,33 @@ html[data-theme='light'] .si-measure-panel {
   color: var(--mz-text);
 }
 html[data-theme='light'] .si-measure-tool {
-  color: #334155;
+  color: var(--ds-color-text-secondary);
   background: rgba(15, 23, 42, 0.04);
 }
 html[data-theme='light'] .si-measure-tool:hover:not(:disabled) {
   background: rgba(15, 23, 42, 0.08);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 html[data-theme='light'] .si-measure-tool.is-on {
   color: #fff;
 }
 html[data-theme='light'] .si-measure-panel__icon-btn {
-  color: #334155;
+  color: var(--ds-color-text-secondary);
   background: rgba(15, 23, 42, 0.04);
 }
 html[data-theme='light'] .si-measure-panel__close {
-  color: #64748b;
+  color: var(--ds-color-text-muted);
 }
 html[data-theme='light'] .si-measure-panel__toolbar {
   background: rgba(241, 245, 249, 0.95);
 }
 html[data-theme='light'] .si-measure-panel__close:hover {
   background: rgba(15, 23, 42, 0.08);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 html[data-theme='light'] .si-measure-panel__unit select {
   background: #fff;
-  color: #0f172a;
+  color: var(--ds-color-text);
   border-color: rgba(148, 163, 184, 0.4);
 }
 html[data-theme='light'] .si-measure-panel__result {
@@ -345,10 +345,10 @@ html[data-theme='light'] .si-measure-panel__result {
 }
 html[data-theme='light'] .si-measure-panel__hint,
 html[data-theme='light'] .si-measure-panel__placeholder {
-  color: #475569;
+  color: var(--ds-color-text-secondary);
 }
 html[data-theme='light'] .si-measure-panel__readout dd {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 html[data-theme='light'] .si-measure-panel__readout.is-primary dd {
   color: #0369a1;

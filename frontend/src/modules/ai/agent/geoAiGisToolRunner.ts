@@ -110,7 +110,7 @@ export async function runGeoAiGisTool(
       case 'buffer': {
         const layerHint = str(a.layer ?? a.inputLayer ?? a.input ?? a.target)
         const resolved = resolveOne(layerHint || undefined)
-        if (!resolved.ok) return { ok: false, content: resolved.error }
+        if (resolved.ok === false) return { ok: false, content: resolved.error }
         let distance = num(a.distance ?? a.dist ?? a.radius)
         let unit = str(a.unit) || 'meters'
         if (distance == null && a.distanceText) {
@@ -149,8 +149,8 @@ export async function runGeoAiGisTool(
         const bHint = str(a.layerB ?? a.overlay ?? a.b ?? a.with)
         const ra = resolveOne(aHint || undefined, false)
         const rb = resolveOne(bHint || undefined, true)
-        if (!ra.ok) return { ok: false, content: ra.error }
-        if (!rb.ok) return { ok: false, content: rb.error }
+        if (ra.ok === false) return { ok: false, content: ra.error }
+        if (rb.ok === false) return { ok: false, content: rb.error }
         return applyResultLayer(
           host,
           runGisIntersect({
@@ -167,8 +167,8 @@ export async function runGeoAiGisTool(
         const clipHint = str(a.clipLayer ?? a.mask ?? a.clip ?? a.with) || 'AOI'
         const rt = resolveOne(targetHint || undefined, false)
         const rc = resolveOne(clipHint, true)
-        if (!rt.ok) return { ok: false, content: rt.error }
-        if (!rc.ok) return { ok: false, content: rc.error }
+        if (rt.ok === false) return { ok: false, content: rt.error }
+        if (rc.ok === false) return { ok: false, content: rc.error }
         return applyResultLayer(
           host,
           runGisClip({
@@ -185,8 +185,8 @@ export async function runGeoAiGisTool(
         const eraseHint = str(a.eraser ?? a.eraseLayer ?? a.mask ?? a.with)
         const rt = resolveOne(targetHint || undefined, false)
         const re = resolveOne(eraseHint || undefined, true)
-        if (!rt.ok) return { ok: false, content: rt.error }
-        if (!re.ok) return { ok: false, content: re.error }
+        if (rt.ok === false) return { ok: false, content: rt.error }
+        if (re.ok === false) return { ok: false, content: re.error }
         return applyResultLayer(
           host,
           runGisErase({
@@ -201,7 +201,7 @@ export async function runGeoAiGisTool(
       case 'merge': {
         const layerHint = str(a.layer ?? a.inputLayer ?? a.target)
         const resolved = resolveOne(layerHint || undefined)
-        if (!resolved.ok) return { ok: false, content: resolved.error }
+        if (resolved.ok === false) return { ok: false, content: resolved.error }
         return applyResultLayer(
           host,
           runGisUnionOrMerge({
@@ -215,7 +215,7 @@ export async function runGeoAiGisTool(
       case 'dissolve': {
         const layerHint = str(a.layer ?? a.inputLayer ?? a.target)
         const resolved = resolveOne(layerHint || undefined)
-        if (!resolved.ok) return { ok: false, content: resolved.error }
+        if (resolved.ok === false) return { ok: false, content: resolved.error }
         return applyResultLayer(
           host,
           runGisDissolve({
@@ -230,7 +230,7 @@ export async function runGeoAiGisTool(
       case 'convexhull': {
         const layerHint = str(a.layer ?? a.inputLayer ?? a.target)
         const resolved = resolveOne(layerHint || undefined)
-        if (!resolved.ok) return { ok: false, content: resolved.error }
+        if (resolved.ok === false) return { ok: false, content: resolved.error }
         return applyResultLayer(
           host,
           runGisConvexHull({
@@ -244,7 +244,7 @@ export async function runGeoAiGisTool(
       case 'thiessen': {
         const layerHint = str(a.layer ?? a.inputLayer ?? a.target)
         const resolved = resolveOne(layerHint || undefined)
-        if (!resolved.ok) return { ok: false, content: resolved.error }
+        if (resolved.ok === false) return { ok: false, content: resolved.error }
         return applyResultLayer(
           host,
           runGisVoronoi({
@@ -257,7 +257,7 @@ export async function runGeoAiGisTool(
       case 'area': {
         const layerHint = str(a.layer ?? a.inputLayer ?? a.target)
         const resolved = resolveOne(layerHint || undefined)
-        if (!resolved.ok) return { ok: false, content: resolved.error }
+        if (resolved.ok === false) return { ok: false, content: resolved.error }
         const result = runGisAreaTable({
           collection: resolved.layer.collection,
           inputName: resolved.layer.name,
@@ -277,8 +277,8 @@ export async function runGeoAiGisTool(
         const maskHint = str(a.mask ?? a.near ?? a.with ?? a.overlay)
         const rt = resolveOne(targetHint || undefined, false)
         const rm = resolveOne(maskHint || undefined, true)
-        if (!rt.ok) return { ok: false, content: rt.error }
-        if (!rm.ok) return { ok: false, content: rm.error }
+        if (rt.ok === false) return { ok: false, content: rt.error }
+        if (rm.ok === false) return { ok: false, content: rm.error }
         let distance = num(a.distance)
         let unit = str(a.unit) || 'meters'
         if (distance == null && a.distanceText) {
@@ -306,7 +306,7 @@ export async function runGeoAiGisTool(
       case 'selectbyattribute': {
         const layerHint = str(a.layer ?? a.inputLayer ?? a.target)
         const resolved = resolveOne(layerHint || undefined)
-        if (!resolved.ok) return { ok: false, content: resolved.error }
+        if (resolved.ok === false) return { ok: false, content: resolved.error }
         const field = str(a.field ?? a.attribute)
         if (!field) return { ok: false, content: 'gis_select_by_attribute requires a field name.' }
         return applyResultLayer(
@@ -325,7 +325,7 @@ export async function runGeoAiGisTool(
       case 'export': {
         const layerHint = str(a.layer ?? a.inputLayer ?? a.target)
         const resolved = resolveOne(layerHint || undefined)
-        if (!resolved.ok) return { ok: false, content: resolved.error }
+        if (resolved.ok === false) return { ok: false, content: resolved.error }
         const formatRaw = str(a.format || 'geojson').toLowerCase()
         const fc = {
           type: 'FeatureCollection' as const,
@@ -352,7 +352,7 @@ export async function runGeoAiGisTool(
             content: `Unsupported export format "${formatRaw}". Use geojson, shapefile, kmz, or excel.`,
           }
         }
-        await exportVectorLayer(fc, base, fmt)
+        await exportVectorLayer(fc, fmt, base)
         return {
           ok: true,
           content: `Exported ${resolved.layer.name} as ${fmt.toUpperCase()} (${fc.features.length} features).`,

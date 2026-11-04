@@ -165,6 +165,8 @@ export type AgroCloudMapboxMapScrollLike = AgroCloudMapboxMapLike & {
   touchZoomRotate?: { enable?: () => void; disable?: () => void }
   boxZoom?: { enable?: () => void; disable?: () => void }
   getCanvas?: () => HTMLCanvasElement
+  getContainer?: () => HTMLElement
+  getCenter?: () => { lng: number; lat: number }
   getZoom?: () => number
   getMinZoom?: () => number
   getMaxZoom?: () => number
@@ -173,6 +175,8 @@ export type AgroCloudMapboxMapScrollLike = AgroCloudMapboxMapLike & {
     zoom?: number
     bearing?: number
     pitch?: number
+    /** Ignored by Mapbox/MapLibre `jumpTo`; kept for callers that pass it. */
+    duration?: number
   }) => void
   easeTo?: (opts: {
     center?: [number, number]
@@ -183,7 +187,7 @@ export type AgroCloudMapboxMapScrollLike = AgroCloudMapboxMapLike & {
     duration?: number
   }) => void
   setFadeDuration?: (duration: number) => void
-  setProjection?: (projection: { name: string }) => void
+  setProjection?: (projection: { name: 'globe' | 'mercator' }) => unknown
   getProjection?: () => { name?: string } | string | undefined
   setMaxParallelImageRequests?: (count: number) => void
   setPrefetchedZoomDelta?: (delta: number) => void

@@ -367,6 +367,9 @@ describe('developEliteKpiEngine', () => {
       zoneId: 'NH 07',
       selectedFieldKey: fieldKey,
       locationSearch: '',
+      structureTypeCode: null,
+      structureTypeCodes: null,
+      activeKpiCardId: null,
     })
     expect(scoped).toHaveLength(1)
     expect(scoped[0]?.Farm_Code).toBe('MH132')
@@ -386,6 +389,9 @@ describe('developEliteKpiEngine', () => {
       zoneId: 'all',
       selectedFieldKey: null,
       locationSearch: '',
+      structureTypeCode: null,
+      structureTypeCodes: null,
+      activeKpiCardId: null,
     })
     expect(scoped).toHaveLength(1)
     expect(scoped[0]?.Total_Tree).toBe(10)
@@ -462,6 +468,9 @@ describe('developEliteKpiEngine', () => {
       zoneId: 'all',
       selectedFieldKey: null,
       locationSearch: '',
+      structureTypeCode: null,
+      structureTypeCodes: null,
+      activeKpiCardId: null,
     })
     const kpis = computeDevelopEliteKpis(
       narrowed,

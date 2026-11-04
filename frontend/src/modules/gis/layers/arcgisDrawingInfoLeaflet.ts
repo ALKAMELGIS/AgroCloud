@@ -48,7 +48,7 @@ function featureValueMatchKeys(raw: unknown): Set<string> {
   if (Number.isFinite(num)) {
     for (const k of collectUniqueValueMatchKeys(String(num), undefined)) keys.add(k)
     if (Number.isInteger(num)) {
-      for (const k of collectUniqueValueMatchKeys(num, undefined)) keys.add(k)
+      for (const k of collectUniqueValueMatchKeys(String(num), undefined)) keys.add(k)
     }
   }
   return keys

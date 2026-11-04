@@ -12,6 +12,7 @@ import {
   DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D,
   isDevelopEliteMapPortfolio3dActive,
 } from './developEliteMapViewport'
+import { asDevelopEliteFogCapableMap, asDevelopEliteProjectionMap } from './developEliteMapLibreCompat'
 
 const DE_FIELD_MAP_CANVAS_BG = '#0e1a16'
 
@@ -26,7 +27,7 @@ function applyDevelopEliteFieldMapCanvasBackdrop(map: MaplibreMap): void {
 
 function clearDevelopEliteGalaxySky(map: MaplibreMap): void {
   try {
-    map.setFog?.(null as never)
+    asDevelopEliteFogCapableMap(map).setFog?.(null)
     map.setSky?.(undefined as never)
   } catch {
     /* style swap */
@@ -38,17 +39,17 @@ function clearDevelopEliteGalaxySky(map: MaplibreMap): void {
 export function applyDevelopElitePortfolioGlobeEnvironment(map: MaplibreMap | null | undefined): void {
   if (!map) return
   if (DEVELOP_ELITE_GRID_MAP_MERCATOR_ONLY) {
-    setMapLibreMercatorProjection(map)
+    setMapLibreMercatorProjection(asDevelopEliteProjectionMap(map))
     clearDevelopEliteGalaxySky(map)
     return
   }
   const zoom = map.getZoom()
   if (zoom >= MAPLIBRE_GLOBE_PORTFOLIO_MAX_ZOOM) {
-    setMapLibreMercatorProjection(map)
+    setMapLibreMercatorProjection(asDevelopEliteProjectionMap(map))
     clearDevelopEliteGalaxySky(map)
     return
   }
-  setMapLibreGlobeProjection(map)
+  setMapLibreGlobeProjection(asDevelopEliteProjectionMap(map))
   try {
     applyMapLibreGlobeGalaxySky(map)
   } catch {

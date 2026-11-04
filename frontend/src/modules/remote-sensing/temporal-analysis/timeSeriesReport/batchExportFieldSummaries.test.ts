@@ -2,7 +2,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { computeImageryYieldEstimate } from '../../indices/imageryYieldEstimation'
 import type { CropAlertFieldInput } from '../../indices/siCropAlertEngine'
 import type { FieldSummaryModel } from './buildFieldSummaryModel'
-import { batchExportFieldSummaries } from './batchExportFieldSummaries'
+import {
+  batchExportFieldSummaries,
+  type BatchExportFieldSummariesDeps,
+} from './batchExportFieldSummaries'
+import type ExcelJS from 'exceljs'
+
+type Deps = Required<BatchExportFieldSummariesDeps>
+
+/** Solid pattern fills carry `fgColor`; gradient fills do not. */
+function fillFgArgb(fill: ExcelJS.Fill | undefined): string | undefined {
+  return fill && fill.type === 'pattern' ? fill.fgColor?.argb : undefined
+}
 import {
   buildFieldSummaryWorkbook,
   sanitizeFieldSummaryExcelFilename,
@@ -144,7 +155,7 @@ describe('buildFieldSummaryWorkbook', () => {
     expect(typeof exec.getRow(21).getCell(2).value).toBe('number')
     expect(exec.getRow(22).getCell(1).value).toBe('Total Loss (m3/ha/day)')
     expect(typeof exec.getRow(22).getCell(2).value).toBe('number')
-    expect(String(wb.worksheets[0]!.getCell('A1').fill?.fgColor?.argb)).toBe('FF1A4E26')
+    expect(String(fillFgArgb(wb.worksheets[0]!.getCell('A1').fill))).toBe('FF1A4E26')
     expect(String(wb.worksheets[2]!.getCell('A5').value)).toContain('YieldFactor')
 
     const prod = wb.getWorksheet('Production Estimation')!
@@ -160,7 +171,7 @@ describe('buildFieldSummaryWorkbook', () => {
     expect(prod.getRow(16).getCell(1).value).toBe('TOTAL')
     expect(typeof prod.getRow(14).getCell(13).value).toBe('number')
     expect(typeof prod.getRow(16).getCell(13).value).toBe('number')
-    expect(String(prod.getRow(14).getCell(10).fill?.fgColor?.argb)).toBe('FFD1FAE5')
+    expect(String(fillFgArgb(prod.getRow(14).getCell(10).fill))).toBe('FFD1FAE5')
 
     expect(chartSpecs.some(s => s.title === 'Area (ha)')).toBe(true)
     expect(chartSpecs.some(s => s.title.includes('Planned vs Unplanned Area by Field'))).toBe(true)
@@ -198,7 +209,7 @@ describe('batchExportFieldSummaries', () => {
       return [{ date: '2024-06-01', ndvi: 0.55, ndmi: 0.2, ndwi: 0.1, evi: null, savi: null, ciRe: null }]
     })
     const buildModel = vi.fn(({ plot }: { plot: CropAlertFieldInput }) => stubSummary(plot))
-    const saveExcel = vi.fn(async () => undefined)
+    const saveExcel = vi.fn<Deps['saveExcel']>(async () => undefined)
     const onProgress = vi.fn()
 
     const result = await batchExportFieldSummaries(
@@ -231,7 +242,7 @@ describe('batchExportFieldSummaries', () => {
       handle: {} as FileSystemFileHandle,
       filename: 'Serbia_Field_Report__2024-06-30.xlsx',
     }
-    const saveExcel = vi.fn(async () => ({
+    const saveExcel = vi.fn<Deps['saveExcel']>(async () => ({
       filename: saveTarget.filename,
       deliveryMode: 'file' as const,
       locationLabel: saveTarget.filename,
@@ -269,7 +280,7 @@ describe('batchExportFieldSummaries', () => {
       controller.abort()
       return [{ date: '2024-06-01', ndvi: 0.4, ndmi: null, ndwi: null, evi: null, savi: null, ciRe: null }]
     })
-    const saveExcel = vi.fn(async () => undefined)
+    const saveExcel = vi.fn<Deps['saveExcel']>(async () => undefined)
 
     const result = await batchExportFieldSummaries(
       {

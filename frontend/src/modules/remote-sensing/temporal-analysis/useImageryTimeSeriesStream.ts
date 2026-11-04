@@ -211,7 +211,7 @@ export function useImageryTimeSeriesStream({
           chirpsPoints,
         })
         if (!merged.labels.length) return false
-        applyChartState(merged)
+        applyChartState({ labels: merged.labels, layerSeries: merged.series })
         return true
       }
       if (hasPrecip && chirpsPoints) {
@@ -222,7 +222,7 @@ export function useImageryTimeSeriesStream({
           chirpsPoints,
         })
         if (!merged.labels.length) return false
-        applyChartState(merged)
+        applyChartState({ labels: merged.labels, layerSeries: merged.series })
         return true
       }
       return false

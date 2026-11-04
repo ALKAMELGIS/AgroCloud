@@ -20,6 +20,8 @@ import '@/assets/styles/tablet-responsive.css'
 import '@/assets/styles/mobile-app.css'
 import '@/assets/styles/modal-responsive.css'
 import '@/assets/styles/agroCloudMapboxBranding.css'
+// Design-system authority layer — must stay last (mirrors src/theme/tokens.ts).
+import '@/assets/styles/agro-premium.css'
 import { initClientErrorMonitoring } from '@/core/error-handling/clientErrorMonitoring'
 import { deferAfterFirstPaint } from '@/app/startup/deferAfterFirstPaint'
 import { ensureBundledFontsForCssFamily } from '@/core/config/loadBundledFontPreset'

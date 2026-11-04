@@ -18,7 +18,8 @@ export type NdviSceneSample = {
   ndvi: number
   ndwi: number | null
   ndmi: number | null
-  ciRe: number | null
+  /** Red-edge chlorophyll index when the scene has it; derived from NDVI otherwise. */
+  ciRe?: number | null
 }
 
 export type NdviSceneSeriesAnalysis = {

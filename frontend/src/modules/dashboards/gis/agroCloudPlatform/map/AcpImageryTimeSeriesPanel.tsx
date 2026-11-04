@@ -521,7 +521,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
                 display: true,
                 text: scatterCorrelation.xLayerId,
                 color: '#94a3b8',
-                font: { size: 10, weight: '600' as const },
+                font: { size: 10, weight: 600 },
               },
               ticks: { color: '#94a3b8', maxTicksLimit: 8, font: { size: 9 } },
               grid: { color: 'rgba(255,255,255,0.06)' },
@@ -531,7 +531,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
                 display: true,
                 text: scatterCorrelation.yLayerId,
                 color: '#94a3b8',
-                font: { size: 10, weight: '600' as const },
+                font: { size: 10, weight: 600 },
               },
               ticks: { color: '#94a3b8', font: { size: 9 } },
               grid: { color: 'rgba(255,255,255,0.06)' },
@@ -731,7 +731,12 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
             ) : chartType === 'pie' ? (
               <Pie ref={chartRef as never} data={pieChartData} options={pieChartOptions} />
             ) : chartType === 'scatter' ? (
-              <Scatter ref={chartRef as never} data={scatterChartData} options={scatterChartOptions} />
+              <Scatter
+                ref={chartRef as never}
+                // Mixed chart: scatter points + per-dataset `type: 'line'` regression fit.
+                data={scatterChartData as ChartData<'scatter'>}
+                options={scatterChartOptions}
+              />
             ) : (
               <Line ref={chartRef as never} data={chartData as ChartData<'line'>} options={cartesianChartOptions} />
             )

@@ -7,7 +7,6 @@ import {
   GIS_CONTENT_LEGACY_SEED_FOLDER_IDS,
   GIS_CONTENT_TEST_FIXTURE_ROWS,
   gisContentAppFormatRowMeta,
-  gisPortalRowDemoGeoJson,
   isGisContentPortalCustomFolderId,
   type GisContentAppFormat,
   type GisContentFolder,
@@ -1070,7 +1069,7 @@ export function restoreGisContentFromRecycleBin(id: string): GisContentRow | nul
 export type GisContentMapLayerPayload = {
   id: string
   name: string
-  geojson: ReturnType<typeof gisPortalRowDemoGeoJson>
+  geojson: import('./gisHostedFeatureLayerPortal').GisHostedFeatureLayerGeoJson
   sourceUrl: string
   portalRowId: string
   mapLayerConfig?: GisContentMapLayerConfig

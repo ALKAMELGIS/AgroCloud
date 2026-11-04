@@ -61,6 +61,10 @@ export type SiAoiMaskBuilderLayerLike = {
     types?: Array<{ id?: number | string; name?: string }>
     typeIdField?: string
   } | null
+  /** ArcGIS FeatureServer layers that stream features per viewport. */
+  viewportStreaming?: boolean
+  /** Import metadata (e.g. total service feature count). */
+  importMetadata?: { featureCount?: number }
 }
 
 function readFeatureProperties(raw: unknown): Record<string, unknown> {
@@ -192,13 +196,13 @@ export function listSiAoiLayerModeOptions(
       if (!l.id) return false
       const n = Array.isArray(l.geojson?.features) ? l.geojson!.features!.length : 0
       if (n > 0) return true
-      const metaN = Number((l as { importMetadata?: { featureCount?: number } }).importMetadata?.featureCount)
+      const metaN = Number(l.importMetadata?.featureCount)
       if (Number.isFinite(metaN) && metaN > 0) return true
-      return Boolean((l as { viewportStreaming?: boolean }).viewportStreaming)
+      return Boolean(l.viewportStreaming)
     })
     .map(l => {
       const geoN = Array.isArray(l.geojson?.features) ? l.geojson!.features!.length : 0
-      const metaN = Number((l as { importMetadata?: { featureCount?: number } }).importMetadata?.featureCount)
+      const metaN = Number(l.importMetadata?.featureCount)
       const featureCount =
         Number.isFinite(metaN) && metaN > geoN ? Math.floor(metaN) : geoN
       return {
@@ -363,7 +367,7 @@ export function resolveSiAoiMaskBuilderClipGeoJson(
   layer: SiAoiMaskBuilderLayerLike | null | undefined,
   settings: SiAoiMaskBuilderSettings,
   selectedFeatureKeys: Set<string>,
-): { type: 'FeatureCollection'; features: unknown[] } | null {
+): GeoJSON.FeatureCollection | null {
   if (!settings.enabled || !layer) return null
 
   const filterValues = effectiveAoiMaskFilterValues(layer, settings)
@@ -387,7 +391,7 @@ export function resolveSiAoiMaskBuilderClipGeoJson(
   }
 
   if (settings.maskMode === 'entire-layer' && layer.geojson?.features?.length) {
-    const features: unknown[] = []
+    const features: GeoJSON.Feature[] = []
     for (const raw of layer.geojson.features) {
       const aoi = featureToPrimaryAoiFeature(raw)
       if (aoi) features.push(aoi)
@@ -402,10 +406,10 @@ export function buildSiAoiMaskBuilderGeoJson(
   layer: SiAoiMaskBuilderLayerLike | null | undefined,
   settings: Pick<SiAoiMaskBuilderSettings, 'filterField' | 'filterValues' | 'maskMode'>,
   selectedFeatureKeys: Set<string>,
-): { type: 'FeatureCollection'; features: unknown[] } | null {
+): GeoJSON.FeatureCollection | null {
   if (!layer?.geojson?.features?.length) return null
   const features = layer.geojson.features
-  const out: unknown[] = []
+  const out: GeoJSON.Feature[] = []
 
   for (let i = 0; i < features.length; i++) {
     const raw = features[i]

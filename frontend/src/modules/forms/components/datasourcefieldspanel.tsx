@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
 import { useLanguage } from '@/core/localization/i18n'
 import '../templates/dsf-fill-modern.css'
 import { FieldCalculateTools } from './FieldCalculateTools'
+import { AdvancedLayerMultiSelect, type SavedLayer } from './AdvancedLayerMultiSelect'
+import { dsfTranslations } from './dsfTranslations'
+import { DsfEmptyState } from './DsfEmptyState'
+
+export { AdvancedLayerMultiSelect } from './AdvancedLayerMultiSelect'
 
 /** Stable DOM id for labels / aria-describedby (fill mode modern). */
 function makeFieldDomId(sourceId: string, fieldName: string): string {
@@ -45,51 +49,6 @@ type Props = {
     farmSuggestDebounceMs?: number
   }
 }
-
-const dsfTranslations = {
-  en: {
-    clear: 'Clear',
-    close: 'Close',
-    configure: 'Configure',
-    dataSource: 'Data Source',
-    dataSourceFields: 'Data Source Fields',
-    dragOrUseArrows: 'Drag or use arrows',
-    layer: 'Layer',
-    list: 'List',
-    loadingSavedLayers: 'Loading saved layers...',
-    multiLayerHint: 'Multi Layer then choose fields',
-    noFieldsFound: 'No fields found for this layer.',
-    noMatchingResults: 'No matching results.',
-    orderFields: 'Order Fields',
-    shortcutsHint: 'Ctrl/Cmd+A: select all filtered · Esc: clear filtered',
-    save: 'Save',
-    searchFields: 'Search fields...',
-    selectFields: 'Select Fields',
-    selectLayerFirst: 'Select a layer first.',
-    text: 'Text',
-  },
-  ar: {
-    clear: 'مسح',
-    close: 'إغلاق',
-    configure: 'إعداد',
-    dataSource: 'مصدر البيانات',
-    dataSourceFields: 'حقول مصدر البيانات',
-    dragOrUseArrows: 'اسحب أو استخدم الأسهم',
-    layer: 'الطبقة',
-    list: 'قائمة',
-    loadingSavedLayers: 'جار تحميل الطبقات المحفوظة...',
-    multiLayerHint: 'اختر طبقات متعددة ثم اختر الحقول',
-    noFieldsFound: 'لا توجد حقول لهذه الطبقة.',
-    noMatchingResults: 'لا توجد نتائج مطابقة.',
-    orderFields: 'ترتيب الحقول',
-    shortcutsHint: 'Ctrl/Cmd+A: تحديد الكل · Esc: مسح المحدد',
-    save: 'حفظ',
-    searchFields: 'ابحث في الحقول...',
-    selectFields: 'اختيار الحقول',
-    selectLayerFirst: 'اختر طبقة أولاً.',
-    text: 'نص',
-  },
-} as const
 
 const STORAGE_KEY = 'form_data_source_bindings_v1'
 const GIS_CONTENT_FIELDS_KEY = 'gisContent.layerFields.v1'
@@ -294,7 +253,6 @@ const normalizeEnabledBySource = (binding: FormBinding | undefined): { sourceIds
   return { sourceIds: ids, enabledBySource }
 }
 
-type SavedLayer = { id: string; name: string; fields: string[] }
 const DB_NAME = 'GisMapStore'
 const STORE_NAME = 'layers'
 
@@ -361,306 +319,6 @@ const moveItem = <T,>(arr: T[], from: number, to: number): T[] => {
   const [moved] = next.splice(from, 1)
   next.splice(to, 0, moved)
   return next
-}
-
-const getLayerGroupKey = (id: string) => {
-  const trimmed = String(id || '').trim()
-  const prefix = trimmed.includes(':') ? trimmed.slice(0, trimmed.indexOf(':')).toLowerCase() : ''
-  if (prefix) return prefix
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return 'url'
-  return 'custom'
-}
-
-const groupLabel: Record<string, string> = {
-  arcgis: 'ArcGIS',
-  geojson: 'GeoJSON',
-  url: 'URL',
-  custom: 'Custom',
-}
-
-function IndeterminateCheckbox({
-  checked,
-  indeterminate,
-  onChange,
-  ariaLabel,
-}: {
-  checked: boolean
-  indeterminate: boolean
-  onChange: () => void
-  ariaLabel: string
-}) {
-  const ref = useRef<HTMLInputElement | null>(null)
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = indeterminate && !checked
-  }, [indeterminate, checked])
-  return <input ref={ref} className="dsf-indeterminate-cb" type="checkbox" checked={checked} onChange={onChange} aria-label={ariaLabel} />
-}
-
-export function AdvancedLayerMultiSelect({
-  layers,
-  selectedIds,
-  onToggle,
-  onSelectMany,
-  onClearMany,
-  search,
-  onSearchChange,
-}: {
-  layers: SavedLayer[]
-  selectedIds: Set<string>
-  onToggle: (id: string) => void
-  onSelectMany: (ids: string[]) => void
-  onClearMany: (ids: string[]) => void
-  search: string
-  onSearchChange: (value: string) => void
-}) {
-  const { language } = useLanguage()
-  const ui = dsfTranslations[language]
-  const [view, setView] = useState<'list' | 'grid' | 'tree'>('grid')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'arcgis' | 'geojson' | 'url' | 'custom'>('all')
-  const [showSelectedOnly, setShowSelectedOnly] = useState(false)
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
-  const [scrollTop, setScrollTop] = useState(0)
-  const listViewportRef = useRef<HTMLDivElement | null>(null)
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return layers
-      .filter(l => {
-        if (typeFilter !== 'all' && getLayerGroupKey(l.id) !== typeFilter) return false
-        if (showSelectedOnly && !selectedIds.has(l.id)) return false
-        if (!q) return true
-        return l.name.toLowerCase().includes(q) || l.id.toLowerCase().includes(q)
-      })
-      .slice()
-  }, [layers, search, typeFilter, showSelectedOnly, selectedIds])
-
-  const selectedInFiltered = useMemo(() => filtered.filter(l => selectedIds.has(l.id)).length, [filtered, selectedIds])
-  const allFilteredIds = useMemo(() => filtered.map(l => l.id), [filtered])
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
-      e.preventDefault()
-      onSelectMany(allFilteredIds)
-      return
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      onClearMany(allFilteredIds)
-    }
-  }
-
-  const rowHeight = 30
-  const viewportHeight = 192
-  const overscan = 10
-  const total = filtered.length
-  const startIndex = view === 'list' ? Math.max(0, Math.floor(scrollTop / rowHeight) - overscan) : 0
-  const endIndex = view === 'list' ? Math.min(total, Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan) : total
-  const visible = view === 'list' ? filtered.slice(startIndex, endIndex) : filtered
-  const padTop = view === 'list' ? startIndex * rowHeight : 0
-  const padBottom = view === 'list' ? Math.max(0, (total - endIndex) * rowHeight) : 0
-
-  const grouped = useMemo(() => {
-    const map = new Map<string, SavedLayer[]>()
-    for (const l of filtered) {
-      const k = getLayerGroupKey(l.id)
-      const arr = map.get(k) ?? []
-      arr.push(l)
-      map.set(k, arr)
-    }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [filtered])
-
-  return (
-    <div className="dsf-layer-picker" onKeyDown={handleKeyDown}>
-      <div className="dsf-layer-toolbar">
-        <div className="dsf-layer-toolbar__left">
-          <div className="dsf-layer-toolbar__views" role="group" aria-label="Layer view">
-            <button
-              type="button"
-              className={`dsf-layer-toolbar__icon-btn${view === 'grid' ? ' is-active' : ''}`}
-              onClick={() => setView('grid')}
-              aria-label="Grid view"
-              aria-pressed={view === 'grid'}
-              title="Grid"
-            >
-              <i className="fa-solid fa-table-cells-large" aria-hidden />
-            </button>
-            <button
-              type="button"
-              className={`dsf-layer-toolbar__icon-btn${view === 'list' ? ' is-active' : ''}`}
-              onClick={() => setView('list')}
-              aria-label="List view"
-              aria-pressed={view === 'list'}
-              title="List"
-            >
-              <i className="fa-solid fa-list-ul" aria-hidden />
-            </button>
-          </div>
-
-          <select
-            className="dsf-layer-toolbar__select"
-            value={typeFilter}
-            onChange={e => setTypeFilter(e.target.value as any)}
-            aria-label="Layer type filter"
-          >
-            <option value="all">All</option>
-            <option value="arcgis">ArcGIS</option>
-            <option value="geojson">GeoJSON</option>
-            <option value="url">URL</option>
-            <option value="custom">Custom</option>
-          </select>
-
-          <label className="dsf-layer-filter-toggle">
-            <input type="checkbox" checked={showSelectedOnly} onChange={() => setShowSelectedOnly(v => !v)} aria-label="Show selected only" />
-            <span className="dsf-layer-filter-toggle__ui" aria-hidden />
-            <span className="dsf-layer-filter-toggle__text">Selected only</span>
-          </label>
-        </div>
-
-        <div className="dsf-layer-toolbar__right">
-          <div className="dsf-layer-toolbar__count" aria-live="polite">
-            <span className="dsf-layer-toolbar__count-num">{selectedInFiltered}</span>
-            <span className="dsf-layer-toolbar__count-sep">/</span>
-            <span>{filtered.length}</span>
-            <span className="dsf-layer-toolbar__count-label">selected</span>
-          </div>
-          <button type="button" className="dsf-layer-toolbar__btn" onClick={() => onSelectMany(allFilteredIds)} disabled={filtered.length === 0} aria-label="Select all filtered">
-            <i className="fa-solid fa-check-double" aria-hidden />
-            Select all
-          </button>
-          <button type="button" className="dsf-layer-toolbar__btn dsf-layer-toolbar__btn--ghost" onClick={() => onClearMany(allFilteredIds)} disabled={selectedInFiltered === 0} aria-label="Clear all filtered">
-            <i className="fa-solid fa-xmark" aria-hidden />
-            Clear
-          </button>
-        </div>
-      </div>
-
-      <div className="dsf-layer-search-wrap">
-        <i className="fa-solid fa-magnifying-glass dsf-layer-search-wrap__icon" aria-hidden />
-        <input
-          className="dsf-layer-search"
-          value={search}
-          onChange={e => onSearchChange(e.target.value)}
-          placeholder="Search layers…"
-          aria-label="Search available layers"
-        />
-      </div>
-
-      {view === 'tree' ? (
-        <div className="dsf-layer-tree-scroll" style={{ maxHeight: viewportHeight }}>
-          {grouped.length ? (
-            grouped.map(([k, items]) => {
-              const label = groupLabel[k] ?? k
-              const totalCount = items.length
-              const selectedCount = items.filter(l => selectedIds.has(l.id)).length
-              const allChecked = totalCount > 0 && selectedCount === totalCount
-              const indeterminate = selectedCount > 0 && selectedCount < totalCount
-              const expanded = expandedGroups[k] ?? true
-              return (
-                <div key={k} style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: '#ffffff', overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 10px', background: '#f8fafc' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <IndeterminateCheckbox
-                        checked={allChecked}
-                        indeterminate={indeterminate}
-                        onChange={() => {
-                          const ids = items.map(i => i.id)
-                          if (allChecked) onClearMany(ids)
-                          else onSelectMany(ids)
-                        }}
-                        ariaLabel={`Select group ${label}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setExpandedGroups(prev => ({ ...prev, [k]: !(prev[k] ?? true) }))}
-                        style={{ border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: 10, padding: '6px 10px', cursor: 'pointer', fontWeight: 900, fontSize: 12 }}
-                        aria-label={`Toggle group ${label}`}
-                      >
-                        {expanded ? '▾' : '▸'} {label} <span style={{ color: '#64748b', fontWeight: 800 }}>({selectedCount}/{totalCount})</span>
-                      </button>
-                    </div>
-                  </div>
-                  {!expanded ? null : (
-                    <div className="dsf-layer-tree-items">
-                      {items.map(l => {
-                        const checked = selectedIds.has(l.id)
-                        return (
-                          <label key={l.id} className={`dsf-layer-row${checked ? ' dsf-layer-row--selected' : ''}`}>
-                            <input type="checkbox" className="dsf-layer-row-native" checked={checked} onChange={() => onToggle(l.id)} aria-label={`Select layer ${l.name}`} />
-                            <span className="dsf-layer-row-indicator" aria-hidden />
-                            <span className="dsf-layer-row-label">{l.name}</span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })
-          ) : (
-            <div className="dsf-layer-empty">No layers found.</div>
-          )}
-        </div>
-      ) : view === 'grid' ? (
-        <div className="dsf-layer-grid">
-          {filtered.length ? (
-            filtered.map(l => {
-              const checked = selectedIds.has(l.id)
-              return (
-                <label key={l.id} className={`dsf-layer-card${checked ? ' dsf-layer-card--selected' : ''}`}>
-                  <input type="checkbox" className="dsf-layer-card-native" checked={checked} onChange={() => onToggle(l.id)} aria-label={`Select layer ${l.name}`} />
-                  <span className="dsf-layer-card-body">
-                    <span className="dsf-layer-card-top">
-                      <span className="dsf-layer-card-title">{l.name}</span>
-                      <span className="dsf-layer-card-badge" aria-hidden>
-                        <i className="fa-solid fa-check" />
-                      </span>
-                    </span>
-                    <span className="dsf-layer-card-meta">{l.fields.length ? `${l.fields.length} fields` : 'Fields: unknown'}</span>
-                  </span>
-                </label>
-              )
-            })
-          ) : (
-            <div className="dsf-layer-grid-empty">No layers found.</div>
-          )}
-        </div>
-      ) : (
-        <div
-          ref={listViewportRef}
-          onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}
-          className="dsf-layer-list-scroll"
-          style={{ height: viewportHeight }}
-          role="listbox"
-          aria-multiselectable="true"
-          aria-label="Available layers"
-          tabIndex={0}
-        >
-          <div style={{ paddingTop: padTop, paddingBottom: padBottom, display: 'grid', gap: 6 }}>
-            {total ? (
-              visible.map(l => {
-                const checked = selectedIds.has(l.id)
-                return (
-                  <label key={l.id} className={`dsf-layer-row dsf-layer-row--compact${checked ? ' dsf-layer-row--selected' : ''}`} style={{ height: rowHeight }}>
-                    <input type="checkbox" className="dsf-layer-row-native" checked={checked} onChange={() => onToggle(l.id)} aria-label={`Select layer ${l.name}`} />
-                    <span className="dsf-layer-row-indicator" aria-hidden />
-                    <span className="dsf-layer-row-label">{l.name}</span>
-                  </label>
-                )
-              })
-            ) : (
-              <div className="dsf-layer-empty">No layers found.</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="dsf-shortcuts">
-        <i className="fa-regular fa-keyboard dsf-shortcuts__icon" aria-hidden />
-        <span>{ui.shortcutsHint}</span>
-      </div>
-    </div>
-  )
 }
 
 export function DataSourceFieldsPanel({
@@ -1245,9 +903,9 @@ export function DataSourceFieldsPanel({
 
               <div className="dsf-settings-layers__body">
                 {savedLayersLoading ? (
-                  <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>{text.loadingSavedLayers}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ds-color-text-muted)', fontWeight: 700 }}>{text.loadingSavedLayers}</div>
                 ) : savedLayersError ? (
-                  <div style={{ fontSize: 12, color: '#b91c1c', fontWeight: 700, background: '#fef2f2', border: '1px solid #fecaca', padding: '8px 10px', borderRadius: 12 }}>
+                  <div style={{ fontSize: 12, color: 'var(--ds-color-danger)', fontWeight: 700, background: 'color-mix(in srgb, var(--ds-color-danger) 8%, var(--ds-color-surface))', border: '1px solid color-mix(in srgb, var(--ds-color-danger) 40%, var(--ds-color-border))', padding: '8px 10px', borderRadius: 12 }}>
                     {savedLayersError}
                   </div>
                 ) : null}
@@ -1337,8 +995,8 @@ export function DataSourceFieldsPanel({
                   <div className="dsf-source-section__grid">
                     <div className="dsf-field-column">
                       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                        <div style={{ fontSize: 12, fontWeight: 900, color: '#0f172a' }}>{text.selectFields}</div>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#64748b' }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--ds-color-text)' }}>{text.selectFields}</div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--ds-color-text-muted)' }}>
                           {selectedConfigs.length}/{availableFields.length}
                         </div>
                       </div>
@@ -1349,7 +1007,7 @@ export function DataSourceFieldsPanel({
                           value={fieldSearch}
                           onChange={e => setFieldSearchForSource(id, e.target.value)}
                           placeholder={text.searchFields}
-                          style={{ flex: 1, padding: '10px 12px', borderRadius: 12, border: '1px solid #e2e8f0', background: '#ffffff' }}
+                          style={{ flex: 1, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--ds-color-border)', background: 'var(--ds-color-surface)' }}
                           aria-label={`${layerName}:Search fields`}
                         />
                         <button
@@ -1359,12 +1017,12 @@ export function DataSourceFieldsPanel({
                           style={{
                             padding: '10px 12px',
                             borderRadius: 12,
-                            border: '1px solid #e2e8f0',
-                            background: '#ffffff',
+                            border: '1px solid var(--ds-color-border)',
+                            background: 'var(--ds-color-surface)',
                             cursor: fieldSearch.trim() ? 'pointer' : 'not-allowed',
                             fontWeight: 800,
                             fontSize: 12,
-                            color: '#334155',
+                            color: 'var(--ds-color-text-secondary)',
                           }}
                         >
                           {text.clear}
@@ -1406,7 +1064,7 @@ export function DataSourceFieldsPanel({
                             )
                           })
                         ) : (
-                          <div style={{ fontSize: 12, color: '#64748b' }}>
+                          <div style={{ fontSize: 12, color: 'var(--ds-color-text-muted)' }}>
                             {availableFields.length ? text.noMatchingResults : id.trim() ? text.noFieldsFound : text.selectLayerFirst}
                           </div>
                         )}
@@ -1419,7 +1077,7 @@ export function DataSourceFieldsPanel({
                         <div className="dsf-order-column__hint">{selectedConfigs.length ? text.dragOrUseArrows : '—'}</div>
                       </div>
 
-                      <div className="dsf-order-list" style={{ marginTop: 10, display: 'grid', gap: 8, maxHeight: 320, overflow: 'auto', paddingRight: 6 }}>
+                      <div className="dsf-order-list" style={{ marginTop: 10, display: 'grid', gap: 8, maxHeight: 320, overflow: 'auto', paddingInlineEnd: 6 }}>
                         {selectedConfigs.length ? (
                           selectedConfigs.map((cfg, idx) => {
                             const canUp = idx > 0
@@ -1476,16 +1134,16 @@ export function DataSourceFieldsPanel({
                                   gap: 10,
                                   padding: '8px 10px',
                                   borderRadius: 12,
-                                  border: '1px solid #e2e8f0',
-                                  background: dragActive ? '#f1f5f9' : '#ffffff',
+                                  border: '1px solid var(--ds-color-border)',
+                                  background: dragActive ? 'var(--ds-color-surface-2)' : 'var(--ds-color-surface)',
                                 }}
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                                  <div style={{ fontWeight: 900, color: '#94a3b8', cursor: 'grab', userSelect: 'none' }} aria-hidden="true">
+                                  <div style={{ fontWeight: 900, color: 'var(--ds-color-text-muted)', cursor: 'grab', userSelect: 'none' }} aria-hidden="true">
                                     ☰
                                   </div>
                                   <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 900, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--ds-color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                       {idx + 1}. {cfg.name}
                                     </div>
                                   </div>
@@ -1506,14 +1164,14 @@ export function DataSourceFieldsPanel({
                                     disabled={!canUp}
                                     aria-label="Move up"
                                     style={{
-                                      border: '1px solid #e2e8f0',
-                                      background: '#ffffff',
+                                      border: '1px solid var(--ds-color-border)',
+                                      background: 'var(--ds-color-surface)',
                                       borderRadius: 10,
                                       padding: '6px 10px',
                                       cursor: canUp ? 'pointer' : 'not-allowed',
                                       fontWeight: 900,
                                       fontSize: 12,
-                                      color: '#334155',
+                                      color: 'var(--ds-color-text-secondary)',
                                     }}
                                   >
                                     ↑
@@ -1532,14 +1190,14 @@ export function DataSourceFieldsPanel({
                                     disabled={!canDown}
                                     aria-label="Move down"
                                     style={{
-                                      border: '1px solid #e2e8f0',
-                                      background: '#ffffff',
+                                      border: '1px solid var(--ds-color-border)',
+                                      background: 'var(--ds-color-surface)',
                                       borderRadius: 10,
                                       padding: '6px 10px',
                                       cursor: canDown ? 'pointer' : 'not-allowed',
                                       fontWeight: 900,
                                       fontSize: 12,
-                                      color: '#334155',
+                                      color: 'var(--ds-color-text-secondary)',
                                     }}
                                   >
                                     ↓
@@ -1556,14 +1214,14 @@ export function DataSourceFieldsPanel({
                                     }}
                                     aria-label="Remove field"
                                     style={{
-                                      border: '1px solid #e2e8f0',
-                                      background: '#ffffff',
+                                      border: '1px solid var(--ds-color-border)',
+                                      background: 'var(--ds-color-surface)',
                                       borderRadius: 10,
                                       padding: '6px 10px',
                                       cursor: 'pointer',
                                       fontWeight: 900,
                                       fontSize: 12,
-                                      color: '#b91c1c',
+                                      color: 'var(--ds-color-danger)',
                                     }}
                                   >
                                     ✕
@@ -1573,7 +1231,7 @@ export function DataSourceFieldsPanel({
                             )
                           })
                         ) : (
-                          <div style={{ fontSize: 12, color: '#64748b', border: '1px dashed #cbd5e1', background: '#f8fafc', padding: '10px 12px', borderRadius: 12 }}>
+                          <div style={{ fontSize: 12, color: 'var(--ds-color-text-muted)', border: '1px dashed var(--ds-color-border-strong)', background: 'var(--ds-color-surface-2)', padding: '10px 12px', borderRadius: 12 }}>
                             Select fields from the left list to show them here, then reorder them.
                           </div>
                         )}
@@ -1771,11 +1429,7 @@ export function DataSourceFieldsPanel({
   }
 
   if (!hasAny) {
-    return (
-      <div style={{ padding: 12, borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontSize: 13 }}>
-        No configured data source fields for <span style={{ fontWeight: 700 }}>{formKey}</span>. Ask an Admin/Manager to configure this form in Settings.
-      </div>
-    )
+    return <DsfEmptyState formKey={formKey} />
   }
 
   const mgmtDisplayName = mgmtKey ? getLayerDisplayName(mgmtKey) : ''
@@ -1789,25 +1443,25 @@ export function DataSourceFieldsPanel({
         <div
           key={mgmtKey}
           className={fillPresentation === 'modern' ? 'dsf-fill-source-card' : undefined}
-          style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: 'white' }}
+          style={{ border: '1px solid var(--ds-color-border)', borderRadius: 12, background: 'var(--ds-color-surface)' }}
         >
           <div
             className={fillPresentation === 'modern' ? 'dsf-fill-source-card__head' : undefined}
-            style={{ padding: '12px 14px', borderBottom: '1px solid #e2e8f0', fontWeight: 800, color: '#0f172a' }}
+            style={{ padding: '12px 14px', borderBottom: '1px solid var(--ds-color-border)', fontWeight: 800, color: 'var(--ds-color-text)' }}
           >
-            Management Layer <span style={{ fontWeight: 700, color: '#64748b' }}>({getLayerDisplayName(mgmtKey)})</span>
+            Management Layer <span style={{ fontWeight: 700, color: 'var(--ds-color-text-muted)' }}>({getLayerDisplayName(mgmtKey)})</span>
           </div>
           <div
             className={fillPresentation === 'modern' ? 'dsf-fill-source-grid' : undefined}
             style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}
           >
             {(mgmtBinding?.selectedFields ?? []).map(fieldName => (
-              <label key={fieldName} style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#334155' }}>
+              <label key={fieldName} style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--ds-color-text-secondary)' }}>
                 <span style={{ fontWeight: 800 }}>{fieldName}</span>
                 {(() => {
                   const mgmtLayerErr = layerFieldErrors?.[mgmtDisplayName]?.[fieldName]
                   return mgmtLayerErr ? (
-                    <span id={`${makeFieldDomId(mgmtKey, fieldName)}-err`} role="alert" style={{ fontSize: 11, color: '#b91c1c', fontWeight: 700 }}>
+                    <span id={`${makeFieldDomId(mgmtKey, fieldName)}-err`} role="alert" style={{ fontSize: 11, color: 'var(--ds-color-danger)', fontWeight: 700 }}>
                       {mgmtLayerErr}
                     </span>
                   ) : null
@@ -1841,7 +1495,7 @@ export function DataSourceFieldsPanel({
                         className={fillPresentation === 'modern' ? 'dsf-float-input' : undefined}
                         aria-invalid={Boolean(mgmtLayerErr)}
                         aria-describedby={mgmtLayerErr ? `${mgmtFid}-err` : undefined}
-                        style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid #e2e8f0', background: 'white' }}
+                        style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid var(--ds-color-border)', background: 'var(--ds-color-surface)' }}
                       >
                         <option value="">Select…</option>
                         {domainOptions.map(opt => (
@@ -1861,7 +1515,7 @@ export function DataSourceFieldsPanel({
                         className={fillPresentation === 'modern' ? 'dsf-float-input' : undefined}
                         aria-invalid={Boolean(mgmtLayerErr)}
                         aria-describedby={mgmtLayerErr ? `${mgmtFid}-err` : undefined}
-                        style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid #e2e8f0', background: 'white' }}
+                        style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid var(--ds-color-border)', background: 'var(--ds-color-surface)' }}
                       >
                         <option value="">Select…</option>
                         <option value="true">Yes</option>
@@ -1878,7 +1532,7 @@ export function DataSourceFieldsPanel({
                       className={fillPresentation === 'modern' ? 'dsf-float-input' : undefined}
                       aria-invalid={Boolean(mgmtLayerErr)}
                       aria-describedby={mgmtLayerErr ? `${mgmtFid}-err` : undefined}
-                      style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid #e2e8f0' }}
+                      style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid var(--ds-color-border)' }}
                     />
                   )
                 })()}
@@ -2060,11 +1714,11 @@ export function DataSourceFieldsPanel({
             id={toSourceDomId(sourceId)}
             data-source-id={sourceId}
             className={fillPresentation === 'modern' ? 'dsf-fill-source-card' : undefined}
-            style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: 'white' }}
+            style={{ border: '1px solid var(--ds-color-border)', borderRadius: 12, background: 'var(--ds-color-surface)' }}
           >
             <div
               className={fillPresentation === 'modern' ? 'dsf-fill-source-card__head' : undefined}
-              style={{ padding: '12px 14px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, color: '#0f172a' }}
+              style={{ padding: '12px 14px', borderBottom: '1px solid var(--ds-color-border)', fontWeight: 700, color: 'var(--ds-color-text)' }}
             >
               {displayName}
             </div>
@@ -2087,8 +1741,8 @@ export function DataSourceFieldsPanel({
                 const effectiveFieldType = isEcTimeField ? 'time' : fieldType
                 const autoReadOnly =
                   isCalcEcPh || (isAgro21 && FARM_AUTO_FIELDS.has(fieldName) && fieldName !== 'Farm_Code') || (isCropsPlanted && fieldName === 'Farm_Name')
-                const inputBaseStyle = { padding: '10px 12px', borderRadius: 12, border: '1px solid #e2e8f0' } as const
-                const inputAutoStyle = { ...inputBaseStyle, background: '#f8fafc', borderColor: '#cbd5e1', color: '#0f172a' } as const
+                const inputBaseStyle = { padding: '10px 12px', borderRadius: 12, border: '1px solid var(--ds-color-border)' } as const
+                const inputAutoStyle = { ...inputBaseStyle, background: 'var(--ds-color-surface-2)', borderColor: 'var(--ds-color-border-strong)', color: 'var(--ds-color-text)' } as const
                 const fieldValidationError = (() => {
                   if (formKey !== 'EC') return null
                   if (isCalcEcPh) return null
@@ -2116,18 +1770,18 @@ export function DataSourceFieldsPanel({
                   (layerErrMsg && String(layerErrMsg).trim()) || (fieldValidationError && String(fieldValidationError).trim()) || null
                 const inputErrorStyle =
                   mergedErrMsg && !autoReadOnly
-                    ? ({ ...inputBaseStyle, borderColor: '#fecaca', background: '#fef2f2' } as const)
+                    ? ({ ...inputBaseStyle, borderColor: 'color-mix(in srgb, var(--ds-color-danger) 40%, var(--ds-color-border))', background: 'color-mix(in srgb, var(--ds-color-danger) 8%, var(--ds-color-surface))' } as const)
                     : undefined
                 const labelGap = modernFill ? 10 : 6
                 return (
                   <label
                     key={fieldName}
                     className={modernFill ? 'dsf-modern-field-label' : undefined}
-                    style={{ display: 'flex', flexDirection: 'column', gap: labelGap, fontSize: 12, color: '#334155' }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: labelGap, fontSize: 12, color: 'var(--ds-color-text-secondary)' }}
                   >
                     <span style={{ fontWeight: 700 }}>
                       {fieldName}
-                      {required ? <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span> : null}
+                      {required ? <span style={{ color: 'var(--ds-color-danger)', marginInlineStart: 4 }}>*</span> : null}
                     </span>
                     {isFarmLookupEnabled && fieldName === 'Farm_Code' ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}>
@@ -2173,15 +1827,15 @@ export function DataSourceFieldsPanel({
                         {farmUi.open && (farmUi.loading || farmUi.error || farmUi.suggestions.length) ? (
                           <div
                             className={modernFill ? 'dsf-lookup-panel' : undefined}
-                            style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: 'white', maxHeight: 220, overflow: 'auto' }}
+                            style={{ border: '1px solid var(--ds-color-border)', borderRadius: 12, background: 'var(--ds-color-surface)', maxHeight: 220, overflow: 'auto' }}
                           >
                             {farmUi.loading ? (
-                              <div style={{ padding: '10px 12px', fontSize: 12, color: '#64748b', fontWeight: 700 }}>
+                              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ds-color-text-muted)', fontWeight: 700 }}>
                                 Searching…
                               </div>
                             ) : null}
                             {farmUi.error ? (
-                              <div style={{ padding: '10px 12px', fontSize: 12, color: '#b91c1c', fontWeight: 700 }}>
+                              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ds-color-danger)', fontWeight: 700 }}>
                                 {farmUi.error}
                               </div>
                             ) : null}
@@ -2202,21 +1856,21 @@ export function DataSourceFieldsPanel({
                                     }}
                                     style={{
                                       width: '100%',
-                                      textAlign: 'left',
+                                      textAlign: 'start',
                                       padding: '10px 12px',
                                       border: 'none',
                                       background: 'transparent',
                                       cursor: 'pointer',
                                     }}
                                   >
-                                    <div style={{ fontWeight: 800, color: '#0f172a' }}>{opt.name || opt.code}</div>
+                                    <div style={{ fontWeight: 800, color: 'var(--ds-color-text)' }}>{opt.name || opt.code}</div>
                                     {opt.name && opt.name !== opt.code ? (
-                                      <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>{opt.code}</div>
+                                      <div style={{ fontSize: 11, color: 'var(--ds-color-text-muted)', fontWeight: 700 }}>{opt.code}</div>
                                     ) : null}
                                   </button>
                                 ))
                               ) : (
-                                <div style={{ padding: '10px 12px', fontSize: 12, color: '#64748b', fontWeight: 700 }}>
+                                <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ds-color-text-muted)', fontWeight: 700 }}>
                                   No matches
                                 </div>
                               )
@@ -2276,15 +1930,15 @@ export function DataSourceFieldsPanel({
                             {valveUi.open && (valveUi.loading || valveUi.error || valveUi.suggestions.length) ? (
                               <div
                                 className={modernFill ? 'dsf-lookup-panel' : undefined}
-                                style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: 'white', maxHeight: 220, overflow: 'auto' }}
+                                style={{ border: '1px solid var(--ds-color-border)', borderRadius: 12, background: 'var(--ds-color-surface)', maxHeight: 220, overflow: 'auto' }}
                               >
                                 {valveUi.loading ? (
-                                  <div style={{ padding: '10px 12px', fontSize: 12, color: '#64748b', fontWeight: 700 }}>
+                                  <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ds-color-text-muted)', fontWeight: 700 }}>
                                     Searching…
                                   </div>
                                 ) : null}
                                 {valveUi.error ? (
-                                  <div style={{ padding: '10px 12px', fontSize: 12, color: '#b91c1c', fontWeight: 700 }}>
+                                  <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ds-color-danger)', fontWeight: 700 }}>
                                     {valveUi.error}
                                   </div>
                                 ) : null}
@@ -2304,18 +1958,18 @@ export function DataSourceFieldsPanel({
                                         }}
                                         style={{
                                           width: '100%',
-                                          textAlign: 'left',
+                                          textAlign: 'start',
                                           padding: '10px 12px',
                                           border: 'none',
                                           background: 'transparent',
                                           cursor: 'pointer',
                                         }}
                                       >
-                                        <div style={{ fontWeight: 800, color: '#0f172a' }}>{opt.valveNo}</div>
+                                        <div style={{ fontWeight: 800, color: 'var(--ds-color-text)' }}>{opt.valveNo}</div>
                                       </button>
                                     ))
                                   ) : (
-                                    <div style={{ padding: '10px 12px', fontSize: 12, color: '#64748b', fontWeight: 700 }}>
+                                    <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ds-color-text-muted)', fontWeight: 700 }}>
                                       No matches
                                     </div>
                                   )
@@ -2333,7 +1987,7 @@ export function DataSourceFieldsPanel({
                           const nextValue = e.target.value
                           commitField(fieldName, nextValue)
                         }}
-                        style={autoReadOnly ? inputAutoStyle : inputErrorStyle ?? { ...inputBaseStyle, background: 'white' }}
+                        style={autoReadOnly ? inputAutoStyle : inputErrorStyle ?? { ...inputBaseStyle, background: 'var(--ds-color-surface)' }}
                         className={modernFill ? 'dsf-float-input' : undefined}
                         required={required}
                         aria-required={required}
@@ -2356,7 +2010,7 @@ export function DataSourceFieldsPanel({
                           const nextValue = e.target.value
                           commitField(fieldName, nextValue)
                         }}
-                        style={autoReadOnly ? inputAutoStyle : inputErrorStyle ?? { ...inputBaseStyle, background: 'white' }}
+                        style={autoReadOnly ? inputAutoStyle : inputErrorStyle ?? { ...inputBaseStyle, background: 'var(--ds-color-surface)' }}
                         className={modernFill ? 'dsf-float-input' : undefined}
                         required={required}
                         aria-required={required}
@@ -2388,12 +2042,12 @@ export function DataSourceFieldsPanel({
                       />
                     )}
                     {mergedErrMsg ? (
-                      <div id={`${fid}-err`} role="alert" style={{ fontSize: 11, color: '#b91c1c', fontWeight: 700 }}>
+                      <div id={`${fid}-err`} role="alert" style={{ fontSize: 11, color: 'var(--ds-color-danger)', fontWeight: 700 }}>
                         {mergedErrMsg}
                       </div>
                     ) : null}
                     {autoReadOnly ? (
-                      <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>
+                      <div style={{ fontSize: 11, color: 'var(--ds-color-text-muted)', fontWeight: 700 }}>
                         {isCalcEcPh ? 'Calculated field (read-only)' : 'Auto-filled from Agro_Structures (FeatureServer/21)'}
                       </div>
                     ) : null}

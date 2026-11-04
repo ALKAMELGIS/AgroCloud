@@ -13,6 +13,12 @@ import {
   type WeeklyCompositeLite,
 } from './staticAoiMultiChartData'
 
+/** Week window before compositing (no mean yet); optional pre-formatted label. */
+export type AoiWeeklyWindow = Omit<WeeklyCompositeLite, 'mean'> & {
+  mean?: number
+  label?: string
+}
+
 export type AoiWeeklyComposite = WeeklyCompositeLite & {
   label: string
   mean: number
@@ -100,7 +106,7 @@ export function meanDailyInWindow(
 
 export function buildWeeklyCompositesFromDaily(
   daily: SentinelHubDailyIndexMeans[],
-  weeklyWindows: WeeklyCompositeLite[],
+  weeklyWindows: AoiWeeklyWindow[],
   primaryLayerId: string,
 ): AoiWeeklyComposite[] {
   const primaryKey = layerIdToDailyKey(primaryLayerId) ?? 'ndvi'

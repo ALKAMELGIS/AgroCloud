@@ -1,12 +1,13 @@
 import type { ThemeOptions } from '@mui/material/styles'
+import { agroRadius } from './tokens'
 
 export const agroShape: NonNullable<ThemeOptions['shape']> = {
-  borderRadius: 8,
+  borderRadius: agroRadius.md,
 }
 
 export const agroRadii = {
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
+  sm: agroRadius.xs,
+  md: agroRadius.sm,
+  lg: agroRadius.lg,
+  xl: agroRadius.xl,
 } as const
