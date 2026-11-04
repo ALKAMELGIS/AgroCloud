@@ -1480,14 +1480,7 @@ html[data-theme='dark'] .content--operations-fit .ec-header {
 }
 
 .content--operations-fit .ec-header::after {
-  content: '';
-  flex: 1 1 auto;
-  align-self: center;
-  min-width: min(160px, 22vw);
-  height: 1px;
-  margin-inline-start: clamp(14px, 3.5vw, 40px);
-  background: linear-gradient(90deg, rgba(148, 163, 184, 0.45), rgba(226, 232, 240, 0));
-  border-radius: 999px;
+  content: none;
 }
 
 .content--operations-fit .ec-title {
@@ -1521,19 +1514,19 @@ html[data-theme='dark'] .content--operations-fit .ec-header {
   max-width: min(56ch, 100%);
 }
 
-/* Icons: glyph-only, refined color — no filled tiles */
+/* Icons: tinted squircle tile derived from each icon's own colour (works in light + dark). */
 .content--operations-fit .ec-title .ops-head-icon {
-  width: auto;
-  height: auto;
-  min-width: 2.5rem;
-  min-height: 2.5rem;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
-  margin-top: 2px;
-  border: none !important;
-  border-radius: 0;
-  background: transparent !important;
+  margin-top: 0;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent) !important;
+  border-radius: 12px;
+  background: color-mix(in srgb, currentColor 12%, transparent) !important;
   box-shadow: none;
-  font-size: clamp(1.35rem, 2.35vw, 1.72rem);
+  font-size: 1.15rem;
   line-height: 1;
 }
 
