@@ -7967,7 +7967,7 @@ export default function SatelliteIntelligence() {
       });
       setSiUploadPhase('processing');
       setSiUploadProgressPct(40);
-      setAddLayerStatus('Processing...');
+      setAddLayerStatus('Processing…');
 
       if (parsed.type === 'table') {
         throw new Error('This CSV has no latitude/longitude columns. Add lat/lon columns or use GeoJSON / KML / SHP (.zip).');

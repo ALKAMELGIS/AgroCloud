@@ -1,3 +1,4 @@
+import { fetchPriorityAttr } from '@/core/utils/fetchPriority'
 import { useEffect, useRef, useState } from 'react'
 import { BrandLogoOrbit } from '@/components/brand/BrandLogoOrbit'
 import { isPwaStandalone, isTouchDevice } from './pwaInstall'
@@ -118,7 +119,7 @@ export default function SplashScreen({
               src={SPLASH_VIDEO_POSTER}
               alt=""
               decoding="async"
-              fetchPriority="high"
+              {...fetchPriorityAttr('high')}
             />
           )}
         </div>

@@ -136,7 +136,7 @@ function formatEta(ms: number): string {
 
 function formatBusyLabel(progress: ExportProgressState | null, _tick: number): string {
   if (!progress || progress.total <= 0) {
-    return progress?.currentName || 'Exporting...'
+    return progress?.currentName || 'Exporting…'
   }
   if (progress.mode === 'agri-intel') {
     return progress.currentName || 'Generating Agricultural Intelligence Report...'

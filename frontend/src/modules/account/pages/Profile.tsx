@@ -763,7 +763,7 @@ export default function Profile() {
                     </div>
                   )}
                 </div>
-                <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={onAvatarFile} aria-hidden />
+                <input ref={fileRef} type="file" accept="image/*" className="sr-only" onChange={onAvatarFile} tabIndex={-1} aria-hidden />
                 <button type="button" className="profile-avatar-camera" onClick={() => fileRef.current?.click()} aria-label={text.changePhoto}>
                   <i className="fa-solid fa-camera" aria-hidden />
                 </button>

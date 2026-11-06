@@ -1,4 +1,5 @@
 import { Component, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { MAIN_CONTENT_ID, SkipLink } from '@/components/navigation/SkipLink'
 import { HashRouter, Navigate, useLocation } from 'react-router-dom'
 import { AppDialogProvider } from './providers/AppDialogProvider'
 import HeaderBar from '@/app/layouts/HeaderBar'
@@ -526,6 +527,9 @@ function AppShell() {
   return (
     <>
       {showAppChrome ? (
+        <SkipLink />
+      ) : null}
+      {showAppChrome ? (
         <HeaderBar
           onToggleMobileNav={() => setMobileNavOpen(v => !v)}
           mobileNavOpen={mobileNavOpen}
@@ -539,13 +543,14 @@ function AppShell() {
             onCloseMobileNav={() => setMobileNavOpen(false)}
           />
         ) : null}
-        <main className={mainContentClass}>
+        <main id={MAIN_CONTENT_ID} tabIndex={-1} className={mainContentClass}>
           {routeBody}
         </main>
       </div>
     </>
   )
 }
+
 
 export default function App() {
   return (

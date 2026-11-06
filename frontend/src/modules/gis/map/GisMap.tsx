@@ -1905,7 +1905,7 @@ export default function GisMap() {
       ? (mapboxGlobeRef.current?.getMap ? mapboxGlobeRef.current.getMap() : mapboxGlobeRef.current)
       : null
     if (!map && !globe) return
-    setMapSearchStatus('Searching...')
+    setMapSearchStatus('Searching…')
     const coordinateMatch = query.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/)
     if (coordinateMatch) {
       const lat = Number(coordinateMatch[1])

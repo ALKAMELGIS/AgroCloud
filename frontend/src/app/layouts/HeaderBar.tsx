@@ -1,3 +1,4 @@
+import { fetchPriorityAttr } from '@/core/utils/fetchPriority'
 import './header.css'
 import '@/assets/styles/lux-theme.css'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
@@ -147,7 +148,7 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
             {hs.showLogoIcon ? (
               <span className={usesDefaultMark ? 'logo-icon logo-icon--mark' : 'logo-icon'}>
                 {logoIconSrc ? (
-                  <img className="logo-icon__img" src={logoIconSrc} alt="Brand icon" loading="lazy" decoding="async" />
+                  <img className="logo-icon__img" src={logoIconSrc} alt={hs.showLogoText ? "" : "AgroCloud"} aria-hidden={hs.showLogoText ? true : undefined} decoding="async" {...fetchPriorityAttr('high')} />
                 ) : hs.logoSvg.trim().startsWith('<svg') ? (
                   <span className="logo-icon__svg" aria-hidden dangerouslySetInnerHTML={{ __html: hs.logoSvg }} />
                 ) : (
@@ -176,7 +177,7 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
             height={48}
             loading="eager"
             decoding="async"
-            fetchPriority="high"
+            {...fetchPriorityAttr('high')}
             draggable={false}
             onError={() => {
               if (logoSrc !== ELITE_AGRO_LOGO_WHITE_URL) setLogoSrc(ELITE_AGRO_LOGO_WHITE_URL)

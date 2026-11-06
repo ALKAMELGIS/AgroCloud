@@ -1,3 +1,4 @@
+import { fetchPriorityAttr } from '@/core/utils/fetchPriority'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { normalizeEmail, normalizeRole, startSession } from '@/core/auth/auth'
@@ -1026,7 +1027,7 @@ export default function Login() {
             src={LOGIN_BG_POSTER}
             alt=""
             decoding="async"
-            fetchPriority="low"
+            {...fetchPriorityAttr('low')}
           />
         ) : (
           <video
@@ -1051,7 +1052,7 @@ export default function Login() {
         <div className="login-card">
           <div className="login-card__brand">
             <div className="login-logo-wrap">
-              <img src={ELITE_AGRO_LOGO_WHITE_URL} alt="Elite Agro Projects" />
+              <img src={ELITE_AGRO_LOGO_WHITE_URL} alt="Elite Agro Projects" width={351} height={101} {...fetchPriorityAttr('high')} />
             </div>
             <div className="login-leaf-badge">
               <div className="login-leaf-circle">
