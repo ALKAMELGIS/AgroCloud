@@ -1,7 +1,4 @@
-import along from '@turf/along'
-import bearing from '@turf/bearing'
-import length from '@turf/length'
-import { lineString } from '@turf/helpers'
+import { along, bearing, length, lineString } from '@turf/turf'
 import type { PathOptions } from 'leaflet'
 import {
   arcgisFeatureToLeafletPathOptions,

@@ -1,6 +1,4 @@
-import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
-import distance from '@turf/distance'
-import { point as turfPoint } from '@turf/helpers'
+import { booleanPointInPolygon, distance, point as turfPoint } from '@turf/turf'
 import type { DevelopEliteMapDataLayerId } from './developEliteMapDataLayers'
 import { isDevelopEliteMapDataLayerVisible } from './developEliteMapDataLayers'
 import {

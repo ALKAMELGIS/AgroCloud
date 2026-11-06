@@ -285,7 +285,10 @@ export default defineConfig({
             injectRegister: null,
             devOptions: { enabled: pwaDevMode },
             workbox: {
-              globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,webmanifest,json}'],
+              // Fonts and export-only vendors are runtime-cached (below) instead of precached:
+              // @fontsource ships every script subset in woff2 + legacy woff (~300 files / 11 MB),
+              // while a browser only ever fetches the subsets a page actually renders.
+              globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,json}'],
               globIgnores: [
                 '**/*.{br,gz}',
                 '**/mapbox-gl-*.js',
@@ -296,6 +299,9 @@ export default defineConfig({
                 '**/html2canvas*.js',
                 '**/geotiff-*.js',
                 '**/decoder-*.js',
+                '**/vendor-excel-*.js',
+                '**/vendor-xlsx-*.js',
+                '**/vendor-pdf-*.js',
               ],
               maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
               navigateFallback: 'index.html',
@@ -304,6 +310,28 @@ export default defineConfig({
               clientsClaim: true,
               skipWaiting: true,
               runtimeCaching: [
+                {
+                  // Self-hosted font subsets: cached the first time a page renders with them.
+                  urlPattern: ({ request, url }) =>
+                    request.destination === 'font' || /\.woff2?$/i.test(url.pathname),
+                  handler: 'CacheFirst',
+                  options: {
+                    cacheName: 'agro-fonts',
+                    expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                    cacheableResponse: { statuses: [0, 200] },
+                  },
+                },
+                {
+                  // Content-hashed build chunks not in the precache (map workspaces, export vendors):
+                  // immutable, so cache-first keeps visited workspaces available offline.
+                  urlPattern: ({ url, sameOrigin }) => sameOrigin && /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.js$/.test(url.pathname),
+                  handler: 'CacheFirst',
+                  options: {
+                    cacheName: 'agro-lazy-chunks',
+                    expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 60 },
+                    cacheableResponse: { statuses: [200] },
+                  },
+                },
                 {
                   urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
                   handler: 'StaleWhileRevalidate',

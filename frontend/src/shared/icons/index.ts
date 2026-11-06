@@ -1,2 +1,0 @@
-export { AgriAppIcon } from './AgriAppIcon'
-
