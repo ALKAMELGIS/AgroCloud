@@ -254,7 +254,15 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // Vite/Rollup virtual helpers (module-preload, CommonJS interop) are needed by every lazy
+          // route; unassigned, they were captured by vendor-pdf (jspdf uses dynamic import()).
+          if (id.includes('vite/preload-helper') || id.includes('commonjsHelpers') || id.includes('vite/modulepreload-polyfill')) return 'vendor-runtime'
           if (!id.includes('node_modules')) return
+          // Core runtime first. Rollup folds an unassigned dependency into the first manual chunk
+          // that uses it, so if `react` / `scheduler` / `@babel/runtime` were left out here they were
+          // captured by vendor-charts / vendor-pdf, and every page preloaded both (~190 KB gzip).
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run)[\\/]/.test(id)) return 'vendor-react'
+          if (/[\\/]node_modules[\\/]@babel[\\/]runtime[\\/]/.test(id)) return 'vendor-runtime'
           if (id.includes('mapbox-gl')) return 'mapbox-gl'
           if (id.includes('maplibre-gl')) return 'maplibre-gl'
           if (id.includes('leaflet')) return 'leaflet'
@@ -265,7 +273,6 @@ export default defineConfig({
           if (id.includes('/xlsx/') || id.includes('\\xlsx\\')) return 'vendor-xlsx'
           if (id.includes('jspdf')) return 'vendor-pdf'
           if (id.includes('geotiff')) return 'vendor-geotiff'
-          if (id.includes('react-dom') || id.includes('react-router')) return 'vendor-react'
         },
       },
     },
