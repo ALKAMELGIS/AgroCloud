@@ -94,7 +94,7 @@ export async function resolveSessionUser(req) {
   const user = rows[0]
   // Throttled: at most one write per session per minute instead of one per API request.
   void pool
-    .query(`UPDATE sessions SET last_active_at = now() WHERE token_hash = $1 AND last_active_at < now() - interval '60 seconds'`, [tokenHash])
+    .query(`UPDATE sessions SET last_active_at = now() WHERE token_hash = $1 AND last_active_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-60 seconds')`, [tokenHash])
     .catch(() => {})
   const perms = await loadUserPermissions(user.id, user.role_id)
   return { user, permissions: perms, sessionToken: token }

@@ -44,13 +44,18 @@ router.get('/identity/me', async (req, res) => {
 
 router.post('/identity/logout', async (req, res) => {
   const cookies = parseCookies(req.headers.cookie)
-  const token = cookies[sessionCookieName()]
+  const auth = String(req.headers.authorization || '')
+  const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : ''
+  // Same token sources as resolveSessionUser: cookie first, then Bearer.
+  const token = cookies[sessionCookieName()] || bearer
   if (token) await deleteSessionByToken(token)
   clearSessionCookie(res)
   return res.json({ ok: true })
 })
 
-router.use(requireIdentitySession)
+// Session required for the routes below — scoped to this router's own paths so other /api/v1 routes
+// are never answered with 401 by this guard.
+router.use(['/identity', '/manpower'], requireIdentitySession)
 
 router.get('/identity/users', async (req, res) => {
   try {
@@ -65,7 +70,7 @@ router.post('/identity/users', async (req, res) => {
   const pool = getPool()
   const client = await pool.connect()
   try {
-    await client.query('BEGIN')
+    await client.query('BEGIN IMMEDIATE') // takes the write lock up front (SQLite's equivalent of SELECT … FOR UPDATE)
     const user = await createUser(client, req.identityActor, req.body || {})
     await client.query('COMMIT')
     return res.status(201).json({ ok: true, user })
@@ -90,7 +95,7 @@ router.post('/identity/users/:id/disable', async (req, res) => {
   const pool = getPool()
   const client = await pool.connect()
   try {
-    await client.query('BEGIN')
+    await client.query('BEGIN IMMEDIATE') // takes the write lock up front (SQLite's equivalent of SELECT … FOR UPDATE)
     const result = await disableUser(client, req.identityActor, req.params.id)
     await client.query('COMMIT')
     return res.json(result)
@@ -106,7 +111,7 @@ router.post('/identity/users/:id/activate', async (req, res) => {
   const pool = getPool()
   const client = await pool.connect()
   try {
-    await client.query('BEGIN')
+    await client.query('BEGIN IMMEDIATE') // takes the write lock up front (SQLite's equivalent of SELECT … FOR UPDATE)
     const result = await activateUser(client, req.identityActor, req.params.id)
     await client.query('COMMIT')
     return res.json(result)
@@ -132,7 +137,7 @@ router.get('/identity/roles', async (req, res) => {
     requirePermission(req.identityActor, 'roles.view')
     const pool = getPool()
     const { rows } = await pool.query(
-      `SELECT r.*, COALESCE(json_agg(p.code) FILTER (WHERE p.code IS NOT NULL), '[]') AS permissions
+      `SELECT r.*, json_group_array(p.code) FILTER (WHERE p.code IS NOT NULL) AS permissions
        FROM roles r
        LEFT JOIN role_permissions rp ON rp.role_id = r.id
        LEFT JOIN permissions p ON p.id = rp.permission_id
@@ -140,7 +145,7 @@ router.get('/identity/roles', async (req, res) => {
        GROUP BY r.id
        ORDER BY r.level DESC`,
     )
-    return res.json({ ok: true, roles: rows })
+    return res.json({ ok: true, roles: rows.map((r) => ({ ...r, permissions: JSON.parse(r.permissions || '[]') })) })
   } catch (e) {
     return identityErrorHandler(e, res)
   }
@@ -199,7 +204,7 @@ router.post('/manpower/allocate', async (req, res) => {
   const pool = getPool()
   const client = await pool.connect()
   try {
-    await client.query('BEGIN')
+    await client.query('BEGIN IMMEDIATE') // takes the write lock up front (SQLite's equivalent of SELECT … FOR UPDATE)
     const row = await allocateManpower(client, req.identityActor, req.body || {})
     await client.query('COMMIT')
     return res.json({ ok: true, allocation: row })

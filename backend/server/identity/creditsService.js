@@ -70,7 +70,7 @@ export async function applyCreditDelta(
     allowNegativeBalance = false,
   },
 ) {
-  const pool = client
+  const pool = client || getPool()
   const delta = BigInt(Math.trunc(Number(amount)))
   if (delta === 0n) {
     throw new CreditsError('VALIDATION_ERROR', 'Amount must be non-zero.', 422)
@@ -81,7 +81,7 @@ export async function applyCreditDelta(
   }
 
   const wallet = await ensureWallet(pool, userId)
-  const { rows: locked } = await pool.query(`SELECT * FROM wallets WHERE id = $1 FOR UPDATE`, [wallet.id])
+  const { rows: locked } = await pool.query(`SELECT * FROM wallets WHERE id = $1`, [wallet.id])
   const w = locked[0]
   if (!w) throw new CreditsError('NOT_FOUND', 'Wallet not found.', 404)
 
@@ -102,7 +102,7 @@ export async function applyCreditDelta(
   const { rows: txRows } = await pool.query(
     `INSERT INTO credit_transactions
        (user_id, wallet_id, amount, balance_after, type, reason, reference_id, metadata, actor_user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
       userId,

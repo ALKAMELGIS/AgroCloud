@@ -44,6 +44,6 @@ export async function exportDirectorySnapshot() {
       meta: a.meta,
     })),
     readOnly: true,
-    source: 'postgresql',
+    source: 'identity',
   }
 }
