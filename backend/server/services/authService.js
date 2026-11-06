@@ -3,8 +3,8 @@
  * Passwords: scrypt (new) with SHA-256 hex legacy verification + migration on login.
  */
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto'
-import { readAdminDirectoryStore, writeAdminDirectoryStore } from './adminDirectoryPersistence.js'
-import { authRateLimitConfig, createAuthRateLimiter } from './authRateLimit.js'
+import { readAdminDirectoryStore, writeAdminDirectoryStore } from '../persistence/adminDirectoryPersistence.js'
+import { authRateLimitConfig, createAuthRateLimiter } from '../middleware/authRateLimit.js'
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000
 const SCRYPT_N = 16384
@@ -486,7 +486,7 @@ export function registerAuthRoutes(app, opts) {
     }
 
     try {
-      const { tryIdentityLogin } = await import('./identity/identityLoginBridge.js')
+      const { tryIdentityLogin } = await import('../identity/identityLoginBridge.js')
       const identityResult = await tryIdentityLogin(req, res, {
         email,
         password,

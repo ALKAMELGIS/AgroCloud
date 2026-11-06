@@ -15,7 +15,7 @@
 | Backend | Node 20+, Express 4 ([backend/server/index.js](backend/server/index.js)) |
 | Database | PostgreSQL via `pg` when `DATABASE_URL` is set ([backend/server/identity/db.js](backend/server/identity/db.js)) |
 | ORM | None — SQL in identity services |
-| Email | Nodemailer ([backend/server/authService.js](backend/server/authService.js)) |
+| Email | Nodemailer ([backend/server/services/authService.js](backend/server/services/authService.js)) |
 | Deploy | GitHub Pages + `api.eliteagrocloud.com` |
 
 ---
@@ -137,7 +137,7 @@ See implementation phases in repo docs: `AUTHENTICATION.md`, `CREDITS.md` (added
 
 ## Files to modify (platform work)
 
-**Do modify:** `backend/server/authService.js`, `backend/server/identity/*`, `backend/migrations/003+`, `frontend/src/core/auth/*`, `frontend/src/modules/identity/*`, new `modules/billing` or admin shell.
+**Do modify:** `backend/server/services/authService.js`, `backend/server/identity/*`, `backend/migrations/003+`, `frontend/src/core/auth/*`, `frontend/src/modules/identity/*`, new `modules/billing` or admin shell.
 
 **Do not modify lightly:** GIS/develop-elite map stack, Pages root `assets/*`, deploy workflows, unless required for API cookies/CORS.
 

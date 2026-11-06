@@ -4,11 +4,11 @@
  * @see https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Statistical/Examples.html
  */
 
-import { readApiSecretsFile } from './apiSecretsPersistence.js'
+import { readApiSecretsFile } from '../persistence/apiSecretsPersistence.js'
 import {
   isWmsStatisticsFallbackReady,
   postSentinelStatisticsViaWms,
-} from './sentinelHubWmsStatisticsEngine.js'
+} from '../engines/sentinelHubWmsStatisticsEngine.js'
 
 const SENTINEL_HUB_OAUTH_URL = 'https://services.sentinel-hub.com/oauth/token'
 const SENTINEL_HUB_STATISTICS_URL = 'https://services.sentinel-hub.com/api/v1/statistics'

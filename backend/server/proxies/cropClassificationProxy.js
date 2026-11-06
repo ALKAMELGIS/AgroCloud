@@ -22,7 +22,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { PNG } from 'pngjs'
 import { fromArrayBuffer } from 'geotiff'
-import { encodeChunkyInt16GeoTiff } from './geoTiffEncoder.js'
+import { encodeChunkyInt16GeoTiff } from '../engines/geoTiffEncoder.js'
 import { resolveSentinelHubWmsConfig, describeSentinelHubStatisticsConfig } from './sentinelHubStatisticsProxy.js'
 import {
   fetchSentinelWmsTrueColorPng,
@@ -32,15 +32,15 @@ import {
   fetchPcSentinelSceneCloudCover,
   estimateAoiBboxFillRatio,
   bbox3857FromGeometry,
-} from './sentinelHubWmsStatisticsEngine.js'
-import { detectCountryFromAoi, cropProfileForCountry } from './cropCountryDatabase.js'
-import { classifyCropFields } from './cropFieldClassifier.js'
-import { fillBlackHolesInPngDataUrl } from './cropPngHoleFill.js'
+} from '../engines/sentinelHubWmsStatisticsEngine.js'
+import { detectCountryFromAoi, cropProfileForCountry } from '../engines/cropCountryDatabase.js'
+import { classifyCropFields } from '../engines/cropFieldClassifier.js'
+import { fillBlackHolesInPngDataUrl } from '../engines/cropPngHoleFill.js'
 import {
   buildMasterGeometry,
   zonalLabelMajorityFromGrid,
   zonalRgbMajorityFromGrid,
-} from './sentinelFieldBatchEngine.js'
+} from '../engines/sentinelFieldBatchEngine.js'
 import {
   deleteCropJobSnapshot,
   loadCropJobSnapshot,
@@ -48,7 +48,7 @@ import {
   persistCropJobSnapshot,
   pruneCropJobSnapshots,
   readCropJobPredictionPng,
-} from './cropClassificationJobStore.js'
+} from '../persistence/cropClassificationJobStore.js'
 
 const HF_SPACE_ID =
   process.env.CROP_CLASSIFICATION_SPACE ||

@@ -20,7 +20,7 @@ import {
   startFtwDatasetSampleJob,
   startFtwLrFinderJob,
   startFtwTrainJob,
-} from './ftwTrainingBuiltin.js'
+} from '../engines/ftwTrainingBuiltin.js'
 
 const BODY_LIMIT = '32mb'
 

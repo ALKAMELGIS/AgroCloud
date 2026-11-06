@@ -5,8 +5,8 @@ on:
     branches: [main]
     paths:
       - 'backend/services/agri-field-boundary/**'
-      - 'backend/server/agriFieldBoundaryProxy.js'
-      - 'backend/server/fieldBoundaryBuiltin.js'
+      - 'backend/server/proxies/agriFieldBoundaryProxy.js'
+      - 'backend/server/engines/fieldBoundaryBuiltin.js'
       - '.github/workflows/deploy-agri-field-boundary-vps.yml'
   workflow_dispatch:
 

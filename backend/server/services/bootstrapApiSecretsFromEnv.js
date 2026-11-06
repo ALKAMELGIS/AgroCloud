@@ -3,7 +3,7 @@
  * Never overwrites keys the user already saved via System Settings.
  */
 
-import { mergeAndWriteApiSecrets, readApiSecretsFile } from './apiSecretsPersistence.js'
+import { mergeAndWriteApiSecrets, readApiSecretsFile } from '../persistence/apiSecretsPersistence.js'
 
 /**
  * @type {Record<string, string>} env var → builtin secret key.

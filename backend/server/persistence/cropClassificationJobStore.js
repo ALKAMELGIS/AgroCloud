@@ -11,7 +11,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const BACKEND_ROOT = path.resolve(__dirname, '..')
+const BACKEND_ROOT = path.resolve(__dirname, '..', '..')
 export const CROP_JOB_ROOT = path.join(BACKEND_ROOT, 'data', 'crop-classification-jobs')
 
 function jobJsonPath(jobId) {

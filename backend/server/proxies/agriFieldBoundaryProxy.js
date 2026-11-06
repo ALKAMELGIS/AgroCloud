@@ -14,9 +14,9 @@
 
 import express from 'express'
 import { randomUUID } from 'crypto'
-import { ensureLocalAiService } from './localAiServiceSupervisor.js'
-import { detectFieldsBuiltin } from './fieldBoundaryBuiltin.js'
-import { vectorizeFtwMosaicBuiltin } from './ftwMaskVectorizeBuiltin.js'
+import { ensureLocalAiService } from '../services/localAiServiceSupervisor.js'
+import { detectFieldsBuiltin } from '../engines/fieldBoundaryBuiltin.js'
+import { vectorizeFtwMosaicBuiltin } from '../engines/ftwMaskVectorizeBuiltin.js'
 
 /** Agricultural Field Delineation fetches Sentinel-2 on the Python service — no client image. */
 const AFD_SOURCES = new Set(['agricultural-field-delineation', 'afd'])

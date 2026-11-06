@@ -85,8 +85,8 @@ export function registerAdminDirectoryPersistence(app, opts) {
 
   app.get('/api/v1/admin/directory', guard, async (_req, res) => {
     try {
-      const { exportDirectorySnapshot } = await import('./identity/directoryExport.js')
-      const { isIdentityReady } = await import('./identity/db.js')
+      const { exportDirectorySnapshot } = await import('../identity/directoryExport.js')
+      const { isIdentityReady } = await import('../identity/db.js')
       if (isIdentityReady()) {
         const snapshot = await exportDirectorySnapshot()
         if (snapshot) return res.json({ ok: true, ...snapshot })
@@ -100,7 +100,7 @@ export function registerAdminDirectoryPersistence(app, opts) {
 
   app.put('/api/v1/admin/directory', guard, async (req, res) => {
     try {
-      const { isIdentityReady } = await import('./identity/db.js')
+      const { isIdentityReady } = await import('../identity/db.js')
       if (isIdentityReady()) {
         return res.status(403).json({
           ok: false,

@@ -3,7 +3,7 @@
  */
 import crypto from 'crypto'
 import { resolveSentinelHubWmsConfig, isSentinelHubStatisticsProxyConfigured } from './sentinelHubStatisticsProxy.js'
-import { processFieldsSpatialBatch, spatialGroupFields } from './sentinelFieldBatchEngine.js'
+import { processFieldsSpatialBatch, spatialGroupFields } from '../engines/sentinelFieldBatchEngine.js'
 
 const JOB_TTL_MS = 2 * 60 * 60_000
 /** @type {Map<string, Record<string, unknown>>} */

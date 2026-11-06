@@ -15,7 +15,7 @@
 
 ## Rate limiting
 
-Configured in [backend/server/authRateLimit.js](backend/server/authRateLimit.js):
+Configured in [backend/server/middleware/authRateLimit.js](backend/server/middleware/authRateLimit.js):
 
 - `AUTH_RATE_LIMIT_WINDOW_MS` (default 15 min)
 - `AUTH_RATE_LIMIT_LOGIN_MAX`, `REGISTER_MAX`, `FORGOT_MAX`, `RESET_MAX`, `VERIFY_MAX`

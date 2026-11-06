@@ -6,7 +6,8 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url))
+// Anchored to backend/server so existing saved config keeps its location.
+const SERVER_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CONFIG_FILE = path.join(SERVER_DIR, 'acp_weather_layer_config.json')
 
 const WEATHER_CACHE_TTL_MS = 30 * 60_000

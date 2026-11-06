@@ -10,7 +10,7 @@
  */
 import { randomUUID } from 'crypto'
 import { basename } from 'path'
-import { getRasterRecord } from './raster/rasterStore.js'
+import { getRasterRecord } from '../raster/rasterStore.js'
 
 /** Base URL of the FastAPI ML service. */
 const IMAGE_CLASSIFICATION_URL = String(

@@ -11,7 +11,7 @@ const { loadProductionEnv } = await import(
   pathToFileURL(path.join(repoRoot, 'backend/server/loadProductionEnv.js')).href
 )
 const { hasSmtpConfig, readSmtpEnv, sendMailWithFallback } = await import(
-  pathToFileURL(path.join(repoRoot, 'backend/server/smtpTransport.js')).href
+  pathToFileURL(path.join(repoRoot, 'backend/server/services/smtpTransport.js')).href
 )
 
 loadProductionEnv()

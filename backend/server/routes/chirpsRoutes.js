@@ -19,7 +19,8 @@ import { fromArrayBuffer } from 'geotiff'
 
 const gunzip = promisify(zlib.gunzip)
 
-const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url))
+// Anchored to backend/server so the existing CHIRPS cache keeps its location.
+const SERVER_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CACHE_DIR = path.join(SERVER_DIR, '.chirps-cache')
 const CHIRPS_NODATA = -9999
 const MAX_GRID = 256

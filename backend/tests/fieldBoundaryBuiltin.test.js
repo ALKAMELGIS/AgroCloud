@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import jpeg from 'jpeg-js'
-import { detectFieldsBuiltin } from '../server/fieldBoundaryBuiltin.js'
+import { detectFieldsBuiltin } from '../server/engines/fieldBoundaryBuiltin.js'
 
 function greenJpegDataUrl(width = 48, height = 48) {
   const data = Buffer.alloc(width * height * 4, 255)

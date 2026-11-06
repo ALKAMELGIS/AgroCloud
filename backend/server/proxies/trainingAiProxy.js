@@ -31,7 +31,7 @@ import {
   listBuiltinModels,
   startBuiltinInferenceJob,
   startBuiltinTrainingJob,
-} from './trainingAiBuiltin.js'
+} from '../engines/trainingAiBuiltin.js'
 
 const INFER_TIMEOUT_MS = 15 * 60 * 1000
 /** Polls can stall while CPU training holds the GIL — keep this generous. */

@@ -17,7 +17,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const SERVICES_ROOT = path.resolve(HERE, '..', 'services')
+const SERVICES_ROOT = path.resolve(HERE, '..', '..', 'services')
 
 /** Health probe budget — cold torch imports answer slowly but not this slowly. */
 const HEALTH_TIMEOUT_MS = 4000
