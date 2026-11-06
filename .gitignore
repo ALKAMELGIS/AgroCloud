@@ -9,7 +9,15 @@ backend/dist/
 !.env.example
 !.env.production.example
 
-# Server-side API token store (Mapbox, Gemini, …) — never commit.
+# SQLite database (all server data, incl. API tokens) and its backups — never commit.
+backend/data/
+*.sqlite-wal
+*.sqlite-shm
+
+# Legacy JSON stores (imported into SQLite on first start; kept on disk as backups) — never commit.
+backend/server/ecph_entries.json
+backend/server/esri_dashboards.json
+backend/server/acp_weather_layer_config.json
 backend/server/agri_api_secrets.json
 backend/server/data/agri_api_secrets.json
 backend/server/agri_user_profiles.json

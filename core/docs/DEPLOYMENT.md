@@ -96,6 +96,22 @@ Never commit real API keys. GitHub Actions builds with **empty** `VITE_*` secret
 
 ---
 
+## Database and persistent data
+
+The API keeps all of its records in one SQLite file, `agrocloud.sqlite`: users, API tokens saved in System Settings, profiles, EC/pH entries, dashboards and identity. Details are in [backend/database/README.md](../../backend/database/README.md).
+
+| Host | Where the file lives |
+|------|----------------------|
+| Docker / VPS compose | `agrocloud_data` volume → `/var/lib/agrocloud` (set by the image). Earlier compose files had no data volume, so data reset on every rebuild. |
+| Hostinger (Node) | `AGRI_DATA_DIR` (e.g. `/data/agrocloud`) — the same directory that held the JSON files; they are imported on first start and kept. |
+| Local dev | `backend/data/agrocloud.sqlite` (gitignored) |
+
+- **Backup:** `npm run db:backup -w backend` makes a consistent copy while the server runs. Copy the whole data directory off-host on a schedule.
+- **Upgrading from PostgreSQL identity:** keep `DATABASE_URL` for one start (or run `npm run db:import-postgres -w backend`), then remove it and set `AGROCLOUD_IDENTITY=on`.
+- **Single instance:** SQLite has one writer, so run one API process per data directory (the current Hostinger/VPS setups already do).
+
+---
+
 ## Performance checklist (already in repo)
 
 - Vite code-splitting and hashed asset names  
@@ -112,7 +128,7 @@ Never commit real API keys. GitHub Actions builds with **empty** `VITE_*` secret
 |-------|-----------|
 | **CI** | [production-health.yml](../../.github/workflows/production-health.yml) — smoke-checks live URL after deploy |
 | **Browser** | `initClientErrorMonitoring()` — ring buffer in `sessionStorage`; optional `VITE_CLIENT_ERROR_REPORT_URL` |
-| **Server** | Node process logs to stdout; mount persistent volumes for `agri_*.json` data files |
+| **Server** | Node process logs to stdout; keep the data directory (`agrocloud.sqlite`) on a persistent volume and back it up (`npm run db:backup -w backend`) |
 | **External** | Optional: Sentry, Datadog, or Azure App Insights (point `VITE_CLIENT_ERROR_REPORT_URL` to your collector) |
 
 ---

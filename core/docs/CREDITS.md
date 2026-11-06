@@ -5,7 +5,7 @@
 - **Wallet** — one per user (`wallets.balance`, non-negative).
 - **Credit transaction** — append-only ledger row with `amount`, `balance_after`, `type`, `reason`, `metadata`.
 
-Migration: [backend/migrations/004_credits_ledger.sql](../../backend/migrations/004_credits_ledger.sql).
+Schema: tables `wallets` and `credit_transactions` in [backend/database/migrations/001_identity_schema.sql](../../backend/database/migrations/001_identity_schema.sql) (SQLite).
 
 ## Types
 

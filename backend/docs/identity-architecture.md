@@ -1,8 +1,10 @@
-# Identity architecture (PostgreSQL users, RBAC, sessions)
+# Identity architecture (users, RBAC, sessions — SQLite)
 
 **Date:** 2026-03-08  
 **Scope:** User platform (auth, identity, credits, admin) — evolve in place, no greenfield rewrite.  
-**Production target:** PostgreSQL identity on API host; static SPA on GitHub Pages / `www.eliteagrocloud.com`.
+**Production target:** identity tables in the API's SQLite database (`AGROCLOUD_IDENTITY=on`); static SPA on GitHub Pages / `www.eliteagrocloud.com`.
+
+> **2026-11 update:** identity moved from PostgreSQL to the shared SQLite database. Same tables and service code; see [backend/database/README.md](../database/README.md) for the schema, query API and the PostgreSQL import.
 
 ---
 
@@ -13,7 +15,7 @@
 | Monorepo | npm workspaces — `frontend`, `backend` ([package.json](../../package.json)) |
 | Frontend | React 18, Vite 5, React Router 6, MUI 6, Yup, HashRouter SPA |
 | Backend | Node 20+, Express 4 ([backend/server/index.js](../server/index.js)) |
-| Database | PostgreSQL via `pg` when `DATABASE_URL` is set ([backend/server/identity/db.js](../server/identity/db.js)) |
+| Database | SQLite via `better-sqlite3`, pg-compatible `pool.query` ([backend/server/database/connection.js](../server/database/connection.js)); identity on with `AGROCLOUD_IDENTITY=on` ([backend/server/identity/db.js](../server/identity/db.js)) |
 | ORM | None — SQL in identity services |
 | Email | Nodemailer ([backend/server/services/authService.js](../server/services/authService.js)) |
 | Deploy | GitHub Pages + `api.eliteagrocloud.com` |
@@ -34,8 +36,8 @@ flowchart LR
     Bridge[identityLoginBridge]
   end
   subgraph stores [Persistence]
-    JSON[admin directory JSON]
-    PG[(PostgreSQL)]
+    JSON[admin directory document]
+    PG[(SQLite identity tables)]
   end
   Login --> Auth
   Auth --> Bridge --> PG
@@ -43,15 +45,16 @@ flowchart LR
   UsersUI --> Identity --> PG
 ```
 
-- **Legacy directory auth:** file-backed users, `/api/auth/register|login|verify-email|resend-verification`.
-- **PostgreSQL identity:** migrations `001`/`002`, RBAC, sessions (`agro_session` cookie), audit, manpower (seat pool — not user credits).
-- **Login:** `/api/auth/login` tries PG first, then JSON fallback.
+- **Directory auth (identity off):** users in the `agri_admin_directory` document, `/api/auth/register|login|verify-email|resend-verification`.
+- **Identity module (`AGROCLOUD_IDENTITY=on`):** migrations `001`/`002`/`004`, RBAC, sessions (`agro_session` cookie or Bearer), audit, manpower (seat pool — not user credits). On its first start with no users it imports the directory users (or the old PostgreSQL data when `DATABASE_URL` is still set).
+- **Login:** `/api/auth/login` tries identity first, then the directory fallback.
+- **Routing:** identity routes are registered before the `/api/v1 → /api` bridge and the SPA fallback (they were unreachable when registered after them).
 
 ---
 
 ## Existing authentication
 
-| Feature | JSON directory | PostgreSQL |
+| Feature | Directory | Identity module |
 |---------|----------------|------------|
 | Sign up | Yes | Admin `createUser`; bridge on login |
 | Sign in | Yes | Yes (cookie session) |
@@ -66,7 +69,7 @@ Passwords: scrypt (new), SHA-256 legacy with upgrade on login.
 
 ---
 
-## Existing user model (PostgreSQL)
+## User model (identity tables)
 
 Table `users`: UUID, `organization_id`, `email`, `name`, `role_id`, `status`, `password_hash`, `email_verified`, `last_login_at`, hierarchy fields.
 
@@ -95,7 +98,8 @@ Table `users`: UUID, `organization_id`, `email`, `name`, `role_id`, `status`, `p
 
 ## Problems (tracked)
 
-1. Dual identity stores — mitigate by PG-as-canonical in production; keep JSON for dev/Pages-offline.
+1. Dual identity stores — identity is canonical when enabled; the directory remains for dev/Pages-offline.
+6. `/api/v1/credits/*` and `/api/v1/admin/credits/adjust` are called by the frontend but have no backend routes yet; `creditsService.js` is implemented and tested.
 2. Auth product gaps — reset password, rate limits (**in progress / done in 003–004**).
 3. Session secret must be set in production (`IDENTITY_SESSION_SECRET`).
 4. User list not paginated — Phase 10.
@@ -137,7 +141,7 @@ See implementation phases in repo docs: `core/docs/AUTHENTICATION.md`, `core/doc
 
 ## Files to modify (platform work)
 
-**Do modify:** `backend/server/services/authService.js`, `backend/server/identity/*`, `backend/migrations/003+`, `frontend/src/core/auth/*`, `frontend/src/modules/identity/*`, new `modules/billing` or admin shell.
+**Do modify:** `backend/server/services/authService.js`, `backend/server/identity/*`, `backend/database/migrations/` (new numbered files only), `frontend/src/core/auth/*`, `frontend/src/modules/identity/*`, new `modules/billing` or admin shell.
 
 **Do not modify lightly:** GIS/develop-elite map stack, Pages root `assets/*`, deploy workflows, unless required for API cookies/CORS.
 
@@ -145,7 +149,7 @@ See implementation phases in repo docs: `core/docs/AUTHENTICATION.md`, `core/doc
 
 ## Decisions (approved for implementation)
 
-1. **PostgreSQL** is canonical for production API; JSON directory remains optional fallback.
+1. **SQLite** (one file, `backend/database/README.md`) holds identity; it is canonical when `AGROCLOUD_IDENTITY=on`; the directory remains the fallback.
 2. **Admin UI** extends MUI shell / identity pages; login card visual identity preserved.
 3. **Migrations** additive only; no destructive drops without explicit approval.
 
@@ -153,4 +157,4 @@ See implementation phases in repo docs: `core/docs/AUTHENTICATION.md`, `core/doc
 
 ## ملخص عربي
 
-المشروع يستخدم مصادقة مزدوجة (ملف JSON وPostgreSQL). الهوية في قاعدة البيانات تدعم الأدوار والصلاحيات والجلسات والتدقيق. لا يوجد نظام رصيد credits سابقاً؛ يُبنى ledger ذري مشابه لمنطق manpower. التطوير تدريجي على `/api/auth` و`/api/v1` دون إعادة كتابة الواجهة أو الخرائط.
+المشروع يستخدم مصادقة مزدوجة (دليل المستخدمين، أو وحدة الهوية عند تفعيل AGROCLOUD_IDENTITY=on)، وكلاهما محفوظ في قاعدة بيانات SQLite واحدة. الهوية في قاعدة البيانات تدعم الأدوار والصلاحيات والجلسات والتدقيق. لا يوجد نظام رصيد credits سابقاً؛ يُبنى ledger ذري مشابه لمنطق manpower. التطوير تدريجي على `/api/auth` و`/api/v1` دون إعادة كتابة الواجهة أو الخرائط.

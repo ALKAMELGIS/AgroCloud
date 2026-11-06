@@ -73,7 +73,7 @@ export async function pushAdminDirectoryToServer(users: unknown[], auditLog: unk
     if (statusRes.ok) {
       const st = (await statusRes.json()) as { identity?: boolean }
       if (st.identity) {
-        console.warn('[admin-directory] Skipping PUT — PostgreSQL identity is active.')
+        console.warn('[admin-directory] Skipping PUT — server identity is active.')
         return false
       }
     }

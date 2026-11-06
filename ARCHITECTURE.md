@@ -10,9 +10,9 @@ flowchart LR
   subgraph api [Express API — backend/server]
     R[routes/] --> E[engines/]
     P[proxies/] --> AI
-    I[identity/] --> PG[(PostgreSQL)]
+    I[identity/] --> DB[(SQLite<br/>agrocloud.sqlite)]
     RS[raster/]
-    PS[persistence/] --> FS[(JSON files)]
+    PS[persistence/] --> DB
   end
   subgraph py [Optional Python services]
     AI[backend/services/*<br/>SAM · SegFormer · field boundary · classification]
@@ -43,14 +43,16 @@ AgroCloud/
 │  ├─ server/              runtime: routes/ proxies/ engines/ persistence/ middleware/ services/ identity/ raster/
 │  ├─ src/                 versioned /api/v1 · /api/v2 routers, error handler
 │  ├─ services/            Python model services (SAM, SegFormer, field boundary, classification …)
-│  ├─ migrations/          PostgreSQL identity schema
+│  ├─ database/            SQLite schema: migrations/ (applied on start), postgres-legacy/ (import reference), README
+│  ├─ data/                agrocloud.sqlite — the database file (gitignored; a volume in Docker)
+│  ├─ scripts/             db:migrate · db:status · db:backup · db:import-postgres
 │  ├─ tests/               node --test
 │  └─ docs/                identity architecture
 ├─ services/geodash-api/   optional FastAPI service
 ├─ analysis_engine/        Python STAC / spectral-index / time-series engine
 ├─ core/                   project material that isn't the running app
 │  ├─ docs/                DEPLOYMENT, AUTHENTICATION, CREDITS, REPOSITORY, technical docs, examples/
-│  ├─ database/            PostGIS SQL
+│  ├─ database/            reference PostGIS schema for external GIS sources (not the app database)
 │  ├─ tools/               standalone utilities (data-entry page, field-report comparison scripts)
 │  └─ scripts/windows/     Windows launchers
 ├─ design-system/          design rules (UI UX Pro Max) + implementation guide
@@ -86,7 +88,7 @@ Dependencies point downward only: `app → modules → components / core / theme
 |---|---|
 | `account` | Login, profile, account settings pages. |
 | `admin` | System Settings (+ sections), GitHub integration, AgroCloud management. |
-| `identity` | Users, roles, hierarchy (PostgreSQL RBAC UI) and their API hooks. |
+| `identity` | Users, roles, hierarchy (server RBAC UI) and their API hooks. |
 | `manpower` | Seat allocation. |
 | `operations` | Daily data entry: fertigation, irrigation, harvest, QHIS, EC/pH, sensors, GPS. |
 | `forms` | Data-source field engine behind the data-entry pages. |
@@ -116,16 +118,17 @@ flood simulation (`gis/flood-simulation/`), crop classification panels (`remote-
 | `routes/` | Feature routes served directly (weather, CHIRPS, GFS raster, GIS gateway, embed checks). |
 | `proxies/` | Proxies to AI model services and external APIs, most with a built-in fallback. |
 | `engines/` | Pure computation: field-boundary detection, crop classifier, Sentinel statistics, GeoTIFF encoding, training. |
-| `persistence/` | JSON-file stores (admin directory, API secrets, user profiles, crop-classification jobs). |
+| `database/` | SQLite connection (pg-style `query` / transactions), migration runner, document store, PostgreSQL importer. See [backend/database/README.md](backend/database/README.md). |
+| `persistence/` | Stores built on the document store (admin directory, API secrets, user profiles); crop-classification job artifacts stay as files. |
 | `middleware/` | Security headers, auth rate limiting. |
 | `services/` | Auth, SMTP, API-secret bootstrap, local AI service supervisor. |
-| `identity/` | PostgreSQL identity: users, roles, sessions, audit, manpower, credits. See `backend/docs/identity-architecture.md`. |
+| `identity/` | Identity module (opt-in, `AGROCLOUD_IDENTITY=on`): users, roles, sessions, audit, manpower, credits — tables in the SQLite database. See `backend/docs/identity-architecture.md`. |
 | `raster/` | COG pipeline, tile rendering, CRS / projection management. |
 | `data/` | Bundled reference data. |
 
 `backend/src/` holds the versioned `/api/v1`, `/api/v2` routers and the shared error handler.
 
-Runtime data stays where it always was: files that compute paths from their own location are anchored to `backend/server` or `backend/`, so existing saved config and caches are found after the reorganisation.
+All records (identity, API tokens, directory, profiles, EC/pH entries, dashboards, settings) are in one SQLite file — see [backend/database/README.md](backend/database/README.md). JSON files from older versions are imported on first read and kept as backups. Caches and binary outputs (raster tiles, classification artifacts) remain files.
 
 ## Design system
 

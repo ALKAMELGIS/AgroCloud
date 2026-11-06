@@ -6,12 +6,12 @@
 |--------|------|--------|
 | GET | `/api/auth/status` | Server auth availability |
 | POST | `/api/auth/register` | Self-signup (JSON directory; role constrained) |
-| POST | `/api/auth/login` | PostgreSQL first via bridge, then JSON fallback; sets `agro_session` cookie when PG |
-| POST | `/api/auth/logout` | Use `/api/v1/identity/logout` when using PG sessions |
+| POST | `/api/auth/login` | Identity module first via bridge (when `AGROCLOUD_IDENTITY=on`), then the directory; sets `agro_session` cookie for identity users |
+| POST | `/api/auth/logout` | Use `/api/v1/identity/logout` for identity sessions (cookie or Bearer) |
 | POST | `/api/auth/verify-email` | Email verification token |
 | POST | `/api/auth/resend-verification` | Resend verification |
 | POST | `/api/auth/forgot-password` | Rate-limited; sends reset email when SMTP configured |
-| POST | `/api/auth/reset-password` | `{ token, password }` — invalidates PG sessions on success |
+| POST | `/api/auth/reset-password` | `{ token, password }` — invalidates identity sessions on success |
 
 ## Rate limiting
 
@@ -22,12 +22,12 @@ Configured in [backend/server/middleware/authRateLimit.js](../../backend/server/
 
 ## Environment
 
-See [.env.example](../../.env.example): `AUTH_REQUIRE_EMAIL_VERIFICATION`, `AUTH_REQUIRE_ADMIN_APPROVAL`, `IDENTITY_SESSION_SECRET`, `DATABASE_URL`.
+See [.env.example](../../.env.example): `AUTH_REQUIRE_EMAIL_VERIFICATION`, `AUTH_REQUIRE_ADMIN_APPROVAL`, `IDENTITY_SESSION_SECRET`, `AGROCLOUD_IDENTITY`, `AGROCLOUD_DATA_DIR`. Storage: [backend/database/README.md](../../backend/database/README.md).
 
-## Password reset (PostgreSQL)
+## Password reset
 
-Migration `003_user_profile_auth.sql` — table `password_reset_tokens` (hashed token, single-use, 1h TTL).
+Migration `001_identity_schema.sql` — table `password_reset_tokens` (hashed token, single-use, 1h TTL).
 
 ## Sessions
 
-Cookie `agro_session`, HTTP-only. Table `sessions` with `last_active_at` (migration 003).
+Cookie `agro_session`, HTTP-only. Table `sessions` with `last_active_at` (migration 001); the last-active write is throttled to once a minute.
