@@ -92,7 +92,10 @@ export async function resolveSessionUser(req) {
   )
   if (!rows[0]) return null
   const user = rows[0]
-  void pool.query(`UPDATE sessions SET last_active_at = now() WHERE token_hash = $1`, [tokenHash]).catch(() => {})
+  // Throttled: at most one write per session per minute instead of one per API request.
+  void pool
+    .query(`UPDATE sessions SET last_active_at = now() WHERE token_hash = $1 AND last_active_at < now() - interval '60 seconds'`, [tokenHash])
+    .catch(() => {})
   const perms = await loadUserPermissions(user.id, user.role_id)
   return { user, permissions: perms, sessionToken: token }
 }
@@ -114,7 +117,23 @@ export async function deleteOtherSessionsForUser(client, userId, keepToken) {
   }
 }
 
+/** Role → permission codes. Permissions only change via migrations/seeds, so a short TTL is safe. */
+const ROLE_PERMISSION_TTL_MS = 60_000
+const rolePermissionCache = new Map()
+
+export function clearRolePermissionCache() {
+  rolePermissionCache.clear()
+}
+
 export async function loadUserPermissions(userId, roleId) {
+  const hit = rolePermissionCache.get(roleId)
+  if (hit && Date.now() - hit.at < ROLE_PERMISSION_TTL_MS) return hit.codes.slice()
+  const codes = await queryRolePermissions(roleId)
+  rolePermissionCache.set(roleId, { codes, at: Date.now() })
+  return codes.slice()
+}
+
+async function queryRolePermissions(roleId) {
   const pool = getPool()
   const { rows } = await pool.query(
     `SELECT DISTINCT p.code
