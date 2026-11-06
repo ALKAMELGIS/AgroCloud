@@ -5,14 +5,14 @@
 | Item | Value |
 |------|--------|
 | **Public URL** | [https://alkamelgis.github.io/AgroCloud/#/](https://alkamelgis.github.io/AgroCloud/#/) |
-| **Hosting** | GitHub Pages (branch `main`, site root) |
+| **Hosting** | GitHub Pages (branch `main`, folder `/docs`) |
 | **HTTPS** | Provided by `*.github.io` (Let's Encrypt) |
 | **CDN** | GitHub / Fastly edge (global) |
 | **PWA** | Enabled on production builds (install on mobile) |
 | **Compression** | Brotli + gzip precompressed assets at build time |
 | **Caching** | Service Worker (Workbox) + browser cache for static assets |
 
-Every push to `main` (except automated `[pages-sync]` commits) runs **[Deploy to GitHub Pages](.github/workflows/deploy-pages.yml)**, which builds the SPA without local secrets and syncs `frontend/dist` to the repository root.
+Every push to `main` (except automated `[pages-sync]` commits) runs **[Deploy to GitHub Pages](../../.github/workflows/deploy-pages.yml)**, which builds the SPA without local secrets and publishes `frontend/dist` to `docs/` (`scripts/publish-pages-docs.mjs`). The order keeps the site up: push `docs/` → point Pages at `/docs` → remove the legacy build older deploys left in the repo root (one-time).
 
 ### GitHub Pages settings
 
@@ -20,9 +20,11 @@ Every push to `main` (except automated `[pages-sync]` commits) runs **[Deploy to
 
 - **Source:** Deploy from a branch  
 - **Branch:** `main`  
-- **Folder:** `/ (root)`
+- **Folder:** `/docs`  (GitHub allows only `/` or `/docs` for branch publishing)
 
-If the site shows 404 while `index.html` exists on `main`, run the workflow manually or ensure **legacy branch deploy** is active (the workflow runs `scripts/ensure-pages-legacy-main.mjs`).
+The workflow sets this itself (`scripts/ensure-pages-branch-source.mjs`; needs `PAGES_ADMIN_TOKEN` if the default token may not edit Pages). If the site shows 404 while `docs/index.html` exists on `main`, run the workflow manually. **Rollback** to the old root layout: revert the commit and run that script with `PAGES_SOURCE_PATH=/`.
+
+The custom domain file lives in `frontend/public/CNAME`, so every build carries it.
 
 ---
 
@@ -69,7 +71,7 @@ docker run -d --name agrocloud -p 443:3001 \
   agrocloud
 ```
 
-Put **nginx** or **Caddy** in front for TLS termination and HTTP/2. Example nginx snippet: [scripts/nginx-agrocloud.conf.example](scripts/nginx-agrocloud.conf.example).
+Put **nginx** or **Caddy** in front for TLS termination and HTTP/2. Example nginx snippet: [scripts/nginx-agrocloud.conf.example](../../scripts/nginx-agrocloud.conf.example).
 
 ### Option B — GitHub Pages + API on VPS
 
@@ -87,8 +89,8 @@ Put **nginx** or **Caddy** in front for TLS termination and HTTP/2. Example ngin
 
 | File | Purpose |
 |------|---------|
-| [.env.example](.env.example) | Local development |
-| [docs/env.production.example](docs/env.production.example) | Production / VPS / private CI |
+| [.env.example](../../.env.example) | Local development |
+| [.env.production.example](../../.env.production.example) | Production / VPS / private CI |
 
 Never commit real API keys. GitHub Actions builds with **empty** `VITE_*` secrets.
 
@@ -108,7 +110,7 @@ Never commit real API keys. GitHub Actions builds with **empty** `VITE_*` secret
 
 | Layer | Mechanism |
 |-------|-----------|
-| **CI** | [production-health.yml](.github/workflows/production-health.yml) — smoke-checks live URL after deploy |
+| **CI** | [production-health.yml](../../.github/workflows/production-health.yml) — smoke-checks live URL after deploy |
 | **Browser** | `initClientErrorMonitoring()` — ring buffer in `sessionStorage`; optional `VITE_CLIENT_ERROR_REPORT_URL` |
 | **Server** | Node process logs to stdout; mount persistent volumes for `agri_*.json` data files |
 | **External** | Optional: Sentry, Datadog, or Azure App Insights (point `VITE_CLIENT_ERROR_REPORT_URL` to your collector) |
@@ -136,7 +138,7 @@ Use **hard refresh** (Ctrl+F5) after deploys because static assets are cached ag
 - CORS restricted via `CORS_ALLOWED_ORIGINS` on the Node server  
 - API secrets file protected with `AGRI_API_SECRETS_TOKEN` when exposed  
 - GitHub Pages build never embeds local `.env` values  
-- See [SECURITY.md](SECURITY.md) and [docs/SECURE_DEPLOYMENT.md](docs/SECURE_DEPLOYMENT.md) for secret handling and incident response  
+- See [SECURITY.md](../../SECURITY.md) for secret handling and incident response  
 
 ---
 
@@ -149,12 +151,11 @@ npm install && npm run dev
 # Production frontend build (matches CI)
 ENABLE_PWA=true npm run build
 
-# Sync to repo root (maintainers — CI normally does this)
-node scripts/pages-dist-check.mjs
-node scripts/sync-pages-dist-to-root.mjs --git-add
+# Publish to docs/ (maintainers — CI normally does this; docs/ is gitignored locally)
+npm run pages:publish
 ```
 
-For repository layout and development, see [core/docs/REPOSITORY.md](core/docs/REPOSITORY.md).
+For repository layout and development, see [REPOSITORY.md](REPOSITORY.md) and [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ---
 
@@ -164,7 +165,7 @@ For repository layout and development, see [core/docs/REPOSITORY.md](core/docs/R
 
 ### GitHub Pages (current)
 
-Push to `main` → [Deploy to GitHub Pages](.github/workflows/deploy-pages.yml) → live at [https://www.eliteagrocloud.com/#/](https://www.eliteagrocloud.com/#/).
+Push to `main` → [Deploy to GitHub Pages](../../.github/workflows/deploy-pages.yml) → live at [https://www.eliteagrocloud.com/#/](https://www.eliteagrocloud.com/#/).
 
 In **Field Boundary**, choose **Fields of the World (Global v3)** → **Show Global Fields** → zoom to **11+**.
 
@@ -172,8 +173,8 @@ In **Field Boundary**, choose **Fields of the World (Global v3)** → **Show Glo
 
 When `eliteagrocloud.com` DNS points to the VPS (`2.24.11.216`):
 
-1. Copy [scripts/nginx-eliteagrocloud-vps.conf.example](scripts/nginx-eliteagrocloud-vps.conf.example) to nginx on the VPS.
-2. Run [scripts/deploy-vps-fullstack.sh](scripts/deploy-vps-fullstack.sh) (sets `VITE_ELITE_SAME_ORIGIN_API=true` so `/api/*` stays on the same domain).
-3. Configure GitHub secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` → [deploy-vps-fullstack.yml](.github/workflows/deploy-vps-fullstack.yml) auto-deploys on push.
+1. Copy [scripts/nginx-eliteagrocloud-vps.conf.example](../../scripts/nginx-eliteagrocloud-vps.conf.example) to nginx on the VPS.
+2. Run [scripts/deploy-vps-fullstack.sh](../../scripts/deploy-vps-fullstack.sh) (sets `VITE_ELITE_SAME_ORIGIN_API=true` so `/api/*` stays on the same domain).
+3. Configure GitHub secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` → [deploy-vps-fullstack.yml](../../.github/workflows/deploy-vps-fullstack.yml) auto-deploys on push.
 
 **Keep MX records** for Hostinger email when changing A records. Test with `/etc/hosts` before DNS cutover.

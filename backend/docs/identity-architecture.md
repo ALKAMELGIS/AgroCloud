@@ -121,7 +121,7 @@ Table `users`: UUID, `organization_id`, `email`, `name`, `role_id`, `status`, `p
 
 ## Recommended improvements (phased)
 
-See implementation phases in repo docs: `AUTHENTICATION.md`, `CREDITS.md` (added with Phase 2+).
+See implementation phases in repo docs: `core/docs/AUTHENTICATION.md`, `core/docs/CREDITS.md` (added with Phase 2+).
 
 | Phase | Focus |
 |-------|--------|

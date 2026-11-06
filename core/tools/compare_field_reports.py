@@ -108,7 +108,7 @@ def summarize(path):
             rid = sh.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
             target = rel_map.get(rid, "")
             if not target.startswith("xl/"):
-                target = "xl/" + target.lstrip("/")
+                target = target.lstrip("/") if target.startswith("/") else "xl/" + target
             meta = sheet_meta(z, target, shared)
             print(f"\n[{name}] merges={len(meta['merges'])} colWidths={meta['cols']}")
             if name in ("Executive Summary", "Area & Coverage Analysis", "Production Estimation"):
@@ -138,9 +138,10 @@ def diff_styles(path_a, path_b):
         print("numFmts B sample:", list(nfb.items())[:15])
 
 
-REF = r"c:\Users\mohamed.abass.WUSOOM\OneDrive - WUSOOM\Desktop\Serbia\Copy of Serbia_Field_Report__2026-08-05.xlsx"
-CUR = r"c:\Users\mohamed.abass.WUSOOM\OneDrive - WUSOOM\Desktop\Serbia\Repprt\50_plots_Field_Report_2026-08-25.xlsx"
-
-summarize(CUR)
-summarize(REF)
-diff_styles(CUR, REF)
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        sys.exit("usage: python core/tools/compare_field_reports.py <current.xlsx> <reference.xlsx>")
+    CUR, REF = sys.argv[1], sys.argv[2]
+    summarize(CUR)
+    summarize(REF)
+    diff_styles(CUR, REF)

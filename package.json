@@ -23,7 +23,7 @@
     "deploy:hostinger": "node scripts/deploy-hostinger-archive.mjs",
     "upload:hostinger": "node scripts/upload-hostinger.mjs",
     "test:smtp": "node scripts/test-smtp.mjs",
-    "sync-pages-docs": "node scripts/sync-pages-docs.mjs",
+    "pages:publish": "node scripts/pages-dist-check.mjs && node scripts/publish-pages-docs.mjs",
     "preview": "npm run preview -w frontend",
     "typecheck": "npm run typecheck -w frontend",
     "test": "npm run test -w frontend && npm run test -w backend",

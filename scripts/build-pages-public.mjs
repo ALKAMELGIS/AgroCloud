@@ -52,4 +52,4 @@ function run(cmd, args) {
 
 run('npm', ['run', 'build'])
 run('node', ['scripts/pages-dist-check.mjs'])
-console.log('build-pages-public: OK — safe to sync with scripts/sync-pages-dist-to-root.mjs')
+console.log('build-pages-public: OK — safe to publish with npm run pages:publish (scripts/publish-pages-docs.mjs)')

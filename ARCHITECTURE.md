@@ -1,6 +1,6 @@
 # AgroCloud architecture
 
-AgroCloud is an npm-workspaces monorepo: a React single-page app (`frontend/`) and an Express API (`backend/`), plus optional Python services for satellite analysis and AI models. The SPA is published to GitHub Pages; the API runs on a VPS or Railway.
+AgroCloud is an npm-workspaces monorepo: a React single-page app (`frontend/`) and an Express API (`backend/`), plus optional Python services for satellite analysis and AI models. The SPA is published to GitHub Pages from `main:/docs`; the API runs on Hostinger, a VPS or Railway.
 
 ```mermaid
 flowchart LR
@@ -26,18 +26,46 @@ flowchart LR
 
 ## Repository layout
 
-| Path | What it is |
-|---|---|
-| `frontend/` | React 18 + TypeScript + Vite 5 + MUI 6 SPA (MapLibre / Mapbox GL for maps). |
-| `backend/` | Express 4 API, identity (PostgreSQL), AI/imagery proxies, raster pipeline. |
-| `backend/services/` | Python model services the API proxies to (SAM, SegFormer, agri field boundary, image classification, …). |
-| `analysis_engine/` | Python STAC / spectral-index / time-series engine (called by `mpcPlanetaryApi`). |
-| `services/geodash-api/` | Optional FastAPI service; enabled by `geodashApiUrl` in Agro Cloud Platform settings. |
-| `scripts/` | Build, deploy and dev scripts used by npm and CI. |
-| `design-system/agrocloud/` | Design rules (UI UX Pro Max output) and the implementation guide. |
-| `core/` | Repository docs, SQL, Windows launchers and a standalone data-entry tool. |
-| `.claude/skills/` | Agent skills used for UI, testing and review work. |
-| repo root `index.html`, `assets/`, `sw.js`, `CNAME`, icons | **Generated** GitHub Pages output, synced by CI (`pages-sync` commits). Do not edit by hand. |
+```text
+AgroCloud/
+├─ frontend/               React + TypeScript SPA (Vite, MUI, MapLibre/Mapbox)
+│  ├─ src/
+│  │  ├─ app/              shell: providers, routes, startup, header/nav layouts, Home hub
+│  │  ├─ modules/          features, one folder per domain (see Feature modules)
+│  │  ├─ components/       shared UI kit — import via @/components
+│  │  ├─ core/             infrastructure only: api, auth services, state, hooks, routing, i18n, config, utils
+│  │  ├─ theme/            design tokens + MUI theme
+│  │  └─ assets/styles/    global CSS (agro-premium.css loads last)
+│  ├─ public/              static files copied into every build (icons, CNAME, schemas)
+│  ├─ tests/               Playwright E2E
+│  └─ scripts/             frontend tooling (check-imports, brand assets)
+├─ backend/                Express API
+│  ├─ server/              runtime: routes/ proxies/ engines/ persistence/ middleware/ services/ identity/ raster/
+│  ├─ src/                 versioned /api/v1 · /api/v2 routers, error handler
+│  ├─ services/            Python model services (SAM, SegFormer, field boundary, classification …)
+│  ├─ migrations/          PostgreSQL identity schema
+│  ├─ tests/               node --test
+│  └─ docs/                identity architecture
+├─ services/geodash-api/   optional FastAPI service
+├─ analysis_engine/        Python STAC / spectral-index / time-series engine
+├─ core/                   project material that isn't the running app
+│  ├─ docs/                DEPLOYMENT, AUTHENTICATION, CREDITS, REPOSITORY, technical docs, examples/
+│  ├─ database/            PostGIS SQL
+│  ├─ tools/               standalone utilities (data-entry page, field-report comparison scripts)
+│  └─ scripts/windows/     Windows launchers
+├─ design-system/          design rules (UI UX Pro Max) + implementation guide
+├─ scripts/                build, deploy and dev scripts used by npm and CI
+├─ docs/                   GENERATED website for GitHub Pages — CI only, gitignored locally
+├─ .github/workflows/      CI/CD (Pages, VPS, health checks)
+├─ .claude/skills/         agent skills used for UI, testing and review work
+├─ server.js               Hostinger production entry (serves the API + frontend/dist)
+├─ Dockerfile*, docker-compose*.yml, railway.toml
+│                          stay at the root: Railway, Docker and the VPS fetch them by these paths
+├─ ARCHITECTURE.md · README.md · SECURITY.md
+└─ package.json            npm workspaces: frontend, backend
+```
+
+`docs/` is the only generated folder. The deploy workflow rebuilds it on every push to `main` (see [core/docs/DEPLOYMENT.md](core/docs/DEPLOYMENT.md)); never edit it by hand.
 
 ## Frontend (`frontend/src`)
 
@@ -124,4 +152,4 @@ npm run dev:client   # frontend only
 npm run dev:server   # backend only
 ```
 
-Deployment: see [DEPLOYMENT.md](DEPLOYMENT.md). Authentication: see [AUTHENTICATION.md](AUTHENTICATION.md).
+Deployment: [core/docs/DEPLOYMENT.md](core/docs/DEPLOYMENT.md). Authentication: [core/docs/AUTHENTICATION.md](core/docs/AUTHENTICATION.md). Credits: [core/docs/CREDITS.md](core/docs/CREDITS.md).

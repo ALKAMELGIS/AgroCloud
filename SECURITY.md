@@ -34,7 +34,7 @@ If GitGuardian or GitHub Secret Scanning alerts on this repository:
 
 1. **Rotate** the exposed credential immediately at the provider.
 2. Remove secrets from the **current tree** (clean CI rebuild).
-3. Purge secrets from **git history** — see [docs/GIT_HISTORY_SECRET_CLEANUP.md](docs/GIT_HISTORY_SECRET_CLEANUP.md).
+3. Purge secrets from **git history** with [git-filter-repo](https://github.com/newren/git-filter-repo) (`git filter-repo --replace-text secrets.txt`), force-push, and ask collaborators to re-clone. Rotating the key (step 1) matters more: history rewrites don't reach existing clones and forks.
 4. Add rotated key prefixes to [`scripts/secret-scan-blocklist.txt`](scripts/secret-scan-blocklist.txt).
 
 ## Dependency updates
@@ -50,7 +50,7 @@ Address high/critical findings in direct dependencies when fixes are available. 
 
 ## Secure deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) and [docs/SECURE_DEPLOYMENT.md](docs/SECURE_DEPLOYMENT.md).
+See [core/docs/DEPLOYMENT.md](core/docs/DEPLOYMENT.md).
 
 ## Security checklist (maintainers)
 

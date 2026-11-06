@@ -15,14 +15,14 @@
 
 ## Rate limiting
 
-Configured in [backend/server/middleware/authRateLimit.js](backend/server/middleware/authRateLimit.js):
+Configured in [backend/server/middleware/authRateLimit.js](../../backend/server/middleware/authRateLimit.js):
 
 - `AUTH_RATE_LIMIT_WINDOW_MS` (default 15 min)
 - `AUTH_RATE_LIMIT_LOGIN_MAX`, `REGISTER_MAX`, `FORGOT_MAX`, `RESET_MAX`, `VERIFY_MAX`
 
 ## Environment
 
-See [.env.example](.env.example): `AUTH_REQUIRE_EMAIL_VERIFICATION`, `AUTH_REQUIRE_ADMIN_APPROVAL`, `IDENTITY_SESSION_SECRET`, `DATABASE_URL`.
+See [.env.example](../../.env.example): `AUTH_REQUIRE_EMAIL_VERIFICATION`, `AUTH_REQUIRE_ADMIN_APPROVAL`, `IDENTITY_SESSION_SECRET`, `DATABASE_URL`.
 
 ## Password reset (PostgreSQL)
 

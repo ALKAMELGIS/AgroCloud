@@ -14,6 +14,6 @@ npm test             # frontend (Vitest) + backend (node --test)
 npm run test:e2e     # Playwright on desktop, tablet and mobile (runs against a production build)
 ```
 
-- [ARCHITECTURE.md](ARCHITECTURE.md): repository layout, layer rules, module map, performance rules
+- [ARCHITECTURE.md](ARCHITECTURE.md): repository tree, layer rules, module map, performance rules
 - [design-system/agrocloud/IMPLEMENTATION.md](design-system/agrocloud/IMPLEMENTATION.md): design tokens and UI rules
-- [DEPLOYMENT.md](DEPLOYMENT.md) · [AUTHENTICATION.md](AUTHENTICATION.md) · [SECURITY.md](SECURITY.md)
+- [core/docs/DEPLOYMENT.md](core/docs/DEPLOYMENT.md) · [core/docs/AUTHENTICATION.md](core/docs/AUTHENTICATION.md) · [SECURITY.md](SECURITY.md)

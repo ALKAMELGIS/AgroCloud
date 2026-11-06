@@ -1,53 +1,14 @@
-# Agri Cloud — repository documentation
+# AgroCloud — repository documentation
 
-> **GitHub Pages:** سير `deploy-pages.yml` يبني ثم يزامن `frontend/dist` إلى **جذر `main`** (`[pages-sync]`). الإعدادات: **Deploy from a branch** → **main** → **/**. مخرجات الجذر مُتجاهلة في git محلياً (`.gitignore`) — الالتزام من CI فقط.
+> **GitHub Pages:** `deploy-pages.yml` builds the SPA and publishes it to **`main:/docs`** (`[pages-sync]` commits). Pages: **Deploy from a branch** → **main** → **/docs**. `docs/` is gitignored locally; only CI commits it (a local `.env` would otherwise be embedded).
 >
-> **رابط التشغيل (HashRouter):** https://alkamelgis.github.io/AgroCloud/#/
->
-> **GitHub Pages:** `deploy-pages.yml` copies the build to **main** repo root. Pages: **main** / **(root)**. Root deploy outputs are **gitignored** locally; only CI commits them (avoids embedding local `.env` secrets).
->
-> **App URL:** https://alkamelgis.github.io/AgroCloud/#/
+> **App URL (HashRouter):** https://www.eliteagrocloud.com/#/
 
-Agri Cloud is a monorepo containing a React/Vite frontend and an Express backend.
+AgroCloud is a monorepo containing a React/Vite frontend and an Express backend.
 
-## Project Structure
+## Project structure
 
-```text
-.
-├─ frontend/
-│  ├─ src/
-│  │  ├─ app/             # entry, routes, providers, layouts, startup
-│  │  ├─ core/            # auth, authorization, config, api, state, routing, hooks
-│  │  ├─ modules/         # features: gis, remote-sensing, ai, operations, forms,
-│  │  │                   #   dashboards, reports, master-data, data-management
-│  │  ├─ roles/           # who may use which module (no copied feature code)
-│  │  ├─ shared/          # reusable UI: components, layouts, maps, charts, dialogs
-│  │  ├─ data/            # domains, schemas, templates, seeds, samples
-│  │  └─ assets/          # styles, images, icons, logos, fonts
-│  ├─ public/             # static assets
-│  └─ config/
-├─ backend/
-│  ├─ server/             # runtime: routes/ proxies/ engines/ persistence/ middleware/ services/ identity/ raster/
-│  ├─ src/
-│  │  ├─ config/
-│  │  ├─ routes/
-│  │  │  ├─ v1/
-│  │  │  └─ v2/
-│  │  ├─ controllers/
-│  │  ├─ middleware/
-│  │  ├─ models/
-│  │  └─ services/
-│  ├─ tests/
-│  └─ docs/
-├─ services/              # auxiliary microservices (geodash-api)
-├─ analysis_engine/       # Python analysis engine
-├─ tools/                 # Python field-report comparison utilities
-├─ scripts/               # build, deploy and dev scripts (used by npm & CI)
-├─ core/                  # docs, database SQL, standalone tools, Windows launchers
-└─ .github/workflows/
-```
-
-For the layer rules and module map, see [ARCHITECTURE.md](../../ARCHITECTURE.md).
+The repository tree, layer rules and module map are maintained in one place: [ARCHITECTURE.md](../../ARCHITECTURE.md).
 
 ## Requirements
 

@@ -82,7 +82,7 @@ def dump_sheet(path, sheet_name, max_row=50):
                 rid = sh.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
                 target = rel_map[rid]
                 if not target.startswith("xl/"):
-                    target = "xl/" + target.lstrip("/")
+                    target = target.lstrip("/") if target.startswith("/") else "xl/" + target
                 break
         root = ET.fromstring(z.read(target))
         merges = [mc.get("ref") for mc in root.findall(".//" + q("mergeCell"))]
@@ -109,17 +109,20 @@ def dump_sheet(path, sheet_name, max_row=50):
                 print(f"{ref}: {cell_val(c, shared)!r} | font={font} fill={fill} border={border} numFmt={nf} align={al}")
 
 
-REF = r"c:\Users\mohamed.abass.WUSOOM\OneDrive - WUSOOM\Desktop\Serbia\Copy of Serbia_Field_Report__2026-08-05.xlsx"
-dump_sheet(REF, "Executive Summary", 46)
-dump_sheet(REF, "Area & Coverage Analysis", 45)
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        sys.exit("usage: python core/tools/extract_ref_styles.py <reference.xlsx>")
+    REF = sys.argv[1]
+    dump_sheet(REF, "Executive Summary", 46)
+    dump_sheet(REF, "Area & Coverage Analysis", 45)
 
-# chart colors
-with zipfile.ZipFile(REF) as z:
-    for name in sorted(z.namelist()):
-        if name.startswith("xl/charts/chart") and name.endswith(".xml"):
-            xml = z.read(name).decode("utf-8")
-            print(f"\n=== {name} ===")
-            colors = re.findall(r'<a:srgbClr val="([0-9A-Fa-f]{6})"', xml)
-            print("colors:", colors[:20])
-            titles = re.findall(r'<c:v>([^<]+)</c:v>', xml)
-            print("text nodes:", titles[:10])
+    # chart colors
+    with zipfile.ZipFile(REF) as z:
+        for name in sorted(z.namelist()):
+            if name.startswith("xl/charts/chart") and name.endswith(".xml"):
+                xml = z.read(name).decode("utf-8")
+                print(f"\n=== {name} ===")
+                colors = re.findall(r'<a:srgbClr val="([0-9A-Fa-f]{6})"', xml)
+                print("colors:", colors[:20])
+                titles = re.findall(r'<c:v>([^<]+)</c:v>', xml)
+                print("text nodes:", titles[:10])

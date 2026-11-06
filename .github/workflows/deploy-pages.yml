@@ -1,10 +1,14 @@
 name: Deploy to GitHub Pages
 
-# CI builds the SPA with empty public env vars (base "/" for the custom domain), copies frontend/dist
-# to repo root on main, then pushes [pages-sync]. GitHub Pages: Deploy from a branch → main → /(root).
+# CI builds the SPA with empty public env vars (base "/" for the custom domain), publishes frontend/dist
+# to docs/ on main, then pushes [pages-sync]. GitHub Pages: Deploy from a branch → main → /docs
+# (GitHub only allows "/" or "/docs" for branch publishing).
 # Live app (HashRouter): https://www.eliteagrocloud.com/#/
 #
-# Root SPA files are gitignored — never commit them from a local machine (local .env would embed secrets).
+# Order is what keeps the site up: publish docs/ → push → point Pages at /docs → only then remove the
+# legacy build that older deploys left in the repo root (one-time; no-op afterwards).
+#
+# docs/ is gitignored — never commit it from a local machine (a local .env would embed secrets).
 on:
   push:
     branches: [main]
@@ -22,18 +26,13 @@ concurrency:
 jobs:
   publish-to-main-root:
     # Skip only the automated root sync commit from this workflow (avoids infinite loop). Do not skip user commits that merely mention [pages-sync] in the message body.
-    if: "${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(pages): sync SPA build to repo root') }}"
+    if: "${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(pages): ') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Force Pages to serve files from main (not Actions artifact)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PAGES_ADMIN_TOKEN: ${{ secrets.PAGES_ADMIN_TOKEN }}
-        run: node scripts/ensure-pages-legacy-main.mjs
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -80,32 +79,44 @@ jobs:
           # Allow the intentionally-public, URL-restricted Mapbox token through the embedded-secret scanner.
           PAGES_SECRET_SCAN_ALLOW: ${{ vars.VITE_MAPBOX_TOKEN }}
         run: node scripts/pages-dist-check.mjs
-      - name: Sync dist to repository root and push main
+      - name: Publish build to docs/ and push main
         run: |
           set -euo pipefail
-          node scripts/sync-pages-dist-to-root.mjs --git-add
+          node scripts/publish-pages-docs.mjs --git-add
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if git diff --cached --quiet; then
-            echo "No SPA changes to commit at repo root."
-            exit 0
+            echo "No SPA changes to publish."
+          else
+            git commit -m "chore(pages): publish SPA build to docs [pages-sync]"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
-          git commit -m "chore(pages): sync SPA build to repo root [pages-sync]"
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-      - name: Re-assert legacy Pages after push (GitHub may reset source)
+      - name: Serve Pages from main /docs (after docs/ is pushed)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PAGES_ADMIN_TOKEN: ${{ secrets.PAGES_ADMIN_TOKEN }}
-        run: node scripts/ensure-pages-legacy-main.mjs
+          PAGES_SOURCE_PATH: /docs
+        run: node scripts/ensure-pages-branch-source.mjs
+      - name: Remove legacy root build (one-time migration)
+        run: |
+          set -euo pipefail
+          node scripts/remove-legacy-pages-root.mjs --git
+          if git diff --cached --quiet; then
+            echo "Repository root already clean."
+            exit 0
+          fi
+          git commit -m "chore(pages): remove legacy root SPA build [pages-sync]"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
       - name: Drop legacy gh-pages branch (optional)
         continue-on-error: true
         run: git push origin --delete gh-pages
       - name: Summary
         run: |
           {
-            echo "## GitHub Pages (main / root)"
-            echo "Build synced to \`main\` root (no local .env secrets). Pages: **Deploy from a branch** → **main** → **/(root)**."
+            echo "## GitHub Pages (main / docs)"
+            echo "Build published to \`main:/docs\` (no local .env secrets). Pages: **Deploy from a branch** → **main** → **/docs**."
             echo ""
             echo "| App |"
             echo "| --- |"
@@ -115,5 +126,5 @@ jobs:
             echo ""
             echo "**Next:** [Production health check](https://github.com/${{ github.repository }}/actions/workflows/production-health.yml) runs after this workflow."
             echo ""
-            echo "See [DEPLOYMENT.md](https://github.com/${{ github.repository }}/blob/main/DEPLOYMENT.md) for full-stack API hosting."
+            echo "See [core/docs/DEPLOYMENT.md](https://github.com/${{ github.repository }}/blob/main/core/docs/DEPLOYMENT.md) for full-stack API hosting."
           } >> "$GITHUB_STEP_SUMMARY"
