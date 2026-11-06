@@ -248,7 +248,7 @@ import {
   GEO_AI_CHAT_SYSTEM_BASE,
   type GeoAiChatTurn,
 } from '@/modules/ai/agent/geoAiChatClaude';
-import { appConfirm } from '@/shared/dialogs/appDialog';
+import { appConfirm } from '@/components/overlays/appDialog';
 import { loadGisMapSavedLayers } from '@/modules/gis/map/gisMapLayerStore';
 import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey';
 import { satelliteCustomLayersToGeoAiLayers } from '@/modules/ai/agent/geoAiMapLayerSources';
@@ -601,7 +601,7 @@ import {
   writeSiStyleClipboard,
 } from '@/modules/gis/layers/symbology/siSymbolStyleStudio';
 import { FieldVisibilityControl } from '@/modules/gis/layers/FieldVisibilityControl';
-import { SiCopyTextButton } from '@/shared/components/SiCopyTextButton';
+import { SiCopyTextButton } from '@/components/actions/CopyTextButton';
 import type { AoiStaticMultiLayerLineChartDataset } from '../temporal-analysis/AoiStaticMultiLayerLineChart';
 import { SatelliteMapAnalysisChrome, type MapToolboxNavigateHandler } from './SatelliteMapAnalysisChrome';
 import { LayerLiveLegendPanel } from '../indices/LayerLiveLegendPanel';

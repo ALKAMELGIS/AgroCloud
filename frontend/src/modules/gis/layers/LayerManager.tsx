@@ -1,5 +1,5 @@
 import React from 'react';
-import { appPrompt } from '@/shared/dialogs/appDialog';
+import { appPrompt } from '@/components/overlays/appDialog';
 
 export type SymbologyStyle =
   | 'single'

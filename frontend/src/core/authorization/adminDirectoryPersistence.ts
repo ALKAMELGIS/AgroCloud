@@ -2,7 +2,7 @@
  * Syncs User Management (adminUsers) + audit log to the Node backend file store
  * so changes survive deploys/restarts when AGRI_ADMIN_DIRECTORY_FILE is on a persistent volume.
  *
- * @see backend/server/adminDirectoryPersistence.js
+ * @see backend/server/persistence/adminDirectoryPersistence.js
  */
 import { AUDIT_LOG_STORAGE_KEY } from './audit'
 

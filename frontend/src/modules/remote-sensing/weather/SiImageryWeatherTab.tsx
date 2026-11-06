@@ -33,7 +33,7 @@ import {
   buildTimeSeriesWeatherTimeline,
   type TimeSeriesWeatherBlock,
 } from '../temporal-analysis/timeSeriesReport/timeSeriesWeatherTimeline'
-import { useImageryChartInk } from '@/shared/charts/imageryChartInk'
+import { useImageryChartInk } from '@/components/charts/imageryChartInk'
 
 ChartJS.register(
   CategoryScale,

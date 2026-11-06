@@ -1,3 +1,0 @@
-# domains
-
-Coded domain values.
