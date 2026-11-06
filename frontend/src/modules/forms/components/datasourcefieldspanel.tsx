@@ -871,7 +871,7 @@ export function DataSourceFieldsPanel({
             <span>{text.dataSourceFields}</span>
           </div>
           <div className="dsf-settings-head__actions">
-            <button id="open-fields-btn" type="button" className="dsf-settings-head__btn dsf-settings-head__btn--secondary" onClick={() => setIsOpen(v => !v)}>
+            <button id="open-fields-btn" type="button" className="dsf-settings-head__btn dsf-settings-head__btn--secondary" onClick={() => setIsOpen(v => !v)} aria-expanded={isOpen} aria-controls="dsf-settings-body">
               {isOpen ? (
                 <>
                   <i className="fa-solid fa-xmark" aria-hidden /> {text.close}
@@ -894,7 +894,7 @@ export function DataSourceFieldsPanel({
         </div>
 
         {!isOpen ? null : (
-          <div className="dsf-settings-body">
+          <div className="dsf-settings-body" id="dsf-settings-body">
             <div className="dsf-settings-layers">
               <div className="dsf-settings-layers__head">
                 <div className="dsf-settings-layers__title">{text.dataSource}</div>

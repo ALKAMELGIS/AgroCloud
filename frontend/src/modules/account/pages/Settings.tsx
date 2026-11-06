@@ -133,7 +133,9 @@ export default function Settings() {
   const openConfigureFields = () => {
     scrollToDataSourceCard()
     window.setTimeout(() => {
-      ;(document.getElementById('open-fields-btn') as HTMLButtonElement | null)?.click()
+      // Open only: the panel toggle would *close* an already-open configuration.
+      const toggle = document.getElementById('open-fields-btn') as HTMLButtonElement | null
+      if (toggle && toggle.getAttribute('aria-expanded') !== 'true') toggle.click()
     }, 350)
   }
 
