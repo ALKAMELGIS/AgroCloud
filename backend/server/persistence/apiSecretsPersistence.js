@@ -1,12 +1,11 @@
 /**
- * Persist API token overrides on the Node server (survives frontend rebuilds / image updates
- * when `agri_api_secrets.json` is on a persistent path or volume).
+ * Persist API token overrides on the Node server, in the SQLite database (`documents` store
+ * `agri_api_secrets`; a legacy agri_api_secrets.json is imported once and kept as a backup).
  * Only keys the user has saved appear under `builtin` / `customSlots` so hydration never wipes unrelated browser overrides.
  * @see frontend/src/lib/apiSecretsServerPersistence.ts
  */
 
-import fs from 'fs'
-import path from 'path'
+import { readFileDocument, writeFileDocument } from '../database/documentStore.js'
 
 const BUILTIN_KEYS = [
   'mapboxToken',
@@ -47,8 +46,8 @@ function migrateRaw(raw) {
 
 export function readApiSecretsFile(filePath) {
   try {
-    if (!fs.existsSync(filePath)) return { persisted: false, secrets: null }
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    const { exists, value: raw } = readFileDocument(filePath)
+    if (!exists) return { persisted: false, secrets: null }
     return { persisted: true, secrets: migrateRaw(raw) }
   } catch (e) {
     console.error('[api-secrets] read failed', e)
@@ -79,13 +78,7 @@ export function mergeAndWriteApiSecrets(filePath, patch) {
   }
 
   const next = { version: 3, builtin, customSlots }
-  const dir = path.dirname(filePath)
-  try {
-    fs.mkdirSync(dir, { recursive: true })
-  } catch {
-    // ignore
-  }
-  fs.writeFileSync(filePath, JSON.stringify(next, null, 2), 'utf8')
+  writeFileDocument(filePath, next)
   return { persisted: true, secrets: next }
 }
 

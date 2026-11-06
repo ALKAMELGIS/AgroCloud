@@ -11,6 +11,7 @@ import fs from 'fs'
 import versionedRoutes from '../src/routes/index.js'
 import { errorHandler, notFoundHandler } from '../src/middleware/errorHandler.js'
 import { registerApiSecretsRoutes } from './persistence/apiSecretsPersistence.js'
+import { readFileDocument, writeFileDocument } from './database/documentStore.js'
 import { registerUserProfilePersistence } from './persistence/userProfilePersistence.js'
 import { registerAdminDirectoryPersistence } from './persistence/adminDirectoryPersistence.js'
 import { loadProductionEnv, resolveAgriDataPaths } from './loadProductionEnv.js'
@@ -241,6 +242,10 @@ app.get('/api/health', (_req, res) => {
 })
 registerEmbedFrameCheckRoute(app)
 registerEmbedBrowseRoute(app)
+
+// Identity API (/api/v1/identity/*, /api/v1/manpower/*). Must come before the /api/v1 → /api bridge
+// below, which rewrites the URL; registered after it (as before), every identity request missed.
+await bootstrapIdentity(app)
 
 // New versioned API gateway: /api/v1/* and /api/v2/*
 app.use('/api', versionedRoutes)
@@ -613,21 +618,12 @@ app.get('/api/weather/latest', (req, res) => {
   res.json({ temp_c: 36.2, humidity_pct: 42, wind_ms: 3.2, rainfall_mm: 0 })
 })
 
+/** Legacy JSON file, imported once into the `documents` table (store `ecph_entries`). */
 const ECPH_ENTRIES_FILE = path.join(SERVER_DIR, 'ecph_entries.json')
-
-function safeJsonParse(raw, fallback) {
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return fallback
-  }
-}
 
 function readEcphEntries() {
   try {
-    if (!fs.existsSync(ECPH_ENTRIES_FILE)) return []
-    const raw = fs.readFileSync(ECPH_ENTRIES_FILE, 'utf8')
-    const parsed = safeJsonParse(raw, [])
+    const { value: parsed } = readFileDocument(ECPH_ENTRIES_FILE)
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
@@ -636,7 +632,7 @@ function readEcphEntries() {
 
 function writeEcphEntries(entries) {
   try {
-    fs.writeFileSync(ECPH_ENTRIES_FILE, JSON.stringify(entries, null, 2))
+    writeFileDocument(ECPH_ENTRIES_FILE, entries)
   } catch (e) {
     console.error('Failed to persist ecph entries', e)
   }
@@ -1808,13 +1804,12 @@ app.post('/api/ollama/chat', async (req, res) => {
   }
 })
 
+/** Legacy JSON file, imported once into the `documents` table (store `esri_dashboards`). */
 const ESRI_DASHBOARDS_FILE = path.join(SERVER_DIR, 'esri_dashboards.json')
 
 function readEsriDashboards() {
   try {
-    if (!fs.existsSync(ESRI_DASHBOARDS_FILE)) return []
-    const raw = fs.readFileSync(ESRI_DASHBOARDS_FILE, 'utf8')
-    const parsed = safeJsonParse(raw, [])
+    const { value: parsed } = readFileDocument(ESRI_DASHBOARDS_FILE)
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
@@ -1823,7 +1818,7 @@ function readEsriDashboards() {
 
 function writeEsriDashboards(items) {
   try {
-    fs.writeFileSync(ESRI_DASHBOARDS_FILE, JSON.stringify(items, null, 2))
+    writeFileDocument(ESRI_DASHBOARDS_FILE, items)
   } catch (err) {
     console.error('Failed to persist esri dashboards', err)
   }
@@ -2008,8 +2003,6 @@ app.get('*', (req, res) => {
 
 app.use(notFoundHandler)
 app.use(errorHandler)
-
-await bootstrapIdentity(app)
 
 const server = app.listen(API_PORT, LISTEN_HOST, () => {
   console.log(`API listening on http://${LISTEN_HOST === '0.0.0.0' ? 'localhost' : LISTEN_HOST}:${API_PORT} (bind ${LISTEN_HOST})`)

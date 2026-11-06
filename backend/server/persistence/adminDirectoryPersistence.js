@@ -1,13 +1,13 @@
 /**
- * Enterprise-style admin directory persistence: users + audit log on the Node host
- * (survives frontend rebuilds, hot reload, and deploys when the file path is on a volume).
+ * Enterprise-style admin directory persistence: users + audit log, stored in the SQLite database
+ * (`documents` table, store `agri_admin_directory`). An existing agri_admin_directory.json is
+ * imported on first read and then kept only as a backup.
  *
  * Env:
- *   AGRI_ADMIN_DIRECTORY_FILE — absolute or relative to `backend/server` (default: agri_admin_directory.json)
+ *   AGRI_ADMIN_DIRECTORY_FILE — legacy JSON file to import (absolute or relative to `backend/server`)
  *   AGRI_ADMIN_DIRECTORY_TOKEN — optional; send X-Agri-Admin-Directory-Token or Authorization: Bearer …
  */
-import fs from 'fs'
-import path from 'path'
+import { readFileDocument, writeFileDocument } from '../database/documentStore.js'
 
 const MAX_USERS = 20000
 const MAX_AUDIT = 8000
@@ -18,8 +18,8 @@ function emptyStore() {
 
 function readStore(filePath) {
   try {
-    if (!fs.existsSync(filePath)) return { persisted: false, data: emptyStore() }
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    const { exists, value: raw } = readFileDocument(filePath)
+    if (!exists) return { persisted: false, data: emptyStore() }
     if (!raw || typeof raw !== 'object') return { persisted: true, data: emptyStore() }
     const users = Array.isArray(raw.users) ? raw.users : []
     const auditLog = Array.isArray(raw.auditLog) ? raw.auditLog : []
@@ -47,19 +47,13 @@ export function writeAdminDirectoryStore(filePath, data) {
 }
 
 function writeStore(filePath, data) {
-  const dir = path.dirname(filePath)
-  try {
-    fs.mkdirSync(dir, { recursive: true })
-  } catch {
-    // ignore
-  }
   const next = {
     version: 1,
     updatedAt: new Date().toISOString(),
     users: Array.isArray(data.users) ? data.users.slice(0, MAX_USERS) : [],
     auditLog: Array.isArray(data.auditLog) ? data.auditLog.slice(0, MAX_AUDIT) : [],
   }
-  fs.writeFileSync(filePath, JSON.stringify(next, null, 2), 'utf8')
+  return writeFileDocument(filePath, next)
 }
 
 /**
@@ -92,7 +86,7 @@ export function registerAdminDirectoryPersistence(app, opts) {
         if (snapshot) return res.json({ ok: true, ...snapshot })
       }
     } catch (e) {
-      console.error('[admin-directory] PG export failed', e)
+      console.error('[admin-directory] identity export failed', e)
     }
     const { data } = readStore(filePath)
     return res.json({ ok: true, ...data })
@@ -104,7 +98,7 @@ export function registerAdminDirectoryPersistence(app, opts) {
       if (isIdentityReady()) {
         return res.status(403).json({
           ok: false,
-          error: 'Directory PUT is disabled when PostgreSQL identity is active. Use /api/v1/identity APIs.',
+          error: 'Directory PUT is disabled while the identity module is active. Use /api/v1/identity APIs.',
           code: 'directory_read_only',
         })
       }

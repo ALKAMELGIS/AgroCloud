@@ -2,9 +2,9 @@
  * Agro Cloud Platform — field weather proxy (Open-Meteo) with server-side cache.
  */
 
-import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { readFileDocument, writeFileDocument } from '../database/documentStore.js'
 
 // Anchored to backend/server so existing saved config keeps its location.
 const SERVER_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -56,9 +56,7 @@ function weatherGridKey(lat, lng, precision = 2) {
 
 function readLayerConfig() {
   try {
-    if (!fs.existsSync(CONFIG_FILE)) return { weatherAlertsVisible: false }
-    const raw = fs.readFileSync(CONFIG_FILE, 'utf8')
-    const parsed = JSON.parse(raw)
+    const { value: parsed } = readFileDocument(CONFIG_FILE)
     return {
       weatherAlertsVisible: parsed?.weatherAlertsVisible === true,
     }
@@ -68,7 +66,7 @@ function readLayerConfig() {
 }
 
 function writeLayerConfig(config) {
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2))
+  writeFileDocument(CONFIG_FILE, config)
 }
 
 async function fetchOpenMeteoSnapshot(lat, lng) {

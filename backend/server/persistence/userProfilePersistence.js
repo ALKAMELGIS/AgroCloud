@@ -1,13 +1,13 @@
 /**
- * Persists extended account profile fields (avatar, address, etc.) in a JSON file on the Node host
+ * Persists extended account profile fields (avatar, address, etc.) in the SQLite database
+ * (`documents` store `agri_user_profiles`; a legacy agri_user_profiles.json is imported once)
  * so users see the same profile after signing in from another browser/device.
  *
  * Optional: set AGRI_USER_PROFILE_TOKEN and send the same value from the frontend via
  * VITE_AGRI_USER_PROFILE_TOKEN (header X-Agri-User-Profile-Token or Authorization: Bearer …).
  * When unset, writes are allowed without a token (suitable only for trusted local networks).
  */
-import fs from 'fs'
-import path from 'path'
+import { readFileDocument, writeFileDocument } from '../database/documentStore.js'
 
 function normalizeEmail(value) {
   return String(value ?? '')
@@ -21,8 +21,8 @@ function emptyStore() {
 
 function readStore(filePath) {
   try {
-    if (!fs.existsSync(filePath)) return { persisted: false, data: emptyStore() }
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    const { exists, value: raw } = readFileDocument(filePath)
+    if (!exists) return { persisted: false, data: emptyStore() }
     if (!raw || typeof raw !== 'object') return { persisted: true, data: emptyStore() }
     const byEmail = typeof raw.byEmail === 'object' && raw.byEmail ? { ...raw.byEmail } : {}
     return { persisted: true, data: { version: 1, byEmail } }
@@ -33,13 +33,7 @@ function readStore(filePath) {
 }
 
 function writeStore(filePath, data) {
-  const dir = path.dirname(filePath)
-  try {
-    fs.mkdirSync(dir, { recursive: true })
-  } catch {
-    // ignore
-  }
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
+  return writeFileDocument(filePath, data)
 }
 
 /**
