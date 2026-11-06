@@ -3,11 +3,13 @@ import { defineConfig, devices } from 'playwright/test'
 /**
  * E2E projects:
  *  - desktop / tablet / mobile run by default (Chromium engine, three viewport classes).
+ *  - perf runs the timing-budget specs alone, after the others.
  *  - firefox / webkit are opt-in (`E2E_CROSS_BROWSER=1`) because they need extra browser installs.
  *
  * Run: `npm run test:e2e` (all default projects) or `npx playwright test --project=mobile`.
  */
 const crossBrowser = process.env.E2E_CROSS_BROWSER === '1'
+const PERF_SPECS = /home-grid\.spec\.ts/
 
 export default defineConfig({
   testDir: './tests',
@@ -38,9 +40,12 @@ export default defineConfig({
     timeout: 300_000,
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-    { name: 'tablet', use: { ...devices['Desktop Chrome'], viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true } },
-    { name: 'mobile', use: { ...devices['Pixel 7'] } },
+    { name: 'desktop', testIgnore: PERF_SPECS, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    { name: 'tablet', testIgnore: PERF_SPECS, use: { ...devices['Desktop Chrome'], viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true } },
+    { name: 'mobile', testIgnore: PERF_SPECS, use: { ...devices['Pixel 7'] } },
+    // Performance budgets (LCP/CLS) run once, after the functional projects, so parallel workers
+    // can't skew timings. These specs set their own viewports (320 → 3840).
+    { name: 'perf', testMatch: PERF_SPECS, dependencies: ['desktop', 'tablet', 'mobile'], use: { ...devices['Desktop Chrome'] } },
     ...(crossBrowser
       ? [
           { name: 'firefox', use: { ...devices['Desktop Firefox'] } },

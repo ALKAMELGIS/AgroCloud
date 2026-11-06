@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto'
-import { getPool, isIdentityReady } from './db.js'
+import { getMigrationGeneration, getPool, isIdentityReady } from './db.js'
 
 const COOKIE_NAME = 'agro_session'
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30
@@ -117,7 +117,10 @@ export async function deleteOtherSessionsForUser(client, userId, keepToken) {
   }
 }
 
-/** Role → permission codes. Permissions only change via migrations/seeds, so a short TTL is safe. */
+/**
+ * Role → permission codes. Permissions only change via migrations/seeds, so a short TTL is safe;
+ * entries are also dropped as soon as a migration is applied (migration generation changes).
+ */
 const ROLE_PERMISSION_TTL_MS = 60_000
 const rolePermissionCache = new Map()
 
@@ -126,10 +129,11 @@ export function clearRolePermissionCache() {
 }
 
 export async function loadUserPermissions(userId, roleId) {
+  const generation = getMigrationGeneration()
   const hit = rolePermissionCache.get(roleId)
-  if (hit && Date.now() - hit.at < ROLE_PERMISSION_TTL_MS) return hit.codes.slice()
+  if (hit && hit.generation === generation && Date.now() - hit.at < ROLE_PERMISSION_TTL_MS) return hit.codes.slice()
   const codes = await queryRolePermissions(roleId)
-  rolePermissionCache.set(roleId, { codes, at: Date.now() })
+  rolePermissionCache.set(roleId, { codes, at: Date.now(), generation })
   return codes.slice()
 }
 

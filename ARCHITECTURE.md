@@ -111,7 +111,8 @@ Accessibility baseline (enforced by tests): visible keyboard focus on every cont
 |---|---|
 | `npm run typecheck` | TypeScript, frontend. |
 | `npm test` | Frontend unit tests (Vitest), then backend tests (`node --test`). |
-| `npm run test:e2e` | Playwright: desktop, tablet and mobile projects. `E2E_CROSS_BROWSER=1` adds Firefox and WebKit. If the bundled Chromium build is missing, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. |
+| `npm run test:e2e` | Playwright against a production build: `desktop`, `tablet` and `mobile` projects, then a `perf` project (LCP/CLS budgets at 320–3840px) that runs alone afterwards so timings aren't skewed. `E2E_CROSS_BROWSER=1` adds Firefox and WebKit; `E2E_DEV_SERVER=1` uses the dev server; if the bundled Chromium build is missing, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. |
+| `npm run check:imports -w frontend` | Lists any import, `vi.mock` or CSS path that doesn't resolve. |
 | `npm run build -w frontend` | Production build. |
 
 ## Development

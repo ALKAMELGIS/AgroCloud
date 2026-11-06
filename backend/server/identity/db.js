@@ -51,6 +51,12 @@ async function migrationFiles() {
     .sort()
 }
 
+/** Bumped whenever a migration is applied, so in-process caches of seeded data (e.g. role permissions) can invalidate. */
+let migrationGeneration = 0
+export function getMigrationGeneration() {
+  return migrationGeneration
+}
+
 export async function runMigrations(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS identity_migrations (
@@ -69,6 +75,7 @@ export async function runMigrations(client) {
       await client.query(sql)
       await client.query('INSERT INTO identity_migrations (name) VALUES ($1)', [file])
       await client.query('COMMIT')
+      migrationGeneration++
       console.info('[identity] applied migration', file)
     } catch (e) {
       await client.query('ROLLBACK')

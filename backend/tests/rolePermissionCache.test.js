@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 // Fake pool: counts permission queries per role.
 let queries = 0
+let generation = 0
 const fakePool = {
   async query(sql, params) {
     if (/FROM role_permissions/.test(sql)) {
@@ -14,7 +15,7 @@ const fakePool = {
 }
 
 mock.module('../server/identity/db.js', {
-  namedExports: { getPool: () => fakePool, isIdentityReady: () => true },
+  namedExports: { getPool: () => fakePool, isIdentityReady: () => true, getMigrationGeneration: () => generation },
 })
 
 const { loadUserPermissions, clearRolePermissionCache } = await import('../server/identity/sessionService.js')
@@ -44,6 +45,17 @@ test('clearing the cache forces a fresh query', async () => {
   queries = 0
   await loadUserPermissions('u1', 'role-admin')
   clearRolePermissionCache()
+  await loadUserPermissions('u1', 'role-admin')
+  assert.equal(queries, 2)
+})
+
+test('applying a migration invalidates cached permissions immediately', async () => {
+  clearRolePermissionCache()
+  queries = 0
+  await loadUserPermissions('u1', 'role-admin')
+  await loadUserPermissions('u1', 'role-admin')
+  assert.equal(queries, 1)
+  generation++ // a migration was applied
   await loadUserPermissions('u1', 'role-admin')
   assert.equal(queries, 2)
 })
