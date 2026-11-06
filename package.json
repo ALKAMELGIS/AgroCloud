@@ -26,7 +26,7 @@
     "sync-pages-docs": "node scripts/sync-pages-docs.mjs",
     "preview": "npm run preview -w frontend",
     "typecheck": "npm run typecheck -w frontend",
-    "test": "npm run test -w frontend",
+    "test": "npm run test -w frontend && npm run test -w backend",
     "test:e2e": "npm run test:e2e -w frontend"
   },
   "engines": {

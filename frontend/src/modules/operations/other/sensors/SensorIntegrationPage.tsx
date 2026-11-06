@@ -429,7 +429,7 @@ export default function SensorIntegrationPage() {
 
   return (
     <div className="sensor-shell" dir={direction}>
-      <main className="sensor-main">
+      <div className="sensor-main">
         <header className="sensor-main-header">
           <div className="sensor-main-title-row">
             <span
@@ -494,7 +494,7 @@ export default function SensorIntegrationPage() {
             ))}
           </ul>
         )}
-      </main>
+      </div>
 
       {modalOpen && draft
         ? createPortal(

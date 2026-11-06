@@ -691,9 +691,9 @@ export default function GisContent() {
   )
 
   return (
-    <main className="gis-portal-page" aria-label="GIS Content">
+    <section className="gis-portal-page" aria-labelledby="gis-portal-title">
       <nav className="gis-portal-topnav" aria-label="Content navigation">
-        <div className="gis-portal-topnav__brand">GIS Content</div>
+        <h1 id="gis-portal-title" className="gis-portal-topnav__brand">GIS Content</h1>
         <div className="gis-portal-topnav__tabs" role="tablist">
           {GIS_PORTAL_TOP_TABS.map(tab => (
             <button
@@ -1083,6 +1083,6 @@ export default function GisContent() {
           {toastMessage}
         </div>
       ) : null}
-    </main>
+    </section>
   )
 }

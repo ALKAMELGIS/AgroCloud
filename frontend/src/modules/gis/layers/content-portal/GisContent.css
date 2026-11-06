@@ -242,6 +242,7 @@
 }
 
 .gis-portal-topnav__brand {
+  margin: 0; /* it is the page <h1>; keep the compact tab-bar look */
   display: flex;
   align-items: center;
   gap: 8px;

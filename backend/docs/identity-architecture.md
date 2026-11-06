@@ -1,4 +1,4 @@
-# AgroCloud — Architecture audit (Phase 1)
+# Identity architecture (PostgreSQL users, RBAC, sessions)
 
 **Date:** 2026-03-08  
 **Scope:** User platform (auth, identity, credits, admin) — evolve in place, no greenfield rewrite.  
@@ -10,12 +10,12 @@
 
 | Layer | Technology |
 |--------|------------|
-| Monorepo | npm workspaces — `frontend`, `backend` ([package.json](package.json)) |
+| Monorepo | npm workspaces — `frontend`, `backend` ([package.json](../../package.json)) |
 | Frontend | React 18, Vite 5, React Router 6, MUI 6, Yup, HashRouter SPA |
-| Backend | Node 20+, Express 4 ([backend/server/index.js](backend/server/index.js)) |
-| Database | PostgreSQL via `pg` when `DATABASE_URL` is set ([backend/server/identity/db.js](backend/server/identity/db.js)) |
+| Backend | Node 20+, Express 4 ([backend/server/index.js](../server/index.js)) |
+| Database | PostgreSQL via `pg` when `DATABASE_URL` is set ([backend/server/identity/db.js](../server/identity/db.js)) |
 | ORM | None — SQL in identity services |
-| Email | Nodemailer ([backend/server/services/authService.js](backend/server/services/authService.js)) |
+| Email | Nodemailer ([backend/server/services/authService.js](../server/services/authService.js)) |
 | Deploy | GitHub Pages + `api.eliteagrocloud.com` |
 
 ---
@@ -25,7 +25,7 @@
 ```mermaid
 flowchart LR
   subgraph client [Frontend SPA]
-    Login[core/auth/Login.tsx]
+    Login[modules/account/pages/Login.tsx]
     UsersUI[identity pages]
   end
   subgraph api [Express]

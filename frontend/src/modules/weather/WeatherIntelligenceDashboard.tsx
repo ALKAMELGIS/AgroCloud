@@ -502,7 +502,7 @@ export default function WeatherIntelligenceDashboard() {
 
       {showMap ? (
         <>
-          <main
+          <div
             className={`weather-main${isArcgisLayout ? ' weather-main--arcgis-map' : ''}`}
           >
             {!isArcgisLayout ? (
@@ -546,7 +546,7 @@ export default function WeatherIntelligenceDashboard() {
               onApplyMapPick={loc => data.setCustomLocation(loc)}
             />
             <WeatherFieldPanel feature={data.selectedField} onClose={() => data.setSelectedField(null)} />
-          </main>
+          </div>
         </>
       ) : null}
 

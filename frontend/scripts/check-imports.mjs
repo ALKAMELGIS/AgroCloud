@@ -1,12 +1,12 @@
 /**
  * Lists module-specifier / CSS url literals under src that do not resolve to a file.
- * Usage: node scripts/restructure/check-imports.mjs
+ * Usage: node scripts/check-imports.mjs
  */
 import fs from 'node:fs'
 import path from 'node:path'
 
 const here = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'))
-const srcRoot = process.env.SRC_ROOT ? path.resolve(process.env.SRC_ROOT) : path.resolve(here, '../../src')
+const srcRoot = process.env.SRC_ROOT ? path.resolve(process.env.SRC_ROOT) : path.resolve(here, '../src')
 const TEXT_EXT = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.css'])
 const RESOLVE_EXT = ['', '.ts', '.tsx', '.d.ts', '.js', '.jsx', '.mjs', '.json', '.css']
 const MODULE_CTX = /(?:\bfrom\s*|\bimport\s*|\bimport\s*\(\s*|\bvi\.(?:mock|doMock|importActual)\s*(?:<[^>]*>)?\s*\(\s*)$/

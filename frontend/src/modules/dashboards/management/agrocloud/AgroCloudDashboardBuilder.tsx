@@ -409,7 +409,7 @@ export default function AgroCloudDashboardBuilder() {
           />
         ) : null}
 
-        <main className="agrocloud-dashboard-builder__main">
+        <div className="agrocloud-dashboard-builder__main">
           {config.elements.length > 0 ? (
             <AgroCloudDashboardCanvas
               config={config}
@@ -466,7 +466,7 @@ export default function AgroCloudDashboardBuilder() {
             </nav>
           </div>
           )}
-        </main>
+        </div>
       </div>
 
       <SelectLayerModal
