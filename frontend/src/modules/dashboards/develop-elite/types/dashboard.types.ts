@@ -6,6 +6,6 @@ export type {
   DevelopEliteMapView,
   DevelopEliteSideStructureCounts,
   DevelopEliteZoneListItem,
-} from '../develop-elite/developEliteKpiEngine'
+} from '../developEliteKpiEngine'
 
-export type { DevelopEliteDashboardConfig } from '../develop-elite/developEliteDashboardConfig'
+export type { DevelopEliteDashboardConfig } from '../developEliteDashboardConfig'

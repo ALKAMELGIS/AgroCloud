@@ -1,6 +1,6 @@
 /**
  * Dashboard module — public surface only.
- * Do not import from `./develop-elite/*` outside this package; use exports here.
+ * Import from this barrel outside the module; internal files are private.
  */
 export { default as DevelopEliteDashboard } from './Dashboard'
 export { developEliteDashboardRoutes } from './dashboard.routes'
@@ -16,4 +16,4 @@ export type {
 export {
   DEVELOP_ELITE_COMPACT_VIEWPORT_MQ,
   useDevelopEliteCompactViewport,
-} from './develop-elite/developEliteCompactViewport'
+} from './developEliteCompactViewport'

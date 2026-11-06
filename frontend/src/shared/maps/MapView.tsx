@@ -2,7 +2,7 @@ import type React from 'react'
 import { useEffect } from 'react'
 import { MapContainer, TileLayer, ZoomControl, ScaleControl, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { DEVELOP_ELITE_MAP_CONTAINER_OPTIONS } from '@/modules/dashboard/develop-elite/developEliteMapInteraction'
+import { DEVELOP_ELITE_MAP_CONTAINER_OPTIONS } from '@/modules/dashboards/develop-elite/developEliteMapInteraction'
 
 type Props = {
   center?: [number, number]

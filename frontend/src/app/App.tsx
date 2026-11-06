@@ -22,7 +22,7 @@ import { isExternalEmbedRoute } from '@/core/routing/defaultPageLinks'
 import { AgroThemeProvider } from '@/theme/AgroThemeProvider'
 import { AppSnackbarProvider } from '@/components/feedback/AppSnackbarProvider'
 import { MuiAppShell } from '@/components/layout/MuiAppShell'
-import { isMuiShellEnabled } from '@/config/muiShell'
+import { isMuiShellEnabled } from '@/theme/muiShell'
 
 type AppErrorState = {
   error: unknown

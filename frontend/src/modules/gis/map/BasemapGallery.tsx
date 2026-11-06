@@ -19,7 +19,7 @@ import {
 import {
   DEVELOP_ELITE_BASEMAP_MAX_ZOOM,
   DEVELOP_ELITE_BASEMAP_TILE_PROPS,
-} from '@/modules/dashboard/develop-elite/developEliteMapInteraction'
+} from '@/modules/dashboards/develop-elite/developEliteMapInteraction'
 
 export type BasemapType = string
 

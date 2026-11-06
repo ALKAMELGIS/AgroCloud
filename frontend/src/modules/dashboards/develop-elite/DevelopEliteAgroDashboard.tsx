@@ -14,7 +14,7 @@ import { useDevelopEliteCompactViewport } from './developEliteCompactViewport'
 import { DevelopEliteListsDrawer } from './DevelopEliteListsDrawer'
 import { developEliteAccent } from '@/theme/dashboardTokens'
 import { useAgroViewport } from '@/theme/useAgroViewport'
-import '../styles/dashboard.css'
+import './styles/dashboard.css'
 
 type SettingsTabId = 'data' | 'kpi' | 'charts' | 'map' | 'appearance'
 
