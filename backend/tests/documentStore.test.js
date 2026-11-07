@@ -12,7 +12,6 @@ import {
   readFileDocument,
   resetDocumentCache,
   writeDocument,
-  writeFileDocument,
 } from '../server/database/documentStore.js'
 import { mergeAndWriteApiSecrets, readApiSecretsFile } from '../server/persistence/apiSecretsPersistence.js'
 import { readAdminDirectoryStore, writeAdminDirectoryStore } from '../server/persistence/adminDirectoryPersistence.js'

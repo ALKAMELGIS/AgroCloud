@@ -12,7 +12,7 @@ import {
   transferUser,
   getHierarchy,
 } from './userService.js'
-import { requirePermission, hasPermission } from './authorizationService.js'
+import { requirePermission } from './authorizationService.js'
 import {
   getOrgManpowerSummary,
   listAllocations,

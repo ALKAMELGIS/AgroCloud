@@ -4,8 +4,6 @@ import {
   assertCanManageUser,
   AuthzError,
   defaultScopeForRoleCode,
-  getRoleByCode,
-  hasPermission,
   isUserInActorScope,
   manpowerEnforced,
   requirePermission,

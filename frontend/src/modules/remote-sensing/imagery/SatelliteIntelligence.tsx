@@ -889,6 +889,10 @@ import {
   type MpcTemplateId,
 } from './mpcPlanetaryApi';
 
+/** Feature switches for map overlays that are built but currently hidden (enable to show them). */
+const SI_SHOW_MULTI_AOI_CENTROID_MARKERS = false
+const SI_SHOW_AOI_HEAT_POINTS = false
+
 const EMPTY_MAP_STYLE: any = {
   version: 8,
   // Bake the globe projection into the style itself so an imperative `setStyle()`
@@ -7013,22 +7017,23 @@ export default function SatelliteIntelligence() {
             pitch: is3DView ? Math.max(typeof vs.pitch === 'number' ? vs.pitch : 0, 42) : vs.pitch ?? 0,
             bearing: typeof vs.bearing === 'number' ? vs.bearing : 0,
           }));
-          if (me.layerHit) {
-            const lyrCfg = customLayers.find(l => l.name === me.layerHit.layerName);
+          const meHit = me.layerHit; // keep the null check inside callbacks below
+          if (meHit) {
+            const lyrCfg = customLayers.find(l => l.name === meHit.layerName);
             const built = buildGeoAiInspectCardContent({
-              properties: me.layerHit.properties,
-              arcgisLayerDefinition: me.layerHit.arcgisLayerDefinition,
+              properties: meHit.properties,
+              arcgisLayerDefinition: meHit.arcgisLayerDefinition,
               popupConfig: lyrCfg?.popupConfig,
               queryContext: userTextForMapFallback,
               inspectCoords: { lng: me.coords[0], lat: me.coords[1] },
             });
             stageGeoAiInspectCard({
-              title: me.layerHit.layerName,
+              title: meHit.layerName,
               rows: built.rows,
               inspect: built.inspect,
               lng: me.coords[0],
               lat: me.coords[1],
-              ...pickGeoAiHumanPlaceFields(me.layerHit.properties),
+              ...pickGeoAiHumanPlaceFields(meHit.properties),
             });
           } else {
             stageGeoAiInspectCard({
@@ -12992,22 +12997,23 @@ export default function SatelliteIntelligence() {
         pitch: is3DView ? Math.max(typeof prev.pitch === 'number' ? prev.pitch : 0, 42) : prev.pitch ?? 0,
         bearing: typeof prev.bearing === 'number' ? prev.bearing : 0,
       }));
-      if (pin.layerHit) {
-        const lyrCfg = customLayers.find(l => l.name === pin.layerHit.layerName);
+      const pinHit = pin.layerHit; // keep the null check inside callbacks below
+      if (pinHit) {
+        const lyrCfg = customLayers.find(l => l.name === pinHit.layerName);
         const built = buildGeoAiInspectCardContent({
-          properties: pin.layerHit.properties,
-          arcgisLayerDefinition: pin.layerHit.arcgisLayerDefinition,
+          properties: pinHit.properties,
+          arcgisLayerDefinition: pinHit.arcgisLayerDefinition,
           popupConfig: lyrCfg?.popupConfig,
           queryContext: userText,
           inspectCoords: { lng: pin.coords[0], lat: pin.coords[1] },
         });
         stageGeoAiInspectCard({
-          title: pin.layerHit.layerName,
+          title: pinHit.layerName,
           rows: built.rows,
           inspect: built.inspect,
           lng: pin.coords[0],
           lat: pin.coords[1],
-          ...pickGeoAiHumanPlaceFields(pin.layerHit.properties),
+          ...pickGeoAiHumanPlaceFields(pinHit.properties),
         });
       } else {
         stageGeoAiInspectCard({
@@ -18620,7 +18626,7 @@ export default function SatelliteIntelligence() {
         geojson: l.geojson as { features?: unknown[] } | null | undefined,
       }));
 
-      if (map?.queryRenderedFeatures && map.project) {
+      if (map?.queryRenderedFeatures && typeof map.project === 'function') {
         const { hits, overlapState } = selectFeaturesAtMapPoint({
           map,
           lng,
@@ -24069,19 +24075,19 @@ export default function SatelliteIntelligence() {
                 onRemove={'onRemove' in layer ? layer.onRemove : undefined}
                 showTypeIcon={!canReorder}
                 headerActions={
-                  'actionable' in layer && layer.actionable && 'sourceLayerId' in layer && layer.sourceLayerId ? (
+                  'actionable' in layer && layer.actionable && reorderId ? (
                     <div className="si-env-layer-actions si-env-layer-actions--menu-only">
                       <div className="si-env-layer-actions-more-wrap">
                         <SiLayerOptionsMenuPortal
-                          open={layerOptionsMenuLayerId === layer.sourceLayerId}
+                          open={layerOptionsMenuLayerId === reorderId}
                           layerLabel={layer.label}
                           onToggleOpen={() =>
                             setLayerOptionsMenuLayerId(v => (v === reorderId ? null : reorderId))
                           }
                         >
-                        {layerOptionsMenuLayerId === layer.sourceLayerId
+                        {layerOptionsMenuLayerId === reorderId
                           ? (() => {
-                              const lid = layer.sourceLayerId!;
+                              const lid = reorderId;
                               const L = customLayers.find(x => x.id === lid);
                               if (!L) return null;
                               const isRaster = L.renderMode === 'raster';
@@ -27040,7 +27046,7 @@ export default function SatelliteIntelligence() {
                     />
                   </Source>
                 ) : null}
-                {false && isMapStyleReady && multiAoiCentroidCollection.features.length > 0 ? (
+                {SI_SHOW_MULTI_AOI_CENTROID_MARKERS && isMapStyleReady && multiAoiCentroidCollection.features.length > 0 ? (
                   <Source
                     id="si-multi-aoi-centroids"
                     type="geojson"
@@ -27086,7 +27092,7 @@ export default function SatelliteIntelligence() {
                     />
                   </Source>
                 ) : null}
-                {false && aoiHeatPointGeoJson?.features?.length ? (
+                {SI_SHOW_AOI_HEAT_POINTS && aoiHeatPointGeoJson?.features?.length ? (
                   <Source id="si-aoi-heat-source" type="geojson" data={aoiHeatPointGeoJson as any}>
                     <Layer
                       id="si-aoi-heatmap"
@@ -28196,7 +28202,7 @@ export default function SatelliteIntelligence() {
             showMapToolbox={true}
           />
 
-          {false && aoiHeatPointGeoJson?.features?.length ? (
+          {SI_SHOW_AOI_HEAT_POINTS && aoiHeatPointGeoJson?.features?.length ? (
             <div className="si-aoi-class-legend" dir="ltr">
               <div className="si-aoi-class-legend-title">{selectedIndex} classified (5 classes)</div>
               {aoiFiveClassLegend.map(row => (

@@ -264,7 +264,6 @@ const GITHUB_OAUTH_REDIRECT_URL = String(
 const APP_ORIGIN_ENV = String(process.env.APP_ORIGIN || '').trim()
 const LISTEN_HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0'
 const API_PORT = Number(process.env.PORT || 3011)
-const WS_PORT = Number(process.env.WS_PORT || 3012)
 
 /** SPA shell URL for OAuth redirects (HashRouter under /AgroCloud/). */
 function resolveAppOrigin(req) {
@@ -1282,20 +1281,6 @@ Please analyze this image as an agricultural expert.
 `
 
 // Helper to construct the API Context Prompt
-function getApiContextPrompt(userQuestion, extractedSymptoms = "unspecified") {
-  return `
-The user is asking about: "${userQuestion}".
-
-Before formulating your final answer, you may need to fetch specific data.
-If the query is about:
-- **Weather/Risk Alerts:** Call the 'getWeatherAlerts' API with the user's provided location (or ask for it).
-- **Disease Database:** Call the 'searchDiseaseLibrary' API with the identified symptoms: ${extractedSymptoms}.
-- **Product Recommendations:** Call the 'getOrganicRemedies' API with the diagnosed issue.
-
-**API Call Guidance:** Use the functions/APIs available to you. Summarize the fetched data for the user in a helpful, concise way.
-`;
-}
-
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY
 
@@ -2007,12 +1992,12 @@ app.use(errorHandler)
 const server = app.listen(API_PORT, LISTEN_HOST, () => {
   console.log(`API listening on http://${LISTEN_HOST === '0.0.0.0' ? 'localhost' : LISTEN_HOST}:${API_PORT} (bind ${LISTEN_HOST})`)
   console.log(
-    `[runtime] cwd=${process.cwd()} entry=${fileURLToPath(import.meta.url)} apiPort=${API_PORT} wsPort=${WS_PORT}`,
+    `[runtime] cwd=${process.cwd()} entry=${fileURLToPath(import.meta.url)} apiPort=${API_PORT} (HTTP + WebSocket)`,
   )
   startLocalAiServiceSupervisor()
 })
 
-/** Shared-hosting (Hostinger): only one port — attach WS to the HTTP server instead of WS_PORT. */
+/** WebSockets share the HTTP server (one port everywhere: dev proxy, Docker, Hostinger). */
 let wss
 try {
   wss = new WebSocketServer({ server })

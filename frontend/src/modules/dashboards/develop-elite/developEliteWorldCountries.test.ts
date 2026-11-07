@@ -52,12 +52,14 @@ describe('buildWorldCountryListItems', () => {
           {
             type: 'Feature',
             properties: { Country: 3, Status: 1 },
-            geometry: null,
+            // GeoJSON allows null geometry; the code under test must handle it.
+        geometry: null as unknown as GeoJSON.Geometry,
           },
           {
             type: 'Feature',
             properties: { Country: 0, Status: 1 },
-            geometry: null,
+            // GeoJSON allows null geometry; the code under test must handle it.
+        geometry: null as unknown as GeoJSON.Geometry,
           },
         ],
       },
@@ -74,12 +76,14 @@ describe('buildWorldCountryListItems', () => {
           {
             type: 'Feature',
             properties: { Country: null, Status: 1, ALL_COUNTRY: 'UAE' },
-            geometry: null,
+            // GeoJSON allows null geometry; the code under test must handle it.
+        geometry: null as unknown as GeoJSON.Geometry,
           },
           {
             type: 'Feature',
             properties: { Country: null, Status: 1, ALL_COUNTRY: 'Morocco' },
-            geometry: null,
+            // GeoJSON allows null geometry; the code under test must handle it.
+        geometry: null as unknown as GeoJSON.Geometry,
           },
         ],
       },

@@ -18,13 +18,13 @@ export function formatGfsTileTime(timeIso?: string): string | undefined {
 }
 
 export async function fetchGfsRasterMeta(signal?: AbortSignal): Promise<GfsRasterMeta> {
-  const res = await fetch(apiUrl('/weather/gfs/meta'), { signal })
+  const res = await fetch(apiUrl('/api/weather/gfs/meta'), { signal })
   if (!res.ok) throw new Error(`GFS meta HTTP ${res.status}`)
   return res.json() as Promise<GfsRasterMeta>
 }
 
 export function buildGfsRasterTileUrl(variable: string, timeIso?: string): string {
-  const base = apiUrl(`/weather/gfs/tiles/${encodeURIComponent(variable)}/{z}/{x}/{y}.png`)
+  const base = apiUrl(`/api/weather/gfs/tiles/${encodeURIComponent(variable)}/{z}/{x}/{y}.png`)
   const t = formatGfsTileTime(timeIso)
   if (!t) return base
   return `${base}?time=${encodeURIComponent(t)}`

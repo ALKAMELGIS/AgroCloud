@@ -1,5 +1,5 @@
 import type { SentinelHubDailyIndexMeans } from '@/modules/remote-sensing/imagery/sentinelHubStatisticsApi'
-import { computeChas, chasInputsFromDaily } from '@/modules/remote-sensing/indices/chasIndex'
+import { computeChasFromDaily } from '@/modules/remote-sensing/indices/chasIndex'
 import {
   ADI_HISTORICAL_LOOKBACK_DAYS,
   computeAdiCurrentIndex,
@@ -277,8 +277,9 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
     }
     case 'CHAS':
     case 'CHAS_ALERT': {
-      const chas = computeChas(chasInputsFromDaily(row))
-      return Number.isFinite(chas) ? chas : null
+      // A cloudy day has no NDVI/NDMI: no CHAS value (computeChas(null) used to throw).
+      const chas = computeChasFromDaily(row)
+      return chas != null && Number.isFinite(chas) ? chas : null
     }
     default:
       break
@@ -675,7 +676,7 @@ export function aggregateImageryTimeSeries(
 
 export type YearSplitSeries = { year: number; labels: string[]; values: number[] }
 
-export function splitSeriesByYear(labels: string[], values: number[]): YearSplitSeries[] {
+export function splitSeriesByYear(labels: string[], values: Array<number | null>): YearSplitSeries[] {
   const byYear = new Map<number, { labels: string[]; values: number[] }>()
   for (let i = 0; i < labels.length; i++) {
     const date = labels[i]!
@@ -1074,7 +1075,7 @@ function meanOf(values: Array<number | null | undefined>): number | null {
 /** Monthly mean buckets for a single layer — keeps pie slices readable. */
 export function bucketImagerySeriesByMonth(
   labels: string[],
-  values: number[],
+  values: Array<number | null>,
 ): { labels: string[]; values: number[] } {
   const buckets = new Map<string, number[]>()
   for (let i = 0; i < labels.length; i++) {

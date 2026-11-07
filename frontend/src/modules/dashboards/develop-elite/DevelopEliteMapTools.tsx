@@ -71,8 +71,8 @@ const TOOLS: Array<{ id: string; icon: string; label: string }> = [
 type PanelId = 'search' | 'layers' | 'satellite' | 'basemap' | null
 
 type ToolbarProps = {
-  rootRef: RefObject<HTMLDivElement | null>
-  viewportRef: RefObject<HTMLDivElement | null>
+  rootRef: RefObject<HTMLDivElement>
+  viewportRef: RefObject<HTMLDivElement>
   geojson: GeoJSON.FeatureCollection
   treesGeojson?: GeoJSON.FeatureCollection | null
   irrigationValvesGeojson?: GeoJSON.FeatureCollection | null

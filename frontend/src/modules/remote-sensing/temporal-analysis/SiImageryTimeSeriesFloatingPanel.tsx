@@ -124,7 +124,7 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   open: boolean;
   onClose: () => void;
   /** Used only for the initial open position anchor (map area). */
-  containerRef: RefObject<HTMLElement | null>;
+  containerRef: RefObject<HTMLElement>;
   agroStructuresMask: GeoJSON.FeatureCollection | null;
   aoiFields: SiAoiFieldRecord[];
   /** KMZ/KML/SHP/GeoJSON layers from the map Layers panel (polygon features → AOI pickers). */

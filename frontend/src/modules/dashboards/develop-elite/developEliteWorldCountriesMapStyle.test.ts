@@ -6,7 +6,8 @@ describe('developEliteWorldCountriesPathStyle', () => {
     const style = developEliteWorldCountriesPathStyle({
       type: 'Feature',
       properties: { Status: 1 },
-      geometry: null,
+      // GeoJSON allows null geometry; the code under test must handle it.
+        geometry: null as unknown as GeoJSON.Geometry,
     })
     expect(style.color).toBe('#4ce600')
     expect(style.weight).toBe(3)
@@ -17,7 +18,8 @@ describe('developEliteWorldCountriesPathStyle', () => {
     const style = developEliteWorldCountriesPathStyle({
       type: 'Feature',
       properties: { Status: 2 },
-      geometry: null,
+      // GeoJSON allows null geometry; the code under test must handle it.
+        geometry: null as unknown as GeoJSON.Geometry,
     })
     expect(style.color).toBe('#e60000')
   })

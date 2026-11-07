@@ -124,6 +124,7 @@ import {
 } from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
 import { flyToLikeGoogleEarth } from './googleEarthFlyTo'
 import { computeStableGisFeatureKey } from '../layers/gisFeatureStableKey'
+import { GIS_MAP_STORE_NAME, openGisMapDb } from './gisMapLayerStore'
 
 const GIS_AGOL_RAIL_COMPACT_LS_KEY = 'gis-agol-rail-compact-v2'
 const GEO_AI_CHAT_PAGE_SIZE = 40
@@ -638,19 +639,9 @@ const readStoredBasemap = (): BasemapType => {
 /** Mapbox GL requires a token even for raster fallbacks; avoid Mapbox-only basemap when token is missing. */
 const readInitialGlobeBasemap = (): BasemapType => readStoredBasemap()
 
-const DB_NAME = 'GisMapStore'
-const STORE_NAME = 'layers'
+const STORE_NAME = GIS_MAP_STORE_NAME
 
-const initDB = () => new Promise<IDBDatabase>((resolve, reject) => {
-  const req = indexedDB.open(DB_NAME, 1)
-  req.onupgradeneeded = () => {
-    if (!req.result.objectStoreNames.contains(STORE_NAME)) {
-      req.result.createObjectStore(STORE_NAME)
-    }
-  }
-  req.onsuccess = () => resolve(req.result)
-  req.onerror = () => reject(req.error)
-})
+const initDB = openGisMapDb
 
 const saveLayersToDB = async (layers: LayerData[]) => {
   try {

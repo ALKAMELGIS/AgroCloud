@@ -858,7 +858,8 @@ export function AcpMapCanvas() {
           startDate: wms.startDate,
           endDate: wms.endDate,
           cloudCoverage: wms.cloudCoverage,
-          aoiFeatureCount: sessionClipRef.current?.aoiFeatureCount ?? snap.aoiMask.features.length,
+          // The AOI can be cleared while tiles load; count it as empty rather than throwing.
+          aoiFeatureCount: sessionClipRef.current?.aoiFeatureCount ?? snap.aoiMask?.features.length ?? 0,
           entries,
         }),
       )

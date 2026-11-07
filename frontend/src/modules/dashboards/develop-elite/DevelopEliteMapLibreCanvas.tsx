@@ -64,7 +64,7 @@ import { asDevelopEliteFogCapableMap, asDevelopEliteGlobeNudgeMap, asMapLibreReq
 
 type Props = {
   basemapId: string
-  shellRef: React.RefObject<HTMLDivElement | null>
+  shellRef: React.RefObject<HTMLDivElement>
 }
 
 const developEliteMapStyleCache = new Map<string, StyleSpecification>()

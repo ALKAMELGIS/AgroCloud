@@ -10,7 +10,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { appConfig } from './config/app'
-import { API_PORT, VITE_PORT, WS_PORT } from '../scripts/devPorts.mjs'
+import { API_PORT, VITE_PORT } from '../scripts/devPorts.mjs'
 
 /** Root `/` for custom domains; default `/AgroCloud/` for GitHub Pages. */
 function resolveBuildBasePath(): string {
@@ -502,8 +502,9 @@ export default defineConfig({
         target: `http://127.0.0.1:${API_PORT}`,
         changeOrigin: true,
       },
+      // The API serves WebSockets on its own HTTP port (backend/server/index.js).
       '/ws': {
-        target: `ws://127.0.0.1:${WS_PORT}`,
+        target: `ws://127.0.0.1:${API_PORT}`,
         ws: true,
       },
       /** Analysis engine on host — reachable from other devices via same origin. */
@@ -527,8 +528,9 @@ export default defineConfig({
         target: `http://127.0.0.1:${API_PORT}`,
         changeOrigin: true,
       },
+      // The API serves WebSockets on its own HTTP port (backend/server/index.js).
       '/ws': {
-        target: `ws://127.0.0.1:${WS_PORT}`,
+        target: `ws://127.0.0.1:${API_PORT}`,
         ws: true,
       },
       '/analysis-api': {

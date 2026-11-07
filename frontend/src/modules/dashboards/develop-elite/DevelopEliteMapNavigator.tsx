@@ -57,7 +57,7 @@ function developEliteMapNavigatorStackHost(map: MaplibreMap): HTMLDivElement {
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  viewportRef: RefObject<HTMLDivElement | null>
+  viewportRef: RefObject<HTMLDivElement>
   planarNavigation: boolean
   onPlanarNavigationChange: (planar: boolean) => void
 }

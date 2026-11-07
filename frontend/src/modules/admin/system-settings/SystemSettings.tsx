@@ -371,6 +371,12 @@ export default function SystemSettings() {
     [],
   )
 
+  // Hooks must run before the permission guard below (allowed resolves asynchronously).
+  const settingsDirty = useMemo(
+    () => JSON.stringify(mergeWithDefaults(settings)) !== JSON.stringify(mergeWithDefaults(draft)),
+    [settings, draft],
+  )
+
   if (!allowed) {
     return (
       <PageContainer>
@@ -508,10 +514,6 @@ export default function SystemSettings() {
   const dataNavGroup = NAV_DEFAULT_GROUPS.find(g => g.id === 'data')
   const navGroupsExceptData = NAV_DEFAULT_GROUPS.filter(g => g.id !== 'data')
   const currentGroupDef = navGroupsExceptData.find(g => g.id === navPickGroup)
-  const settingsDirty = useMemo(
-    () => JSON.stringify(mergeWithDefaults(settings)) !== JSON.stringify(mergeWithDefaults(draft)),
-    [settings, draft],
-  )
   const inlineSettingsActions = (
     <footer
       className="sys-settings-actions"

@@ -120,7 +120,7 @@ export function resolveBodyLayout(config: AgroCloudDashboardConfig): DashboardBo
 
   if (missing.length === 0 && stale.length === 0) return stored
 
-  let next = stored
+  let next: DashboardBodyLayoutNode | null = stored
   for (const staleId of stale) next = removeElementFromBodyLayout(next, staleId)
   if (!next && bodyIds.length === 0) return null
   for (const id of missing) next = appendElementToBodyLayout(next, id)

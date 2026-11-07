@@ -34,7 +34,7 @@ function asNavMap(map: MaplibreMap): AgroCloudMapboxMapScrollLike {
 type Options = {
   mapRef: RefObject<MaplibreMap | null>
   mapInstance: MaplibreMap | null
-  mapShellRef: RefObject<HTMLDivElement | null>
+  mapShellRef: RefObject<HTMLDivElement>
   basemapId: string
   viewMode3d: boolean
   setViewMode3d: (on: boolean) => void

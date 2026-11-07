@@ -422,8 +422,8 @@ export function DevelopEliteMapLibreFlyBridge({
     if (portfolioBasemapAppliedRef.current === basemapId) return
 
     const pendingNavigation =
-      mapFlyToRequest > 0 ||
-      mapCountryFlyRequest > 0 ||
+      (mapFlyToRequest ?? 0) > 0 ||
+      (mapCountryFlyRequest ?? 0) > 0 ||
       Boolean(mapFlyToLngLat?.nonce) ||
       Boolean(mapExtentFly?.nonce) ||
       Boolean(highlightFieldKey?.trim())

@@ -21,7 +21,7 @@ export type UseSiMapSwipeStateArgs = {
 }
 
 export type SiMapSwipeChromeModel = {
-  rootRef: RefObject<HTMLDivElement | null>
+  rootRef: RefObject<HTMLDivElement>
   open: boolean
   hasAoi: boolean
   setOpen: (next: boolean) => void

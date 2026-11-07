@@ -4,7 +4,7 @@ export type SiRsSelectMenuPositionOptions = {
   minWidth?: number
   maxHeightCap?: number
   /** Clamp menu + backdrop to this element’s screen rect (e.g. Develop Elite map viewport). */
-  boundsRef?: RefObject<HTMLElement | null>
+  boundsRef?: RefObject<HTMLElement>
   edgePad?: number
 }
 
@@ -16,7 +16,7 @@ type SiRsSelectMenuPositionResult = {
 const MENU_Z = 10050
 
 function readBoundsRect(
-  boundsRef: RefObject<HTMLElement | null> | undefined,
+  boundsRef: RefObject<HTMLElement> | undefined,
   edgePad: number,
 ): { left: number; top: number; right: number; bottom: number } {
   const el = boundsRef?.current
@@ -53,7 +53,7 @@ function readBoundsRect(
  */
 export function useSiRsSelectMenuPosition(
   open: boolean,
-  triggerRef: RefObject<HTMLElement | null>,
+  triggerRef: RefObject<HTMLElement>,
   options?: SiRsSelectMenuPositionOptions,
 ): SiRsSelectMenuPositionResult {
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({})

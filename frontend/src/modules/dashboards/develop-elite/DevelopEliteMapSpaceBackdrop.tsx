@@ -8,7 +8,7 @@ import {
 import { paintDevelopEliteMapSpaceStarfield } from './developEliteMapSpaceStarfieldCanvas'
 
 type Props = {
-  hostRef: RefObject<HTMLDivElement | null>
+  hostRef: RefObject<HTMLDivElement>
 }
 
 function readCamera(map: {

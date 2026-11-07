@@ -17,7 +17,7 @@ const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', feature
 type Props = {
   open: boolean
   onClose: () => void
-  containerRef: RefObject<HTMLElement | null>
+  containerRef: RefObject<HTMLElement>
   highlightFieldKey: string | null
   onSelectFieldKey: (key: string | null) => void
 }

@@ -167,7 +167,7 @@ type ExportPopoverAnchor = {
 }
 
 function useExportPopoverAnchor(
-  rootRef: RefObject<HTMLDivElement | null>,
+  rootRef: RefObject<HTMLDivElement>,
   active: boolean,
 ): ExportPopoverAnchor | null {
   const [anchor, setAnchor] = useState<ExportPopoverAnchor | null>(null)

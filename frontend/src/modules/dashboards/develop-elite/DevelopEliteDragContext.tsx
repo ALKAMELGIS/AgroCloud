@@ -11,8 +11,8 @@ import {
 import type { DevelopEliteWidgetPosition } from './developEliteLayoutConfig'
 
 type DragContextValue = {
-  canvasRef: RefObject<HTMLDivElement | null>
-  floatLayerRef: RefObject<HTMLDivElement | null>
+  canvasRef: RefObject<HTMLDivElement>
+  floatLayerRef: RefObject<HTMLDivElement>
   widgetFloat: Record<string, DevelopEliteWidgetPosition>
   setWidgetFloat: (widgetId: string, position: DevelopEliteWidgetPosition | null) => void
   persistFloat: () => void

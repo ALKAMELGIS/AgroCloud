@@ -13,7 +13,7 @@ export type VirtualRowSlice<T> = {
 /** Windowed slice for long field lists — keeps DOM light on large portfolios. */
 export function useAcpVirtualRows<T>(
   items: T[],
-  containerRef: RefObject<HTMLElement | null>,
+  containerRef: RefObject<HTMLElement>,
   rowHeight: number,
 ): VirtualRowSlice<T> {
   const [scrollTop, setScrollTop] = useState(0)

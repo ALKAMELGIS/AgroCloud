@@ -57,6 +57,7 @@ export async function buildFloodTerrainGrid(
   signal?: AbortSignal,
 ): Promise<FloodTerrainGrid> {
   const bbox = geometryBBox(geometry)
+  if (!bbox) throw new Error('Draw or select an area (polygon) to run the flood simulation.')
   const demOpts = resolveCutFillDemBuildOptions(geometry)
   const dem = await buildDemGrid({ bbox, ...demOpts, signal })
   if (!dem) throw new Error('Terrain elevation could not be loaded for this area.')

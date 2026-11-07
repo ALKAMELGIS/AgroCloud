@@ -12,7 +12,7 @@ import { ACP_FIELD_LOCATE_MIN_ZOOM } from '../acpMapSpatial'
 
 type AcpWeatherIntelligenceChromeProps = {
   map: MaplibreMap | null
-  mapShellRef: RefObject<HTMLDivElement | null>
+  mapShellRef: RefObject<HTMLDivElement>
 }
 
 function createWeatherPinElement(): HTMLDivElement {

@@ -16,7 +16,6 @@ const archivePath =
     : path.join(repoRoot, 'hostinger-deploy.zip')
 
 const domain = String(process.env.HOSTINGER_DOMAIN || 'geosyntra.org').trim()
-const username = String(process.env.HOSTINGER_USERNAME || 'u245840661').trim()
 
 if (!fs.existsSync(archivePath)) {
   console.log('Archive missing — running deploy:hostinger…')

@@ -123,7 +123,7 @@ export function SiSymbologyClassesTable({
                     value={color.startsWith('#') ? color : '#94a3b8'}
                     aria-label={`Color for class ${i + 1}`}
                     onChange={e =>
-                      onBreakOverrideChange(i, { min: lo, max: hi, ...ov, color: e.target.value })
+                      onBreakOverrideChange(i, { ...ov, color: e.target.value })
                     }
                   />
                 </td>
@@ -137,7 +137,7 @@ export function SiSymbologyClassesTable({
                     value={label}
                     aria-label={`Label for class ${i + 1}`}
                     onChange={e =>
-                      onBreakOverrideChange(i, { min: lo, max: hi, ...ov, label: e.target.value })
+                      onBreakOverrideChange(i, { ...ov, label: e.target.value })
                     }
                   />
                 </td>

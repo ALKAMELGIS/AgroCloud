@@ -8,6 +8,7 @@ import { WorkflowHeroStepper } from '@/modules/forms/components/WorkflowHeroStep
 import { EntryActionBar, EntryFlash, EntryFormCardHeader, EntryValidationAlert } from '@/modules/operations/shared/DataEntryChrome'
 import { getWorkflowShellMeta, stepLabels } from '@/modules/forms/templates/workflowMeta'
 import '../fertigation/EC.css'
+import { GIS_MAP_STORE_NAME, openGisMapDb } from '../../gis/map/gisMapLayerStore'
 
 type FieldConfig = { name: string; enabled: boolean; required?: boolean }
 type FormBinding = {
@@ -29,8 +30,7 @@ type SaveRecord = {
   state: DataSourceFormState
 }
 
-const DB_NAME = 'GisMapStore'
-const STORE_NAME = 'layers'
+const STORE_NAME = GIS_MAP_STORE_NAME
 
 const readJson = <T,>(key: string, fallback: T): T => {
   try {
@@ -76,11 +76,7 @@ export default function Harvest() {
     let cancelled = false
     const run = async () => {
       try {
-        const db = await new Promise<IDBDatabase>((resolve, reject) => {
-          const req = indexedDB.open(DB_NAME, 1)
-          req.onsuccess = () => resolve(req.result)
-          req.onerror = () => reject(req.error)
-        })
+        const db = await openGisMapDb()
         const tx = db.transaction(STORE_NAME, 'readonly')
         const req = tx.objectStore(STORE_NAME).get('savedLayers')
         const layers = await new Promise<any[]>((resolve) => {

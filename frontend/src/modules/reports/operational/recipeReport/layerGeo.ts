@@ -1,4 +1,5 @@
 /** Minimal layer shape from IndexedDB `savedLayers` (GIS map). */
+import { GIS_MAP_STORE_NAME, openGisMapDb } from '../../../gis/map/gisMapLayerStore'
 
 export type StoredLayer = {
   id: number | string
@@ -7,16 +8,11 @@ export type StoredLayer = {
   data?: unknown
 }
 
-const DB_NAME = 'GisMapStore'
-const STORE_NAME = 'layers'
+const STORE_NAME = GIS_MAP_STORE_NAME
 
 export async function loadStoredLayers(): Promise<StoredLayer[]> {
   try {
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1)
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
+    const db = await openGisMapDb()
     const layers = await new Promise<unknown>((resolve) => {
       try {
         const tx = db.transaction(STORE_NAME, 'readonly')

@@ -249,21 +249,6 @@ function polygonBbox(geometry) {
   return [w, s, e, n]
 }
 
-/** Evenly spaced ISO dates across the season (timesteps points, inclusive of end). */
-function resolveTimestepDates(season, timesteps) {
-  const start = new Date(`${season.start}T00:00:00Z`).getTime()
-  const end = new Date(`${season.end}T00:00:00Z`).getTime()
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
-    throw new Error('Invalid season range')
-  }
-  const out = []
-  for (let i = 0; i < timesteps; i += 1) {
-    const t = start + ((end - start) * i) / Math.max(1, timesteps - 1)
-    out.push(new Date(t).toISOString().slice(0, 10))
-  }
-  return out
-}
-
 /** Fetch one true-color RGB preview (data URL) for the AOI around a target clear date. */
 async function fetchAoiPreview(wmsConfig, geometry, isoDate, size) {
   const day = new Date(`${isoDate}T00:00:00Z`)

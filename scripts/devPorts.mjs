@@ -1,6 +1,6 @@
 /**
  * AgroCloud local dev ports only (defaults 5180 / 3011 / 3012).
- * Override via root `.env`: VITE_DEV_PORT, PORT, WS_PORT, APP_ORIGIN.
+ * Override via root `.env`: VITE_DEV_PORT, PORT, APP_ORIGIN. (WebSockets share the API port.)
  *
  * Important: local AI launchers (agri-field-boundary, SegFormer, …) set `PORT` to
  * their uvicorn port (8092/8095/…). Vite must never treat those as the Node API
@@ -23,6 +23,7 @@ function resolveApiPort() {
 }
 
 export const API_PORT = resolveApiPort()
+/** @deprecated The API serves WebSockets on API_PORT; nothing listens here. Kept for old .env files. */
 export const WS_PORT = Number(process.env.WS_PORT || 3012)
 export const APP_ORIGIN = (process.env.APP_ORIGIN || `http://localhost:${VITE_PORT}/AgroCloud`).replace(
   /\/$/,

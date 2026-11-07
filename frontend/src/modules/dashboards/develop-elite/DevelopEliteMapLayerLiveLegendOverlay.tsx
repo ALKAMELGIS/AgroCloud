@@ -9,7 +9,7 @@ import { developEliteLayerLiveSelectOptions } from './developEliteMapLayerLiveCo
 import { useDevelopEliteMapLayerLiveOptional } from './developEliteMapLayerLiveContext'
 
 type Props = {
-  viewportRef: RefObject<HTMLElement | null>
+  viewportRef: RefObject<HTMLElement>
 }
 
 export function DevelopEliteMapLayerLiveLegendHost({ viewportRef }: Props) {

@@ -43,7 +43,6 @@ export async function closePool() {
 }
 
 /** Applies pending migrations. The optional client argument is accepted for older callers. */
-// eslint-disable-next-line no-unused-vars
 export async function runMigrations(_client) {
   return applyMigrations()
 }

@@ -24,8 +24,8 @@ function clearTrackTransform(track: HTMLElement) {
 }
 
 export function useDevelopEliteListAutoScroll(
-  listRef: RefObject<HTMLUListElement | null>,
-  viewportRef: RefObject<HTMLDivElement | null> | null,
+  listRef: RefObject<HTMLUListElement>,
+  viewportRef: RefObject<HTMLDivElement> | null,
   active: boolean,
   pausedRef: RefObject<boolean>,
   itemCount: number,

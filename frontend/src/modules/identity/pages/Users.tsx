@@ -20,6 +20,7 @@ import {
 } from '@/core/authorization/adminDirectoryPersistence'
 import UsersManagementPage from '@/modules/identity/pages/UsersManagementPage'
 import { useIdentityAvailable } from '@/modules/identity/hooks/useAuthorization'
+import { newLocalUserId, resolveLocalUserId } from './localUserIds'
 
 type User = {
   id: number
@@ -164,9 +165,8 @@ function LegacyUsers({ embedded }: { embedded?: boolean } = {}) {
     if (!raw || typeof raw !== 'object') return null
     const email = String(raw.email || '').trim()
     if (!email) return null
-    const id = typeof raw.id === 'number' ? raw.id : Number(raw.id || 0)
     return {
-      id: Number.isFinite(id) && id > 0 ? id : Date.now(),
+      id: resolveLocalUserId(raw.id),
       name: String(raw.name || email),
       email,
       role: normalizeRole(raw.role),
@@ -384,7 +384,7 @@ function LegacyUsers({ embedded }: { embedded?: boolean } = {}) {
             const exists = loadedUsers.some(u => normalizeEmail(u.email) === normalizeEmail(parsedCurrent.email))
             if (!exists) {
               const seededUser: User = {
-                id: parsedCurrent.id || Date.now(),
+                id: resolveLocalUserId(parsedCurrent.id),
                 name: parsedCurrent.name || parsedCurrent.email,
                 email: String(parsedCurrent.email).trim(),
                 role: normalizeRole(parsedCurrent.role),
@@ -558,7 +558,7 @@ function LegacyUsers({ embedded }: { embedded?: boolean } = {}) {
             : String(Date.now())
           : undefined
       const user: User = {
-        id: Date.now(),
+        id: newLocalUserId(),
         name: nextName,
         email: nextEmail,
         role: normalizeRole(creatingRole),

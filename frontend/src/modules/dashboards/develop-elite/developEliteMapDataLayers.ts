@@ -198,5 +198,5 @@ export function developEliteMapDataLayerOpacityValue(
   id: DevelopEliteMapDataLayerId,
 ): number {
   const v = opacity[id]
-  return Number.isFinite(v) ? Math.min(1, Math.max(0.05, v)) : DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0.05, v)) : DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY
 }

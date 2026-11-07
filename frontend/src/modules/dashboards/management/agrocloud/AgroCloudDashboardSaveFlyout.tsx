@@ -5,7 +5,7 @@ type Props = {
   onClose: () => void
   onSave: () => void
   onSaveAs: () => void
-  anchorRef?: React.RefObject<HTMLElement | null>
+  anchorRef?: React.RefObject<HTMLElement>
 }
 
 export function AgroCloudDashboardSaveFlyout({ open, onClose, onSave, onSaveAs, anchorRef }: Props) {

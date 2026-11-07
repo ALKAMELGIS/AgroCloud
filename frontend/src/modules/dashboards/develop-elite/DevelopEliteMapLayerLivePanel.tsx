@@ -6,7 +6,7 @@ import { useDevelopEliteMapLayerLive } from './developEliteMapLayerLiveContext'
 export function DevelopEliteMapLayerLivePanel({
   menuBoundsRef,
 }: {
-  menuBoundsRef?: RefObject<HTMLElement | null>
+  menuBoundsRef?: RefObject<HTMLElement>
 } = {}) {
   const {
     layerLiveStatus,

@@ -9,7 +9,7 @@ export type DashboardAddElementMenuProps = {
   onClose: () => void
   onSelect: (kind: AgroCloudDashboardElementKind, label: string) => void
   className?: string
-  anchorRef?: React.RefObject<HTMLElement | null>
+  anchorRef?: React.RefObject<HTMLElement>
   /** Rail = flyout beside sidebar; below = dropdown under + trigger; inline = in-panel dropdown. */
   placement?: DashboardAddElementMenuPlacement
 }

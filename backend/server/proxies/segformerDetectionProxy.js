@@ -116,15 +116,9 @@ const SPECTRAL_FALLBACK_CLASS_IDS = new Set([
   ...Array.from({ length: 15 }, (_, i) => i + 1),
   ...Array.from({ length: 15 }, (_, i) => i + 20),
 ])
-const AG_DEFAULT_MIN_CONFIDENCE = 0.3
-const DEFAULT_MIN_CONFIDENCE = 0.45
 
 function isSpectralFallbackClass(classId) {
   return SPECTRAL_FALLBACK_CLASS_IDS.has(Number(classId))
-}
-
-function defaultMinConfidenceForClass(classId) {
-  return isSpectralFallbackClass(classId) ? AG_DEFAULT_MIN_CONFIDENCE : DEFAULT_MIN_CONFIDENCE
 }
 
 /**
@@ -485,9 +479,8 @@ async function detectBuiltIn(body) {
   const classId = Number(body.classId ?? body.class_id)
   const className = body.className || body.class_name || CLASS_NAMES[classId] || `Class ${classId}`
   const ade20kIndices = body.ade20kIndices || body.ade20k_indices || CLASS_ADE20K[classId] || []
-  const minConfidence = Number(
-    body.minConfidence ?? body.min_confidence ?? defaultMinConfidenceForClass(classId),
-  )
+  // body.minConfidence is not used here: spectral segmentation yields one coverage-based score, not
+  // per-detection confidences, so the threshold applies to the SegFormer model path only.
   const bbox = body.bbox
 
   if (!ade20kIndices.length) {

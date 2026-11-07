@@ -956,7 +956,8 @@ function buildCorrelationChartSpecs(
   let row = 3
 
   blocks.forEach((block, blockIdx) => {
-    if (!block.points.length) return
+    const points = block.points ?? []
+    if (!points.length) return
     const title = `${block.xLayerId} vs ${block.yLayerId}`
     ws.getCell(row, 1).value = title
     ws.getCell(row, 1).font = { bold: true, size: 10, color: { argb: BRAND_DARK } }
@@ -969,14 +970,14 @@ function buildCorrelationChartSpecs(
     row += 1
 
     const dataStart = row
-    block.points.forEach((pt, i) => {
+    points.forEach((pt, i) => {
       const r = ws.getRow(dataStart + i)
       r.values = [pt.date, pt.x, pt.y, i === 0 ? block.r2 : '', i === 0 ? block.n : '']
       styleDataRow(r, i % 2 === 1)
       if (typeof r.getCell(2).value === 'number') r.getCell(2).numFmt = '0.0000'
       if (typeof r.getCell(3).value === 'number') r.getCell(3).numFmt = '0.0000'
     })
-    const dataEnd = dataStart + block.points.length - 1
+    const dataEnd = dataStart + points.length - 1
     row = dataEnd + 3
 
     const q = (col: string, r1: number, r2: number) => `'${sheetName}'!$${col}$${r1}:$${col}$${r2}`

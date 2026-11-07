@@ -113,7 +113,7 @@ export function developEliteKpiCardIsActive(
   ) {
     const codes = filters.structureTypeCodes
     return (
-      Boolean(codes?.length) &&
+      !!codes?.length &&
       codes.length === card.structureTypeCodes.length &&
       card.structureTypeCodes.every(c => codes.includes(c)) &&
       filters.structureTypeCode == null

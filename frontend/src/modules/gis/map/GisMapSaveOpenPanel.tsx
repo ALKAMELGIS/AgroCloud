@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 
 type GisMapSaveOpenFlyoutProps = {
   open: boolean
-  anchorRef: RefObject<HTMLButtonElement | null>
+  anchorRef: RefObject<HTMLButtonElement>
   onClose: () => void
   onSave: () => void
   onSaveAs: () => void

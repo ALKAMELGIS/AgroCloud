@@ -254,18 +254,20 @@ async function runClassifyJob(job, payload, broadcast) {
  * @param {{ secretsFilePath?: string, broadcast?: (obj: any) => void }} [options]
  */
 export function registerImageClassificationRoutes(app, { broadcast } = {}) {
+  // Capabilities probe. The ML service is an optional sidecar, so "offline" is a normal answer
+  // (200 + configured:false + hint), not an HTTP error the browser logs on every page visit.
   app.get('/api/image-classification/config', async (_req, res) => {
     try {
       const upstream = await fetch(`${IMAGE_CLASSIFICATION_URL}/config`, {
         signal: AbortSignal.timeout(4000),
       })
       if (!upstream.ok) {
-        return res.status(503).json(offlineConfig(`ML service responded ${upstream.status}.`))
+        return res.json(offlineConfig(`ML service responded ${upstream.status}.`))
       }
       const config = await upstream.json()
       res.json(config)
     } catch (err) {
-      res.status(503).json(offlineConfig(`Cannot reach ML service: ${String(err?.message || err)}`))
+      res.json(offlineConfig(`Cannot reach ML service: ${String(err?.message || err)}`))
     }
   })
 

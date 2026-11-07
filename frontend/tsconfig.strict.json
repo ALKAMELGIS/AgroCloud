@@ -1,0 +1,8 @@
+{
+  // Strict-mode ratchet (scripts/check-strict.mjs): the app compiles with tsconfig.json; this config
+  // adds `strict` so the remaining strict errors are counted per file and can only go down.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true
+  }
+}

@@ -3,6 +3,7 @@
  * Default Agro_Structures Farm Plots + PIVOT mask remains when builder is disabled.
  */
 
+import type { ArcgisLayerDefLite } from '../../gis/layers/arcgisAttributeDisplay'
 import { featureToPrimaryAoiFeature, isAgroStructuresLayer, buildAgroStructuresLayerAoiMask } from './agroStructuresPrimaryAoi'
 import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
 
@@ -49,18 +50,7 @@ export type SiAoiMaskBuilderLayerLike = {
   visible?: boolean
   renderMode?: string
   geojson?: { features?: unknown[] }
-  arcgisLayerDefinition?: {
-    fields?: Array<{
-      name?: string
-      alias?: string
-      domain?: {
-        type?: string
-        codedValues?: Array<{ name?: string; code?: number | string }>
-      }
-    }>
-    types?: Array<{ id?: number | string; name?: string }>
-    typeIdField?: string
-  } | null
+  arcgisLayerDefinition?: ArcgisLayerDefLite | null
   /** ArcGIS FeatureServer layers that stream features per viewport. */
   viewportStreaming?: boolean
   /** Import metadata (e.g. total service feature count). */

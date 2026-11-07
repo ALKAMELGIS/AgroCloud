@@ -20,7 +20,7 @@ export type SiAiDetectionGisPanelProps = {
   onRasterProcessed?: (raster: AiDlProcessedRaster) => void
   onExportDetectionToMap?: (geojson: GeoJSON.FeatureCollection, name: string) => void
   netfloraStats: NetfloraDetectionStats | null
-  netfloraUploadInputRef: RefObject<HTMLInputElement | null>
+  netfloraUploadInputRef: RefObject<HTMLInputElement>
   onNetfloraUploadChange: (e: ChangeEvent<HTMLInputElement>) => void
   netfloraStatus?: string
   onRunNetfloraDetection?: () => void

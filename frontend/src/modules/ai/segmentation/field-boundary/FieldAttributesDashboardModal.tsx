@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 export type FieldAttributesDashboardModalProps = {
   open: boolean
   onClose: () => void
-  containerRef: RefObject<HTMLElement | null>
+  containerRef: RefObject<HTMLElement>
   title: string
   subtitle?: string
   children: ReactNode

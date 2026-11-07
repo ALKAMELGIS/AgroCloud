@@ -29,7 +29,6 @@ function hexToRgb(hex) {
  * Prevents black cloud cutouts in the Crop Type map after cloudy dates were skipped.
  */
 function fillUnclassifiedHoles(labels, width, height, passes = 8) {
-  const n = width * height
   for (let pass = 0; pass < passes; pass += 1) {
     let changed = 0
     const next = labels.slice()
@@ -85,43 +84,6 @@ function resampleToPhenophases(values, srcFracs) {
     }
   }
   return out
-}
-
-/**
- * Chamfer (3,4-style Euclidean-approx) distance transform of a binary mask.
- * Each foreground pixel receives its distance to the nearest background pixel.
- */
-function distanceTransform(mask, width, height) {
-  const INF = 1e9
-  const dt = new Float32Array(width * height)
-  for (let i = 0; i < dt.length; i += 1) dt[i] = mask[i] ? INF : 0
-  const a = 1
-  const b = Math.SQRT2
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const p = y * width + x
-      if (dt[p] === 0) continue
-      let m = dt[p]
-      if (x > 0) m = Math.min(m, dt[p - 1] + a)
-      if (y > 0) m = Math.min(m, dt[p - width] + a)
-      if (x > 0 && y > 0) m = Math.min(m, dt[p - width - 1] + b)
-      if (x < width - 1 && y > 0) m = Math.min(m, dt[p - width + 1] + b)
-      dt[p] = m
-    }
-  }
-  for (let y = height - 1; y >= 0; y -= 1) {
-    for (let x = width - 1; x >= 0; x -= 1) {
-      const p = y * width + x
-      if (dt[p] === 0) continue
-      let m = dt[p]
-      if (x < width - 1) m = Math.min(m, dt[p + 1] + a)
-      if (y < height - 1) m = Math.min(m, dt[p + width] + a)
-      if (x < width - 1 && y < height - 1) m = Math.min(m, dt[p + width + 1] + b)
-      if (x > 0 && y < height - 1) m = Math.min(m, dt[p + width - 1] + b)
-      dt[p] = m
-    }
-  }
-  return dt
 }
 
 /**
