@@ -1,5 +1,5 @@
 # Production-style image: build SPA then serve API + static assets via backend
-FROM node:20-alpine
+FROM node:22-alpine
 
 ARG CACHE_BUST=2026-09-01-ftw-argv-fix
 RUN echo "app build ${CACHE_BUST}"
