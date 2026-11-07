@@ -61,6 +61,7 @@ AgroCloud/
 ├─ .github/workflows/      CI/CD (Pages, VPS, health checks)
 ├─ .claude/skills/         agent skills used for UI, testing and review work
 ├─ server.js               Hostinger production entry (serves the API + frontend/dist)
+├─ start-agrocloud.cmd     Windows one-click launcher (production mode, local only)
 ├─ Dockerfile*, docker-compose*.yml, railway.toml
 │                          stay at the root: Railway, Docker and the VPS fetch them by these paths
 ├─ ARCHITECTURE.md · README.md · SECURITY.md

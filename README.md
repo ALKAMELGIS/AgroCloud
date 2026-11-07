@@ -4,6 +4,10 @@ AgroCloud is a smart agriculture platform that combines AI, satellite imagery, a
 
 AgroCloud is designed to transform satellite data into practical agricultural information, making crop monitoring faster, more scalable, and easier to use.
 
+## Run it on Windows
+
+Install [Node.js 22 LTS](https://nodejs.org/en/download), then double-click **`start-agrocloud.cmd`**. The first run installs and builds (5–10 minutes); after that it starts in seconds and opens http://localhost:3011/. Data is kept in `data\agrocloud.sqlite` next to the file. After updating the code, run `start-agrocloud.cmd rebuild`.
+
 ## For developers
 
 ```bash

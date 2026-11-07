@@ -49,7 +49,8 @@ function isPendingApprovalStatus(user) {
   return normalizeAccountStatus(user?.status) === STATUS_PENDING_APPROVAL.toLowerCase()
 }
 
-const DEFAULT_SELF_SIGNUP_ROLES = ['Viewer', 'Editor', 'Manager', 'Admin Manager', 'Admin']
+/** Roles anyone may pick when signing up. Broaden only via AUTH_SELF_SIGNUP_ROLES; never default to admin roles. */
+const DEFAULT_SELF_SIGNUP_ROLES = ['Viewer']
 
 function normalizeEmail(value) {
   let v = String(value ?? '')
@@ -210,8 +211,9 @@ function appendAudit(auditLog, entry) {
 function parseSelfSignupRoles(raw) {
   const fromEnv = String(raw || '')
     .split(',')
-    .map((s) => normalizeRole(s.trim()))
-    .filter(Boolean)
+    .map((s) => s.trim())
+    .filter(Boolean) // an empty entry must not turn into 'Viewer' and hide the default list
+    .map((s) => normalizeRole(s))
   const unique = [...new Set(fromEnv.length ? fromEnv : DEFAULT_SELF_SIGNUP_ROLES)]
   return unique
 }

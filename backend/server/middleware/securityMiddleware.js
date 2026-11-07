@@ -21,6 +21,7 @@ function resolveTrustedConnectHosts() {
  * Content-Security-Policy tuned for AgroCloud GIS:
  * - App scripts/styles/fonts are self-hosted (no CDN libraries).
  * - Map tiles, ArcGIS, Sentinel, weather APIs use HTTPS connect/img (no mixed content).
+ * - Media: self, blob: and www.esri.com (login/splash videos) only.
  * - Inline scripts in index.html require 'unsafe-inline' (hash nonces can replace later).
  */
 export function buildContentSecurityPolicy() {
@@ -37,6 +38,9 @@ export function buildContentSecurityPolicy() {
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
     "img-src 'self' data: blob: https:",
+    // Login/splash background videos are streamed from esri.com; without this they fell back to
+    // default-src 'self' and were blocked in production.
+    "media-src 'self' blob: https://www.esri.com",
     `connect-src ${connectSrc}`,
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
