@@ -34,7 +34,11 @@ function resolves(importer, spec) {
 
 const bad = []
 for (const file of walk(srcRoot)) {
-  const text = fs.readFileSync(file, 'utf8')
+  // Blank out block comments that start a line (JSDoc examples like `import('../pages/Foo')`), keeping
+  // offsets; strings such as 'src/**/*.ts' are untouched because they never start a line.
+  const text = fs
+    .readFileSync(file, 'utf8')
+    .replace(/^[ \t]*\/\*[\s\S]*?\*\//gm, (c) => c.replace(/[^\n]/g, ' '))
   const rel = path.relative(srcRoot, file).split(path.sep).join('/')
   for (const m of text.matchAll(/(['"`])((?:\.{1,2}\/|@\/)[^'"`\n$]*?)\1/g)) {
     const before = text.slice(Math.max(0, m.index - 60), m.index)

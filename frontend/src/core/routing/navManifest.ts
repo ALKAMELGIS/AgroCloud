@@ -35,6 +35,7 @@ export type NavTranslationKey =
   | 'admin'
   | 'userManagement'
   | 'manpower'
+  | 'credits'
   | 'rolesPermissions'
   | 'hierarchy'
   | 'githubIntegration'
@@ -275,6 +276,13 @@ export const NAV_DEFAULT_GROUPS: NavGroupDef[] = [
         path: '/admin/manpower',
         i18nKey: 'manpower',
         defaultIcon: 'fa-solid fa-people-group',
+        subitemClass: 'nav-item-admin',
+      },
+      {
+        id: 'admin-credits',
+        path: '/admin/credits',
+        i18nKey: 'credits',
+        defaultIcon: 'fa-solid fa-coins',
         subitemClass: 'nav-item-admin',
       },
       {

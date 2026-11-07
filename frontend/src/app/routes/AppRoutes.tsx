@@ -32,6 +32,7 @@ const MasterGisContentItem = lazyWithRetry(() => import('@/modules/gis/layers/co
 const DashboardSettings = lazyWithRetry(() => import('@/modules/dashboards/management/DashboardSettings'), 'DashboardSettings')
 const AdminUsers = lazyWithRetry(() => import('@/modules/identity/pages/Users'), 'AdminUsers')
 const AdminManpower = lazyWithRetry(() => import('@/modules/manpower/pages/ManpowerDashboard'), 'AdminManpower')
+const AdminCredits = lazyWithRetry(() => import('@/modules/identity/pages/CreditsPage'), 'AdminCredits')
 const AdminRoles = lazyWithRetry(() => import('@/modules/identity/pages/RolesPermissionsPage'), 'AdminRoles')
 const AdminHierarchy = lazyWithRetry(() => import('@/modules/identity/pages/HierarchyPage'), 'AdminHierarchy')
 const AdminGitHub = lazyWithRetry(() => import('@/modules/admin/pages/GitHubIntegration'), 'AdminGitHub')
@@ -148,6 +149,7 @@ export default function AppRoutes() {
         <Route path="/sensors/:sensorKind" element={<SensorIntegrationPage />} />
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/manpower" element={<AdminManpower />} />
+        <Route path="/admin/credits" element={<AdminCredits />} />
         <Route path="/admin/roles" element={<AdminRoles />} />
         <Route path="/admin/hierarchy" element={<AdminHierarchy />} />
         <Route path="/admin/github" element={<AdminGitHub />} />
