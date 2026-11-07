@@ -9,7 +9,8 @@ AgroCloud is designed to transform satellite data into practical agricultural in
 ```bash
 npm install
 npm run dev          # frontend http://localhost:5180/AgroCloud/  +  API http://localhost:3011
-npm run typecheck
+npm run lint         # ESLint (hook rules, correctness, backend undefined/unused names)
+npm run typecheck    # TypeScript + strict-mode ratchet
 npm test             # frontend (Vitest) + backend (node --test)
 npm run test:e2e     # Playwright on desktop, tablet and mobile (runs against a production build)
 ```

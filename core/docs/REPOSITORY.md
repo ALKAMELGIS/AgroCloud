@@ -55,7 +55,8 @@ Frontend output is generated in `frontend/dist`.
 ## Testing
 
 ```bash
-npm run typecheck
+npm run lint
+npm run typecheck   # includes the strict-mode ratchet
 npm test
 npm run test:e2e
 ```
