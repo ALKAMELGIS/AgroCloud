@@ -12,7 +12,7 @@ import {
   resetTrainingAiBuiltinForTests,
   startBuiltinInferenceJob,
   startBuiltinTrainingJob,
-} from '../server/trainingAiBuiltin.js'
+} from '../server/engines/trainingAiBuiltin.js'
 
 function greenJpegDataUrl(width = 64, height = 64) {
   const data = Buffer.alloc(width * height * 4, 255)

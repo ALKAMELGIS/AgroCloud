@@ -91,7 +91,7 @@ export type RemoteSensingToolboxPanelProps = {
   onChirpsExportExcel?: () => void
   onChirpsExportReport?: () => void
   layerSelectMenuPortal?: boolean
-  layerSelectMenuBoundsRef?: RefObject<HTMLElement | null>
+  layerSelectMenuBoundsRef?: RefObject<HTMLElement>
   layerSelectMenuMaxHeight?: number
   onClose: () => void
 }

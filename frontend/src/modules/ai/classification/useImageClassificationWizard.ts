@@ -875,8 +875,9 @@ export function useImageClassificationWizard(
     const controller = new AbortController()
     fetchImageClassificationConfig(controller.signal)
       .then(config => {
+        // The API answers configured:false (with a hint) when the ML sidecar is not running.
         setServiceConfig(config)
-        setServiceOnline(true)
+        setServiceOnline(config.configured !== false)
       })
       .catch(() => {
         if (!controller.signal.aborted) setServiceOnline(false)

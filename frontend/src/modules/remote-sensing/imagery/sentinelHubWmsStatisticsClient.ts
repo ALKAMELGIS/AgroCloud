@@ -2,7 +2,7 @@
  * Browser WMS zonal statistics for Time Series on static deploys (GitHub Pages /
  * eliteagrocloud.com) where `/api/sentinel-hub/statistics` does not exist.
  *
- * Mirrors `backend/server/sentinelHubWmsStatisticsEngine.js` time-series path:
+ * Mirrors `backend/server/engines/sentinelHubWmsStatisticsEngine.js` time-series path:
  * Planetary Computer STAC scene dates → Sentinel Hub OGC WMS GetMap + EVALSCRIPT
  * → AOI mean NDVI/NDWI/NDMI/NDSI. Uses the public featured-collections token +
  * configured/default WMS instance (no Statistical API OAuth required).

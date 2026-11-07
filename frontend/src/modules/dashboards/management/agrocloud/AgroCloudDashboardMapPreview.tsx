@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import L from 'leaflet'
 import { GeoJSON, useMap } from 'react-leaflet'
-import MapView from '@/shared/maps/MapView'
+import MapView from '@/components/map/MapView'
 import { useGisContentPortal } from '@/modules/gis/layers/gisContentPortalStore'
 import { resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
 import { BasemapLayer } from '@/modules/gis/map/BasemapGallery'

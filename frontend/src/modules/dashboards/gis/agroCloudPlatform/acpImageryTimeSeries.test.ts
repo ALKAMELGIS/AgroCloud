@@ -332,3 +332,22 @@ describe('acpImageryTimeSeries', () => {
     expect(formatImageryTimeSeriesYTick(0.25)).toBe('0.25')
   })
 })
+
+describe('evaluateImageryLayerDailyValue — CHAS on incomplete days', () => {
+  it('returns null (not a crash) for a cloudy day without NDVI/NDMI', async () => {
+    const { evaluateImageryLayerDailyValue } = await import('./acpImageryTimeSeries')
+    const cloudy = { date: '2026-03-01' } as Parameters<typeof evaluateImageryLayerDailyValue>[1]
+    expect(evaluateImageryLayerDailyValue('CHAS', cloudy)).toBeNull()
+    expect(evaluateImageryLayerDailyValue('CHAS_ALERT', cloudy)).toBeNull()
+  })
+
+  it('still computes CHAS when NDVI and NDMI are present', async () => {
+    const { evaluateImageryLayerDailyValue } = await import('./acpImageryTimeSeries')
+    const day = { date: '2026-03-02', ndvi: 0.62, ndmi: 0.21, ndwi: -0.4 } as Parameters<
+      typeof evaluateImageryLayerDailyValue
+    >[1]
+    const v = evaluateImageryLayerDailyValue('CHAS', day)
+    expect(typeof v).toBe('number')
+    expect(Number.isFinite(v)).toBe(true)
+  })
+})

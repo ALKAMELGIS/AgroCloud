@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { appAlert, appPrompt } from '@/shared/dialogs/appDialog'
+import { appAlert, appPrompt } from '@/components/overlays/appDialog'
 import { getGisContentRowById } from '@/modules/gis/layers/gisContentPortalStore'
 import {
   DEFAULT_AGROCLOUD_DASHBOARD_CONFIG,

@@ -22,7 +22,7 @@ export type RemoteSensingLayerLiveStripProps = {
   layerSelectMenuPortal?: boolean
   layerSelectMenuClassName?: string
   layerSelectRootClassName?: string
-  layerSelectMenuBoundsRef?: RefObject<HTMLElement | null>
+  layerSelectMenuBoundsRef?: RefObject<HTMLElement>
   layerSelectMenuMaxHeight?: number
   cloudCoverage?: number
   onCloudCoverageChange?: (value: number) => void

@@ -142,7 +142,11 @@ export function approximateLngLatBBoxFromViewState(viewState: {
   const lng = viewState.longitude
   const lat = viewState.latitude
   const zoom = viewState.zoom
-  if (!Number.isFinite(lng) || !Number.isFinite(lat) || !Number.isFinite(zoom)) return null
+  if (
+    typeof lng !== 'number' || !Number.isFinite(lng) ||
+    typeof lat !== 'number' || !Number.isFinite(lat) ||
+    typeof zoom !== 'number' || !Number.isFinite(zoom)
+  ) return null
   const latRad = (lat * Math.PI) / 180
   const worldPx = 512 * 2 ** zoom
   const metersPerPx = (156543.03392 * Math.cos(latRad)) / 2 ** (zoom - 0)

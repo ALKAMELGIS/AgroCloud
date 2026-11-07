@@ -8,7 +8,7 @@ import {
   resolveAgroStructuresFieldDisplayName,
   resolveAgroStructuresStructureTypeLabel,
 } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
-import { computeChas, chasInputsFromDaily } from '@/modules/remote-sensing/indices/chasIndex'
+import { computeChasFromDaily } from '@/modules/remote-sensing/indices/chasIndex'
 import { bboxesIntersect, geometryBBox } from '@/modules/ai/agent/geoAiGeoJsonSpatial'
 import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
 import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
@@ -341,8 +341,8 @@ export function aggregateDailySeriesForFeatures(
       if (!row) continue
       if (row.ndvi != null && Number.isFinite(row.ndvi)) ndviVals.push(row.ndvi)
       if (row.ndmi != null && Number.isFinite(row.ndmi)) ndmiVals.push(row.ndmi)
-      const chasVal = computeChas(chasInputsFromDaily(row))
-      if (Number.isFinite(chasVal)) chasVals.push(chasVal)
+      const chasVal = computeChasFromDaily(row) // null on days without NDVI/NDMI
+      if (chasVal != null && Number.isFinite(chasVal)) chasVals.push(chasVal)
     }
     ndvi.push(ndviVals.length ? ndviVals.reduce((a, b) => a + b, 0) / ndviVals.length : NaN)
     ndmi.push(ndmiVals.length ? ndmiVals.reduce((a, b) => a + b, 0) / ndmiVals.length : NaN)

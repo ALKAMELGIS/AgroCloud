@@ -21,7 +21,7 @@ const VAL_COLOR = '#fbbf24'
 export type ValidationQuickDashboardProps = {
   open: boolean
   onClose: () => void
-  mapContainerRef: RefObject<HTMLElement | null>
+  mapContainerRef: RefObject<HTMLElement>
   job: TrainingJobStatus | null
 }
 

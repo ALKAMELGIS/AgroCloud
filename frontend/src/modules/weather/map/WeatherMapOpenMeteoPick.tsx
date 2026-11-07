@@ -12,7 +12,7 @@ import {
 
 } from '@/modules/remote-sensing/weather/openMeteoWeather'
 
-import { registerDevelopEliteMapIntelPick } from '@/modules/dashboard/develop-elite/developEliteMapIntelPick'
+import { registerDevelopEliteMapIntelPick } from '@/modules/dashboards/develop-elite/developEliteMapIntelPick'
 
 import { wmoWeatherEmojiMeta } from '../config/wmoWeatherEmoji'
 

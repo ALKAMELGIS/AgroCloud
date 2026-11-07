@@ -540,7 +540,6 @@ export function AcpPlatformProvider({ children }: { children: ReactNode }) {
       applyDashboardDefaultsFromConfig,
       saveCurrentLayerDefaultsToConfig,
       saveCurrentPortalLayerDefaultsToConfig,
-      portalLayerCount: engineSnap.portalLayerCount,
       aoiSyncRevision,
       refreshEngine,
       refreshEngineRef,

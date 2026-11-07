@@ -11,8 +11,8 @@
 - حالات تحميل واضحة ومعالجة أخطاء والتحقق من صحة البيانات
 
 ## مكان التنفيذ
-- مكون الإعدادات: [Settings.tsx](file:///c:/Users/mohamed.abass.WUSOOM/Downloads/RAK/D/Map/Logo/ESRI/Map/Agri/src/pages/account/Settings.tsx)
-- مكون إدارة مصادر البيانات: [datasourcefieldspanel.tsx](file:///c:/Users/mohamed.abass.WUSOOM/Downloads/RAK/D/Map/Logo/ESRI/Map/Agri/src/pages/data-entry/components/datasourcefieldspanel.tsx)
+- مكون الإعدادات: [Settings.tsx](../../frontend/src/modules/account/pages/Settings.tsx)
+- مكون إدارة مصادر البيانات: [datasourcefieldspanel.tsx](../../frontend/src/modules/forms/components/datasourcefieldspanel.tsx)
 
 ## نظرة عامة على السلوك
 ### 1) طبقات Available
@@ -93,13 +93,13 @@
 
 ## الاختبارات
 ### Unit/Component Tests (Vitest)
-- [AdvancedLayerMultiSelect.test.tsx](file:///c:/Users/mohamed.abass.WUSOOM/Downloads/RAK/D/Map/Logo/ESRI/Map/Agri/src/pages/data-entry/components/AdvancedLayerMultiSelect.test.tsx)
+- [AdvancedLayerMultiSelect.test.tsx](../../frontend/src/modules/forms/components/AdvancedLayerMultiSelect.test.tsx)
   - يتحقق من:
     - Normalize payload الخارجي
     - البحث + Select all filtered
     - اختصارات Ctrl/Cmd+A و Esc
 
 ### Integration/E2E (Playwright)
-- [data-source-advanced-layer.spec.ts](file:///c:/Users/mohamed.abass.WUSOOM/Downloads/RAK/D/Map/Logo/ESRI/Map/Agri/tests/data-source-advanced-layer.spec.ts)
+- [data-source-advanced-layer.spec.ts](../../frontend/tests/data-source-advanced-layer.spec.ts)
   - يتحقق من ظهور واجهة الاختيار المتقدم داخل صفحة Settings.
 

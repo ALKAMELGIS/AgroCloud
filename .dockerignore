@@ -12,3 +12,16 @@ backend/server/data/agri_api_secrets.json
 backend/data
 hostinger-deploy.zip
 terminals
+# Generated GitHub Pages website (the image builds its own frontend/dist).
+# Patterns are anchored at the build-context root, so frontend/src/assets is unaffected.
+docs
+assets
+dashboard-themes
+index.html
+404.html
+sw.js
+workbox-*.js
+*.png
+favicon.svg
+manifest.webmanifest
+CNAME

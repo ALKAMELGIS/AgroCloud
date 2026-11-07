@@ -2,7 +2,7 @@
  * Syncs User Management (adminUsers) + audit log to the Node backend file store
  * so changes survive deploys/restarts when AGRI_ADMIN_DIRECTORY_FILE is on a persistent volume.
  *
- * @see backend/server/adminDirectoryPersistence.js
+ * @see backend/server/persistence/adminDirectoryPersistence.js
  */
 import { AUDIT_LOG_STORAGE_KEY } from './audit'
 
@@ -73,7 +73,7 @@ export async function pushAdminDirectoryToServer(users: unknown[], auditLog: unk
     if (statusRes.ok) {
       const st = (await statusRes.json()) as { identity?: boolean }
       if (st.identity) {
-        console.warn('[admin-directory] Skipping PUT — PostgreSQL identity is active.')
+        console.warn('[admin-directory] Skipping PUT — server identity is active.')
         return false
       }
     }

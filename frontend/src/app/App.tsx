@@ -1,8 +1,9 @@
 import { Component, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { MAIN_CONTENT_ID, SkipLink } from '@/components/navigation/SkipLink'
 import { HashRouter, Navigate, useLocation } from 'react-router-dom'
 import { AppDialogProvider } from './providers/AppDialogProvider'
-import HeaderBar from '@/shared/layouts/HeaderBar'
-import NavMenu from '@/shared/layouts/NavMenu'
+import HeaderBar from '@/app/layouts/HeaderBar'
+import NavMenu from '@/app/layouts/NavMenu'
 import AppRoutes from './routes/AppRoutes'
 import PersistentAgroCloudEmbed from './layouts/PersistentAgroCloudEmbed'
 import PwaInstallPrompt from './startup/PwaInstallPrompt'
@@ -22,7 +23,7 @@ import { isExternalEmbedRoute } from '@/core/routing/defaultPageLinks'
 import { AgroThemeProvider } from '@/theme/AgroThemeProvider'
 import { AppSnackbarProvider } from '@/components/feedback/AppSnackbarProvider'
 import { MuiAppShell } from '@/components/layout/MuiAppShell'
-import { isMuiShellEnabled } from '@/config/muiShell'
+import { isMuiShellEnabled } from '@/theme/muiShell'
 
 type AppErrorState = {
   error: unknown
@@ -526,6 +527,9 @@ function AppShell() {
   return (
     <>
       {showAppChrome ? (
+        <SkipLink />
+      ) : null}
+      {showAppChrome ? (
         <HeaderBar
           onToggleMobileNav={() => setMobileNavOpen(v => !v)}
           mobileNavOpen={mobileNavOpen}
@@ -539,13 +543,14 @@ function AppShell() {
             onCloseMobileNav={() => setMobileNavOpen(false)}
           />
         ) : null}
-        <main className={mainContentClass}>
+        <main id={MAIN_CONTENT_ID} tabIndex={-1} className={mainContentClass}>
           {routeBody}
         </main>
       </div>
     </>
   )
 }
+
 
 export default function App() {
   return (

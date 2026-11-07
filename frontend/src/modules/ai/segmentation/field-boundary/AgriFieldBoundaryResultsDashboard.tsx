@@ -44,7 +44,7 @@ import '../../training/components/AoiTrainingChartsGrid.css'
 export type AgriFieldBoundaryResultsDashboardProps = {
   open: boolean
   onClose: () => void
-  mapContainerRef: RefObject<HTMLElement | null>
+  mapContainerRef: RefObject<HTMLElement>
   geojson: GeoJSON.FeatureCollection | null
   fieldCount: number
   totalAreaHa: number

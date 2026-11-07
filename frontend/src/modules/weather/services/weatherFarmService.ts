@@ -1,13 +1,13 @@
 import {
   fetchArcgisLayerDrawingInfoExact,
   fetchFeatureLayerGeoJson,
-} from '@/modules/dashboard/develop-elite/developEliteArcgisFetch'
+} from '@/modules/dashboards/develop-elite/developEliteArcgisFetch'
 import {
   DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL,
   DEFAULT_DEVELOP_ELITE_STRUCTURES_URL,
-} from '@/modules/dashboard/develop-elite/developEliteDashboardConfig'
+} from '@/modules/dashboards/develop-elite/developEliteDashboardConfig'
 import { getArcgisPortalToken } from '@/modules/gis/layers/arcgisPortalToken'
-import { comparePortfolioCountryListLabels } from '@/modules/dashboard/develop-elite/developEliteCountryListSort'
+import { comparePortfolioCountryListLabels } from '@/modules/dashboards/develop-elite/developEliteCountryListSort'
 import {
   resolveAgroStructuresCountryDisplayName,
 } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'

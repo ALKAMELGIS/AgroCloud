@@ -4,7 +4,7 @@
  * Drives the async job on the backend orchestrator (`/api/flood-monitoring/*`):
  *   AOI → Sentinel-1 GRD (pre/post) → SAR change detection → flood extent + change rasters + stats.
  *
- * @see backend/server/floodMonitoringProxy.js
+ * @see backend/server/proxies/floodMonitoringProxy.js
  */
 
 import {

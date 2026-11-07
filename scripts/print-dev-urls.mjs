@@ -1,5 +1,5 @@
 import os from 'node:os'
-import { API_PORT, VITE_PORT, WS_PORT } from './devPorts.mjs'
+import { API_PORT, VITE_PORT } from './devPorts.mjs'
 
 const PORT = VITE_PORT
 const BASE = '/AgroCloud/'
@@ -34,7 +34,7 @@ if (ips.length) {
 }
 console.log('')
 console.log(`  API (proxied via Vite):  /api  →  backend :${API_PORT}`)
-console.log(`  WebSocket (proxied):     /ws  →  backend :${WS_PORT}`)
+console.log(`  WebSocket (proxied):     /ws  →  backend :${API_PORT}`)
 console.log('  Tips:')
 console.log('  • Run "npm run dev" (frontend + backend), not dev:client alone.')
 console.log('  • If /api routes look stale, run "npm run dev:server:clean" to reclaim :3011.')

@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { WebSocketServer } from 'ws'
 import OpenAI from 'openai'
-import { hasSmtpConfig as checkSmtpConfig, sendMailWithFallback } from './smtpTransport.js'
+import { hasSmtpConfig as checkSmtpConfig, sendMailWithFallback } from './services/smtpTransport.js'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
@@ -10,48 +10,49 @@ import * as yup from 'yup'
 import fs from 'fs'
 import versionedRoutes from '../src/routes/index.js'
 import { errorHandler, notFoundHandler } from '../src/middleware/errorHandler.js'
-import { registerApiSecretsRoutes } from './apiSecretsPersistence.js'
-import { registerUserProfilePersistence } from './userProfilePersistence.js'
-import { registerAdminDirectoryPersistence } from './adminDirectoryPersistence.js'
+import { registerApiSecretsRoutes } from './persistence/apiSecretsPersistence.js'
+import { readFileDocument, writeFileDocument } from './database/documentStore.js'
+import { registerUserProfilePersistence } from './persistence/userProfilePersistence.js'
+import { registerAdminDirectoryPersistence } from './persistence/adminDirectoryPersistence.js'
 import { loadProductionEnv, resolveAgriDataPaths } from './loadProductionEnv.js'
-import { bootstrapApiSecretsFromEnv } from './bootstrapApiSecretsFromEnv.js'
-import { registerSentinelHubStatisticsRoutes } from './sentinelHubStatisticsProxy.js'
-import { registerSentinelFieldBatchRoutes } from './sentinelFieldBatchProxy.js'
-import { registerGeocodeRoutes } from './geocodeProxy.js'
-import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
-import { registerChirpsRoutes } from './chirpsRoutes.js'
-import { registerWaporAetRoutes } from './waporAetProxy.js'
-import { registerOpenMeteoEt0Routes } from './openMeteoEt0Proxy.js'
-import { registerWeatherDashboardRoutes } from './weatherDashboardRoutes.js'
-import { registerGfsRasterRoutes } from './gfsRasterRoutes.js'
-import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
-import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
-import { registerSamDetectionRoutes } from './samDetectionProxy.js'
-import { registerSegFormerDetectionRoutes } from './segformerDetectionProxy.js'
-import { registerTrainingAiRoutes } from './trainingAiProxy.js'
-import { registerSam2RefinementRoutes } from './sam2RefinementProxy.js'
-import { registerTemporalTransformerRoutes } from './temporalTransformerProxy.js'
-import { registerGeoaiInferenceRoutes } from './geoaiInferenceProxy.js'
-import { registerGeoaiChatRoutes } from './geoaiChatProxy.js'
-import { registerAgriFieldBoundaryRoutes } from './agriFieldBoundaryProxy.js'
-import { registerFtwTrainingRoutes } from './ftwTrainingProxy.js'
-import { startLocalAiServiceSupervisor } from './localAiServiceSupervisor.js'
-import { registerDelineateAnythingRoutes } from './delineateAnythingProxy.js'
-import { registerFloodMonitoringRoutes } from './floodMonitoringProxy.js'
-import { registerEsriTerrainTileRoutes } from './esriTerrainRgbTiles.js'
+import { bootstrapApiSecretsFromEnv } from './services/bootstrapApiSecretsFromEnv.js'
+import { registerSentinelHubStatisticsRoutes } from './proxies/sentinelHubStatisticsProxy.js'
+import { registerSentinelFieldBatchRoutes } from './proxies/sentinelFieldBatchProxy.js'
+import { registerGeocodeRoutes } from './proxies/geocodeProxy.js'
+import { registerAcpWeatherRoutes } from './routes/acpWeatherRoutes.js'
+import { registerChirpsRoutes } from './routes/chirpsRoutes.js'
+import { registerWaporAetRoutes } from './proxies/waporAetProxy.js'
+import { registerOpenMeteoEt0Routes } from './proxies/openMeteoEt0Proxy.js'
+import { registerWeatherDashboardRoutes } from './routes/weatherDashboardRoutes.js'
+import { registerGfsRasterRoutes } from './routes/gfsRasterRoutes.js'
+import { registerCropClassificationRoutes } from './proxies/cropClassificationProxy.js'
+import { registerTreeDetectionRoutes } from './proxies/treeDetectionProxy.js'
+import { registerSamDetectionRoutes } from './proxies/samDetectionProxy.js'
+import { registerSegFormerDetectionRoutes } from './proxies/segformerDetectionProxy.js'
+import { registerTrainingAiRoutes } from './proxies/trainingAiProxy.js'
+import { registerSam2RefinementRoutes } from './proxies/sam2RefinementProxy.js'
+import { registerTemporalTransformerRoutes } from './proxies/temporalTransformerProxy.js'
+import { registerGeoaiInferenceRoutes } from './proxies/geoaiInferenceProxy.js'
+import { registerGeoaiChatRoutes } from './proxies/geoaiChatProxy.js'
+import { registerAgriFieldBoundaryRoutes } from './proxies/agriFieldBoundaryProxy.js'
+import { registerFtwTrainingRoutes } from './proxies/ftwTrainingProxy.js'
+import { startLocalAiServiceSupervisor } from './services/localAiServiceSupervisor.js'
+import { registerDelineateAnythingRoutes } from './proxies/delineateAnythingProxy.js'
+import { registerFloodMonitoringRoutes } from './proxies/floodMonitoringProxy.js'
+import { registerEsriTerrainTileRoutes } from './engines/esriTerrainRgbTiles.js'
 import { registerRasterRoutes } from './raster/rasterUploadRoutes.js'
-import { registerEmbedFrameCheckRoute } from './embedFrameCheckRoute.js'
-import { registerEmbedBrowseRoute } from './embedBrowseRoute.js'
+import { registerEmbedFrameCheckRoute } from './routes/embedFrameCheckRoute.js'
+import { registerEmbedBrowseRoute } from './routes/embedBrowseRoute.js'
 import { registerCrsRoutes } from './raster/crsRoutes.js'
 import { warmProjectionManager } from './raster/projectionManager.js'
-import { registerImageClassificationRoutes } from './imageClassificationProxy.js'
-import { registerGisGatewayRoutes } from './gisGatewayRoutes.js'
+import { registerImageClassificationRoutes } from './proxies/imageClassificationProxy.js'
+import { registerGisGatewayRoutes } from './routes/gisGatewayRoutes.js'
 import {
   applyStaticCacheHeaders,
   httpsRedirectMiddleware,
   securityHeadersMiddleware,
-} from './securityMiddleware.js'
-import { registerAuthRoutes } from './authService.js'
+} from './middleware/securityMiddleware.js'
+import { registerAuthRoutes } from './services/authService.js'
 import { bootstrapIdentity } from './identity/registerIdentity.js'
 
 loadProductionEnv()
@@ -242,6 +243,10 @@ app.get('/api/health', (_req, res) => {
 registerEmbedFrameCheckRoute(app)
 registerEmbedBrowseRoute(app)
 
+// Identity API (/api/v1/identity/*, /api/v1/manpower/*). Must come before the /api/v1 → /api bridge
+// below, which rewrites the URL; registered after it (as before), every identity request missed.
+await bootstrapIdentity(app)
+
 // New versioned API gateway: /api/v1/* and /api/v2/*
 app.use('/api', versionedRoutes)
 // Backward compatibility bridge: map /api/v1/* to existing /api/* handlers below.
@@ -259,7 +264,6 @@ const GITHUB_OAUTH_REDIRECT_URL = String(
 const APP_ORIGIN_ENV = String(process.env.APP_ORIGIN || '').trim()
 const LISTEN_HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0'
 const API_PORT = Number(process.env.PORT || 3011)
-const WS_PORT = Number(process.env.WS_PORT || 3012)
 
 /** SPA shell URL for OAuth redirects (HashRouter under /AgroCloud/). */
 function resolveAppOrigin(req) {
@@ -613,21 +617,12 @@ app.get('/api/weather/latest', (req, res) => {
   res.json({ temp_c: 36.2, humidity_pct: 42, wind_ms: 3.2, rainfall_mm: 0 })
 })
 
+/** Legacy JSON file, imported once into the `documents` table (store `ecph_entries`). */
 const ECPH_ENTRIES_FILE = path.join(SERVER_DIR, 'ecph_entries.json')
-
-function safeJsonParse(raw, fallback) {
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return fallback
-  }
-}
 
 function readEcphEntries() {
   try {
-    if (!fs.existsSync(ECPH_ENTRIES_FILE)) return []
-    const raw = fs.readFileSync(ECPH_ENTRIES_FILE, 'utf8')
-    const parsed = safeJsonParse(raw, [])
+    const { value: parsed } = readFileDocument(ECPH_ENTRIES_FILE)
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
@@ -636,7 +631,7 @@ function readEcphEntries() {
 
 function writeEcphEntries(entries) {
   try {
-    fs.writeFileSync(ECPH_ENTRIES_FILE, JSON.stringify(entries, null, 2))
+    writeFileDocument(ECPH_ENTRIES_FILE, entries)
   } catch (e) {
     console.error('Failed to persist ecph entries', e)
   }
@@ -1286,20 +1281,6 @@ Please analyze this image as an agricultural expert.
 `
 
 // Helper to construct the API Context Prompt
-function getApiContextPrompt(userQuestion, extractedSymptoms = "unspecified") {
-  return `
-The user is asking about: "${userQuestion}".
-
-Before formulating your final answer, you may need to fetch specific data.
-If the query is about:
-- **Weather/Risk Alerts:** Call the 'getWeatherAlerts' API with the user's provided location (or ask for it).
-- **Disease Database:** Call the 'searchDiseaseLibrary' API with the identified symptoms: ${extractedSymptoms}.
-- **Product Recommendations:** Call the 'getOrganicRemedies' API with the diagnosed issue.
-
-**API Call Guidance:** Use the functions/APIs available to you. Summarize the fetched data for the user in a helpful, concise way.
-`;
-}
-
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY
 
@@ -1808,13 +1789,12 @@ app.post('/api/ollama/chat', async (req, res) => {
   }
 })
 
+/** Legacy JSON file, imported once into the `documents` table (store `esri_dashboards`). */
 const ESRI_DASHBOARDS_FILE = path.join(SERVER_DIR, 'esri_dashboards.json')
 
 function readEsriDashboards() {
   try {
-    if (!fs.existsSync(ESRI_DASHBOARDS_FILE)) return []
-    const raw = fs.readFileSync(ESRI_DASHBOARDS_FILE, 'utf8')
-    const parsed = safeJsonParse(raw, [])
+    const { value: parsed } = readFileDocument(ESRI_DASHBOARDS_FILE)
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
@@ -1823,7 +1803,7 @@ function readEsriDashboards() {
 
 function writeEsriDashboards(items) {
   try {
-    fs.writeFileSync(ESRI_DASHBOARDS_FILE, JSON.stringify(items, null, 2))
+    writeFileDocument(ESRI_DASHBOARDS_FILE, items)
   } catch (err) {
     console.error('Failed to persist esri dashboards', err)
   }
@@ -2009,17 +1989,15 @@ app.get('*', (req, res) => {
 app.use(notFoundHandler)
 app.use(errorHandler)
 
-await bootstrapIdentity(app)
-
 const server = app.listen(API_PORT, LISTEN_HOST, () => {
   console.log(`API listening on http://${LISTEN_HOST === '0.0.0.0' ? 'localhost' : LISTEN_HOST}:${API_PORT} (bind ${LISTEN_HOST})`)
   console.log(
-    `[runtime] cwd=${process.cwd()} entry=${fileURLToPath(import.meta.url)} apiPort=${API_PORT} wsPort=${WS_PORT}`,
+    `[runtime] cwd=${process.cwd()} entry=${fileURLToPath(import.meta.url)} apiPort=${API_PORT} (HTTP + WebSocket)`,
   )
   startLocalAiServiceSupervisor()
 })
 
-/** Shared-hosting (Hostinger): only one port — attach WS to the HTTP server instead of WS_PORT. */
+/** WebSockets share the HTTP server (one port everywhere: dev proxy, Docker, Hostinger). */
 let wss
 try {
   wss = new WebSocketServer({ server })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { appAlert } from '@/shared/dialogs/appDialog'
+import { appAlert } from '@/components/overlays/appDialog'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLanguage } from '@/core/localization/i18n'
 import { generateRecipeReportPdf } from '@/modules/reports/operational/recipeReport/generateRecipeReportPdf'
@@ -10,6 +10,7 @@ import { RecipeReportConfigModal, type RecipeReportConfigPayload } from '@/modul
 import { getWorkflowShellMeta, stepLabels } from '@/modules/forms/templates/workflowMeta'
 import './EC.css'
 import './recipes.css'
+import { GIS_MAP_STORE_NAME, openGisMapDb } from '../../gis/map/gisMapLayerStore'
 
 const SLUG_TO_FORM_KEY: Record<string, string> = {
   'ec-ph': 'EC',
@@ -29,8 +30,7 @@ const SLUG_TO_ENTRY_PATH: Record<string, string> = {
   fertigation: '/data/irrigation',
 }
 
-const DB_NAME = 'GisMapStore'
-const STORE_NAME = 'layers'
+const STORE_NAME = GIS_MAP_STORE_NAME
 
 const copy = (lang: 'en' | 'ar') => {
   const en = {
@@ -104,11 +104,7 @@ export default function Recipes() {
     let cancelled = false
     const run = async () => {
       try {
-        const db = await new Promise<IDBDatabase>((resolve, reject) => {
-          const req = indexedDB.open(DB_NAME, 1)
-          req.onsuccess = () => resolve(req.result)
-          req.onerror = () => reject(req.error)
-        })
+        const db = await openGisMapDb()
         const tx = db.transaction(STORE_NAME, 'readonly')
         const req = tx.objectStore(STORE_NAME).get('savedLayers')
         const layers = await new Promise<any[]>((resolve) => {

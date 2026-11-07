@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useMap } from 'react-leaflet'
-import { ensureDevelopEliteMapDataPane } from '@/modules/dashboard/develop-elite/developEliteMapPanes'
+import { ensureDevelopEliteMapDataPane } from '@/modules/dashboards/develop-elite/developEliteMapPanes'
 import { ensureWeatherMapPanes } from './weatherMapPanes'
 
 export function WeatherMapPanesInit() {

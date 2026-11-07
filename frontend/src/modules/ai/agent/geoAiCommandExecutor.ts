@@ -319,7 +319,7 @@ export function executeGeoAiMapCommands(
   const results: GeoAiMapCommandResult[] = []
   for (const command of commands) {
     try {
-      let message: string | void | Promise<string | void>
+      let message: string | void | Promise<string | void> = undefined
       switch (command.op) {
         case 'flyTo':
           message = handlers.flyTo?.(command)

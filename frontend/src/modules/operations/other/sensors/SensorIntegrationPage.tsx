@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useParams } from 'react-router-dom'
-import { appConfirm } from '@/shared/dialogs/appDialog'
+import { appConfirm } from '@/components/overlays/appDialog'
 import { useLanguage } from '@/core/localization/i18n'
 import {
   type CameraVmsPreset,
@@ -429,7 +429,7 @@ export default function SensorIntegrationPage() {
 
   return (
     <div className="sensor-shell" dir={direction}>
-      <main className="sensor-main">
+      <div className="sensor-main">
         <header className="sensor-main-header">
           <div className="sensor-main-title-row">
             <span
@@ -494,7 +494,7 @@ export default function SensorIntegrationPage() {
             ))}
           </ul>
         )}
-      </main>
+      </div>
 
       {modalOpen && draft
         ? createPortal(

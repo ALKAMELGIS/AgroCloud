@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMap } from 'react-leaflet'
-import { flyToLatLng } from '@/modules/dashboard/develop-elite/developEliteMapFly'
+import { flyToLatLng } from '@/modules/dashboards/develop-elite/developEliteMapFly'
 import { listDevelopEliteBasemapEntries } from '@/modules/gis/map/BasemapGallery'
 import { buildBasemapCatalog, getBasemapThumbnail, resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
 import { searchPlaces, type MapSearchResult } from '@/modules/gis/map/mapSearchGeocode'

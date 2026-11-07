@@ -145,14 +145,14 @@ type GeometryMetrics = {
   vertexCount: number
 }
 
-function unwrapGeometry(input: GeoJsonGeometryLike): GeoJsonGeometryLike {
+function unwrapGeometry(input: GeoJsonGeometryLike | undefined): GeoJsonGeometryLike {
   if (!input) return null
   if (input.type === 'Feature' && input.geometry) return input.geometry
   return input
 }
 
 /** Area (m²), vertex-average centroid, and bbox for Polygon / MultiPolygon / others. */
-export function geometryMetrics(input: GeoJsonGeometryLike): GeometryMetrics | null {
+export function geometryMetrics(input: GeoJsonGeometryLike | undefined): GeometryMetrics | null {
   const geom = unwrapGeometry(input)
   if (!geom || !geom.type) return null
   let area = 0

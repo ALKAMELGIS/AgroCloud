@@ -1,7 +1,7 @@
 /**
  * GIS / raster scope hooks (feature-flagged).
  */
-import { isIdentityReady } from './db.js'
+import { getPool, isIdentityReady } from './db.js'
 import { resolveSessionUser } from './sessionService.js'
 import { hasPermission } from './authorizationService.js'
 
@@ -38,7 +38,7 @@ export function rasterTileCacheKey(prefix, z, x, y) {
 export async function filterResourcesByAssignment(client, actor, resourceType, resourceIds) {
   if (!isGisScopeEnforced() || !actor) return resourceIds
   if (actor.user.role_code === 'OWNER' || actor.user.role_code === 'DIRECTOR') return resourceIds
-  const pool = client
+  const pool = client || getPool()
   const { rows } = await pool.query(
     `SELECT resource_id FROM user_resource_assignments
      WHERE organization_id = $1 AND user_id = $2 AND resource_type = $3`,

@@ -91,7 +91,7 @@ export default function UsersManagementPage({ embedded }: { embedded?: boolean }
       <StatePanel
         tone="offline"
         title="Server identity is not configured"
-        description="Use legacy user management until the PostgreSQL identity service is available."
+        description="Use legacy user management until the server identity service is enabled (AGROCLOUD_IDENTITY=on)."
       />,
     )
   }

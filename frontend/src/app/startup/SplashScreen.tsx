@@ -1,7 +1,8 @@
+import { fetchPriorityAttr } from '@/core/utils/fetchPriority'
 import { useEffect, useRef, useState } from 'react'
-import { BrandLogoOrbit } from '@/shared/components/BrandLogoOrbit'
+import { BrandLogoOrbit } from '@/components/brand/BrandLogoOrbit'
 import { isPwaStandalone, isTouchDevice } from './pwaInstall'
-import '@/shared/components/brand-logo-orbit.css'
+import '@/components/brand/brand-logo-orbit.css'
 import './splash.css'
 
 const SPLASH_VIDEO_SRC =
@@ -118,7 +119,7 @@ export default function SplashScreen({
               src={SPLASH_VIDEO_POSTER}
               alt=""
               decoding="async"
-              fetchPriority="high"
+              {...fetchPriorityAttr('high')}
             />
           )}
         </div>

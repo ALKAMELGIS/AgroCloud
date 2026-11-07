@@ -4,7 +4,7 @@ import { useMap } from 'react-leaflet'
 
 import L from 'leaflet'
 
-import { flyToLatLng } from '@/modules/dashboard/develop-elite/developEliteMapFly'
+import { flyToLatLng } from '@/modules/dashboards/develop-elite/developEliteMapFly'
 
 import { wmoWeatherLabel } from '@/modules/remote-sensing/weather/openMeteoWeather'
 

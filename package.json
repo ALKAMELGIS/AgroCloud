@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Agri Cloud — npm workspaces (frontend + backend)",
+  "description": "Agri Cloud \u2014 npm workspaces (frontend + backend)",
   "workspaces": [
     "frontend",
     "backend"
@@ -23,20 +23,26 @@
     "deploy:hostinger": "node scripts/deploy-hostinger-archive.mjs",
     "upload:hostinger": "node scripts/upload-hostinger.mjs",
     "test:smtp": "node scripts/test-smtp.mjs",
-    "sync-pages-docs": "node scripts/sync-pages-docs.mjs",
+    "pages:publish": "node scripts/pages-dist-check.mjs && node scripts/publish-pages-docs.mjs",
     "preview": "npm run preview -w frontend",
-    "typecheck": "npm run typecheck -w frontend",
-    "test": "npm run test -w frontend",
+    "typecheck": "npm run typecheck -w frontend && npm run typecheck:strict -w frontend",
+    "lint": "eslint .",
+    "test": "npm run test -w frontend && npm run test -w backend",
     "test:e2e": "npm run test:e2e -w frontend"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "express": "^4.18.2"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
+    "typescript-eslint": "^8.72.1"
   },
   "overrides": {
     "vite": {

@@ -206,6 +206,10 @@
           'error',
           function (e) {
             if (done || !boot || !boot.isConnected) return
+            // Capture phase also sees failed <img>/<link>/font loads; only a failed <script> or an
+            // uncaught error (target === window) can actually stop the app from starting.
+            var t = e && e.target
+            if (t && t !== window && t.tagName !== 'SCRIPT') return
             var msg = (e && (e.message || (e.error && e.error.message))) || 'Script error'
             boot.innerHTML =
               '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Failed to start</div>' +
