@@ -99,7 +99,7 @@ Table `users`: UUID, `organization_id`, `email`, `name`, `role_id`, `status`, `p
 ## Problems (tracked)
 
 1. Dual identity stores — identity is canonical when enabled; the directory remains for dev/Pages-offline.
-6. `/api/v1/credits/*` and `/api/v1/admin/credits/adjust` are called by the frontend but have no backend routes yet; `creditsService.js` is implemented and tested.
+6. Credits API (`/api/v1/credits/*`, `/api/v1/admin/credits/adjust`) is implemented and tested; no screen uses it yet.
 2. Auth product gaps — reset password, rate limits (**in progress / done in 003–004**).
 3. Session secret must be set in production (`IDENTITY_SESSION_SECRET`).
 4. User list not paginated — Phase 10.

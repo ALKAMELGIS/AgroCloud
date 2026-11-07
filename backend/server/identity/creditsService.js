@@ -1,5 +1,5 @@
 import { getPool, isIdentityReady } from './db.js'
-import { AuthzError, requirePermission } from './authorizationService.js'
+import { AuthzError, getUserById, isUserInActorScope, requirePermission } from './authorizationService.js'
 import { writeAudit } from './auditService.js'
 
 const ALLOWED_TYPES = new Set([
@@ -120,12 +120,19 @@ export async function applyCreditDelta(
   return { wallet: updated[0], transaction: txRows[0] }
 }
 
-export async function adminAdjustCredits(client, actor, targetUserId, amount, reason) {
-  requirePermission(actor, amount >= 0 ? 'credits.add' : 'credits.remove')
-  const orgId = actor.user.organization_id
+export async function adminAdjustCredits(client, actor, targetRef, amount, reason) {
   const delta = Math.trunc(Number(amount))
   if (!Number.isFinite(delta) || delta === 0) {
     throw new CreditsError('VALIDATION_ERROR', 'Amount must be a non-zero integer.', 422)
+  }
+  requirePermission(actor, delta > 0 ? 'credits.add' : 'credits.remove')
+  const orgId = actor.user.organization_id
+  // The target must be in the actor's organisation and management scope.
+  const targetUserId = await resolveTargetUserId(client, targetRef, orgId)
+  const target = targetUserId && (await getUserById(client, targetUserId, orgId))
+  if (!target) throw new AuthzError('NOT_FOUND', 'User not found.', 404)
+  if (!(await isUserInActorScope(client, actor, targetUserId))) {
+    throw new AuthzError('USER_OUTSIDE_SCOPE', 'User outside your scope.', 403)
   }
   const result = await applyCreditDelta(client, {
     userId: targetUserId,
@@ -144,6 +151,19 @@ export async function adminAdjustCredits(client, actor, targetUserId, amount, re
     metadata: { amount: delta, transactionId: result.transaction.id },
   })
   return result
+}
+
+/** Accepts the identity UUID or the numeric id the client sees for directory-era users. */
+async function resolveTargetUserId(client, ref, orgId) {
+  const value = String(ref ?? '').trim()
+  if (!value) return null
+  if (!/^\d+$/.test(value)) return value
+  const pool = client || getPool()
+  const { rows } = await pool.query(
+    `SELECT id FROM users WHERE organization_id = $1 AND legacy_directory_id = $2 AND deleted_at IS NULL LIMIT 1`,
+    [orgId, Number(value)],
+  )
+  return rows[0]?.id || null
 }
 
 export async function debitCreditsForUsage(client, userId, creditsUsed, { service, action, referenceId, metadata } = {}) {

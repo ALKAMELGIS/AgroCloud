@@ -55,7 +55,7 @@ router.post('/identity/logout', async (req, res) => {
 
 // Session required for the routes below — scoped to this router's own paths so other /api/v1 routes
 // are never answered with 401 by this guard.
-router.use(['/identity', '/manpower'], requireIdentitySession)
+router.use(['/identity', '/manpower', '/credits', '/admin/credits'], requireIdentitySession)
 
 router.get('/identity/users', async (req, res) => {
   try {
@@ -223,6 +223,69 @@ router.get('/manpower/transactions', async (req, res) => {
     return res.json({ ok: true, transactions: rows })
   } catch (e) {
     return identityErrorHandler(e, res)
+  }
+})
+
+/* ---------- credits (see core/docs/CREDITS.md) ---------- */
+
+function walletForClient(w) {
+  return { id: w.id, balance: Number(w.balance), updatedAt: w.updated_at }
+}
+
+function transactionForClient(t) {
+  return {
+    id: t.id,
+    amount: Number(t.amount),
+    balanceAfter: Number(t.balance_after),
+    type: t.type,
+    reason: t.reason,
+    referenceId: t.reference_id,
+    metadata: t.metadata,
+    actorUserId: t.actor_user_id,
+    createdAt: t.created_at,
+  }
+}
+
+router.get('/credits/wallet', async (req, res) => {
+  try {
+    requirePermission(req.identityActor, 'credits.read')
+    const wallet = await getWalletForUser(req.identityActor.user.id)
+    return res.json({ ok: true, wallet: walletForClient(wallet) })
+  } catch (e) {
+    return identityErrorHandler(e, res)
+  }
+})
+
+router.get('/credits/transactions', async (req, res) => {
+  try {
+    requirePermission(req.identityActor, 'credits.read')
+    const rows = await listCreditTransactions(req.identityActor.user.id, {
+      limit: req.query.limit,
+      offset: req.query.offset,
+    })
+    return res.json({ ok: true, transactions: rows.map(transactionForClient) })
+  } catch (e) {
+    return identityErrorHandler(e, res)
+  }
+})
+
+router.post('/admin/credits/adjust', async (req, res) => {
+  const { userId, amount, reason } = req.body || {}
+  const client = await getPool().connect()
+  try {
+    await client.query('BEGIN IMMEDIATE') // wallet read + update + ledger row as one write
+    const result = await adminAdjustCredits(client, req.identityActor, userId, amount, reason)
+    await client.query('COMMIT')
+    return res.json({
+      ok: true,
+      balance: Number(result.wallet.balance),
+      transaction: transactionForClient(result.transaction),
+    })
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {})
+    return identityErrorHandler(e, res)
+  } finally {
+    client.release()
   }
 })
 
