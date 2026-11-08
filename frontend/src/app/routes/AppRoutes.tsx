@@ -19,11 +19,8 @@ const AgroCloudPlatformDashboard = lazyWithRetry(
 const SatelliteIntelligence = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/SatelliteIntelligence'), 'SatelliteIntelligence')
 const SatelliteMultidimensional = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/Multidimensional'), 'SatelliteMultidimensional')
 const GisMap = lazyWithRetry(() => import('@/modules/gis/map/GisMap'), 'GisMap')
-const DataEntryFertigationRecords = lazyWithRetry(() => import('@/modules/operations/fertigation/FertigationRecords'), 'DataEntryFertigationRecords')
-const DataEntryIrrigation = lazyWithRetry(() => import('@/modules/operations/irrigation/Irrigation'), 'DataEntryIrrigation')
-const DataEntryHarvest = lazyWithRetry(() => import('@/modules/operations/harvest/Harvest'), 'DataEntryHarvest')
+const OperationsFormsApp = lazyWithRetry(() => import('@/modules/operations-forms/OperationsFormsApp'), 'OperationsFormsApp')
 const DataEntryQHIS = lazyWithRetry(() => import('@/modules/operations/other/QHIS'), 'DataEntryQHIS')
-const DataEntryECPH = lazyWithRetry(() => import('@/modules/operations/fertigation/EC'), 'DataEntryECPH')
 const DataEntryRecipes = lazyWithRetry(() => import('@/modules/operations/fertigation/Recipes'), 'DataEntryRecipes')
 const AccountProfile = lazyWithRetry(() => import('@/modules/account/pages/Profile'), 'AccountProfile')
 const AccountSettings = lazyWithRetry(() => import('@/modules/account/pages/Settings'), 'AccountSettings')
@@ -76,13 +73,22 @@ export default function AppRoutes() {
           }
         />
         <Route path="/satellite" element={<Navigate to="/satellite/indices" replace />} />
-        <Route path="/data/fertigation" element={<Navigate to="/data/fertigation-records" replace />} />
-        <Route path="/data/fertigation-records" element={<DataEntryFertigationRecords />} />
-        <Route path="/data/irrigation" element={<DataEntryIrrigation />} />
-        <Route path="/data/harvest" element={<DataEntryHarvest />} />
+        {/* Operations forms (one SQL database, import / export / reports). Old addresses redirect. */}
+        <Route
+          path="/ops/*"
+          element={
+            <Suspense fallback={<RouteLoadingFallback label="Loading operations forms…" />}>
+              <OperationsFormsApp />
+            </Suspense>
+          }
+        />
+        <Route path="/data/fertigation" element={<Navigate to="/ops/fertigation" replace />} />
+        <Route path="/data/fertigation-records" element={<Navigate to="/ops/fertigation" replace />} />
+        <Route path="/data/irrigation" element={<Navigate to="/ops/irrigation" replace />} />
+        <Route path="/data/harvest" element={<Navigate to="/ops/harvest" replace />} />
+        <Route path="/data/production" element={<Navigate to="/ops/harvest" replace />} />
+        <Route path="/data/ec-ph" element={<Navigate to="/ops/ec_ph" replace />} />
         <Route path="/data/qhis" element={<DataEntryQHIS />} />
-        <Route path="/data/production" element={<DataEntryHarvest />} />
-        <Route path="/data/ec-ph" element={<DataEntryECPH />} />
         <Route path="/data/recipes/:formSlug" element={<DataEntryRecipes />} />
         <Route
           path="/satellite/indices"

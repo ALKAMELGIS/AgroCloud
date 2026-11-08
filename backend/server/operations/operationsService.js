@@ -318,7 +318,7 @@ export function filterOptions(formId) {
 
 const PERIOD_SQL = {
   day: (col) => col,
-  week: (col) => `strftime('%Y-W%W', ${col})`,
+  week: (col) => `strftime('%G-W%V', ${col})`, // ISO week, same as the forms' week_no
   month: (col) => `substr(${col}, 1, 7)`,
   year: (col) => `substr(${col}, 1, 4)`,
 }

@@ -165,6 +165,8 @@ test('filters, search, pagination, navigation and aggregation', async () => {
   const monthly = await call('GET', '/forms/harvest/aggregate?from=2026-01-01&groupBy=month&groupBy2=location')
   assert.equal(monthly.body.groups.join(','), 'month,location')
   assert.equal(monthly.body.rows.length, 4)
+  const weekly = await call('GET', '/forms/harvest/aggregate?from=2026-01-01&to=2026-01-04&groupBy=week')
+  assert.deepEqual(weekly.body.rows.map((r) => r.keys[0]), ['2026-W01']) // ISO week (Jan 1–4 2026)
 
   const opts = await call('GET', '/forms/harvest/filters')
   assert.ok(opts.body.options.product.some((o) => o.value === 'Tomato' && o.count === 10))

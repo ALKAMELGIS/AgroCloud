@@ -53,30 +53,18 @@ export const menuItems: HomeMenuItem[] = [
     icon: 'fa-solid fa-screwdriver-wrench',
     color: '#F59E0B', // Amber
     items: [
-      {
-        label: { en: 'EC/PH', ar: 'الملوحة والحموضة' },
-        icon: 'fa-solid fa-droplet',
-        to: '/data/ec-ph',
-      },
-      {
-        label: { en: 'Irrigation Scheduling', ar: 'جدولة الري' },
-        icon: 'fa-solid fa-water',
-        to: '/data/irrigation',
-      },
-      {
-        label: { en: 'Harvest Logging', ar: 'تسجيل الحصاد' },
-        icon: 'fa-solid fa-tractor',
-        to: '/data/harvest',
-      },
+      { label: { en: 'Operations forms', ar: 'استمارات العمليات' }, icon: 'fa-solid fa-table-list', to: '/ops' },
+      { label: { en: 'Harvest record', ar: 'سجل الحصاد' }, icon: 'fa-solid fa-tractor', to: '/ops/harvest' },
+      { label: { en: 'EC / pH record', ar: 'سجل الملوحة والحموضة' }, icon: 'fa-solid fa-droplet', to: '/ops/ec_ph' },
+      { label: { en: 'Plant protection (PPP)', ar: 'تطبيق المبيدات' }, icon: 'fa-solid fa-spray-can-sparkles', to: '/ops/ppp' },
+      { label: { en: 'Irrigation & fertigation', ar: 'الري والتسميد' }, icon: 'fa-solid fa-water', to: '/ops/irrigation' },
+      { label: { en: 'Fertigation worksheet', ar: 'ورقة عمل التسميد' }, icon: 'fa-solid fa-flask', to: '/ops/fertigation' },
+      { label: { en: 'Fertilizer issue', ar: 'صرف الأسمدة' }, icon: 'fa-solid fa-boxes-stacked', to: '/ops/fertilizer_issue' },
+      { label: { en: 'Forms settings', ar: 'إعدادات الاستمارات' }, icon: 'fa-solid fa-gear', to: '/ops/settings' },
       {
         label: { en: 'QHIS', ar: 'الجودة والسلامة' },
         icon: 'fa-solid fa-shield-halved',
         to: '/data/qhis',
-      },
-      {
-        label: { en: 'Product & Sales Tracking', ar: 'تتبع المنتجات والمبيعات' },
-        icon: 'fa-solid fa-boxes-stacked',
-        to: '/data/production',
       },
     ],
   },

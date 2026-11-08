@@ -49,15 +49,13 @@ test.describe('keyboard access', () => {
     }
   })
 
-  test('Escape closes the fertigation report modal', async ({ page }) => {
+  test('Escape closes an operations form dialog', async ({ page }) => {
     await signInAsAdmin(page)
-    await page.goto('/AgroCloud/#/data/fertigation-records')
-    const open = page.getByRole('button', { name: /report/i }).first()
-    test.skip((await open.count()) === 0, 'report entry point not present in this configuration')
-    await open.click()
-    const overlay = page.locator('.report-modal-overlay')
-    await expect(overlay).toBeVisible()
+    await page.goto('/AgroCloud/#/ops/harvest')
+    await page.getByRole('button', { name: /^import$/i }).first().click()
+    const dialog = page.getByRole('dialog', { name: /import records/i })
+    await expect(dialog).toBeVisible()
     await page.keyboard.press('Escape')
-    await expect(overlay).toHaveCount(0)
+    await expect(dialog).toHaveCount(0)
   })
 })
