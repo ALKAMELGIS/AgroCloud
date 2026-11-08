@@ -37,15 +37,9 @@
   font-family: var(--ds-font-sans);
 }
 
-.login-page-root .login-bg-overlay {
-  background: radial-gradient(circle at center, rgba(11, 18, 16, 0.55) 0%, rgba(11, 18, 16, 0.92) 70%, var(--lg-bg) 100%);
-}
-
-.login-page-root .login-bg-video {
-  background:
-    radial-gradient(circle at 20% 10%, rgba(34, 197, 94, 0.2), transparent 55%),
-    radial-gradient(circle at 80% 35%, rgba(234, 179, 8, 0.08), transparent 60%),
-    var(--lg-bg);
+/* Plain backdrop: one solid colour, no video, imagery or gradients. */
+.login-page-root {
+  background: var(--lg-bg);
 }
 
 .login-page-content {

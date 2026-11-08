@@ -14,7 +14,6 @@ import { appendAuditLog } from '@/core/authorization/audit'
 import { useLanguage } from '@/core/localization/i18n'
 import './Login.css'
 import { ELITE_AGRO_LOGO_WHITE_URL } from '@/core/config/brandAssets'
-import { isTouchDevice } from '@/app/startup/pwaInstall'
 import { sha256Base64, sha256Hex } from '@/core/utils/sha256'
 import {
   loginAccount,
@@ -39,10 +38,6 @@ import {
   REGISTRATION_SUCCESS_MESSAGE,
 } from '@/core/auth/authEmailCopy'
 
-const LOGIN_BG_POSTER =
-  'https://www.esri.com/content/dam/esrisites/en-us/parallax-gis/scene-poster.jpg'
-const LOGIN_BG_VIDEO =
-  'https://www.esri.com/content/dam/esrisites/en-us/parallax-gis/wigis-scene-2-0521-large.mp4'
 
 type AuthUser = {
   id: number
@@ -149,7 +144,6 @@ export default function Login() {
   const [inviteToken, setInviteToken] = useState<string>('')
   const location = useLocation()
   const roleDropdownRef = useRef<HTMLDivElement | null>(null)
-  const loginBgVideoRef = useRef<HTMLVideoElement | null>(null)
   const [isRoleOpen, setIsRoleOpen] = useState(false)
   const [keepSignedIn, setKeepSignedIn] = useState(true)
   const mandatoryLoginSeeds = [
@@ -1007,47 +1001,12 @@ export default function Login() {
   }, [])
 
   useEffect(() => {
-    if (isTouchDevice()) return
-    const el = loginBgVideoRef.current
-    if (!el) return
-    void el.play()?.catch(() => {})
-  }, [])
-
-  useEffect(() => {
     // Keep session persistence enabled by default for same-browser multi-tab/window continuity.
     if (mode === 'signin') setKeepSignedIn(true)
   }, [mode])
 
   return (
     <div className="login-page-root">
-      <div className="login-bg-video" aria-hidden="true">
-        {isTouchDevice() ? (
-          <img
-            className="video-background login-bg-poster"
-            src={LOGIN_BG_POSTER}
-            alt=""
-            decoding="async"
-            {...fetchPriorityAttr('low')}
-          />
-        ) : (
-          <video
-            ref={loginBgVideoRef}
-            id="banner-two"
-            preload="metadata"
-            className="video-background"
-            poster={LOGIN_BG_POSTER}
-            muted
-            playsInline
-            autoPlay
-            loop
-          >
-            <source media="(min-width: 1024px)" src={LOGIN_BG_VIDEO} type="video/mp4" />
-            <source media="(min-width: 780px)" src={LOGIN_BG_VIDEO} type="video/mp4" />
-            <source src={LOGIN_BG_VIDEO} type="video/mp4" />
-          </video>
-        )}
-      </div>
-      <div className="login-bg-overlay"></div>
       <div className="login-page-content">
         <div className="login-card">
           <div className="login-card__brand">
