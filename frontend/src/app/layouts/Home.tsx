@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useTheme } from '@mui/material/styles'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './Home.css'
@@ -7,25 +7,20 @@ import { useSystemSettingsOptional } from '@/core/state/SystemSettingsContext'
 import { AuthContextOptional } from '@/core/state/auth'
 import { startSession } from '@/core/auth/auth'
 import { GPS_VEHICLE_TRACKING_SIGNIN_URL } from '@/core/routing/defaultPageLinks'
+import { Menu, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react'
+import { SidebarNav } from '@/components/ui/dashboard-sidebar'
+import {
+  buildHomeNavigation,
+  HomeCommandPalette,
+  type HomeMenuItem,
+  type HomeNavEntry,
+  type HomeSubMenuItem,
+} from './HomeNavigation'
 
-interface MenuItem {
-  id: string
-  label: Record<AppLanguage, string>
-  icon: string
-  color: string
-  items?: SubMenuItem[]
-  to?: string
-  /** Opens in a new tab (e.g. John Deere sign-in). */
-  externalUrl?: string
-}
+type MenuItem = HomeMenuItem
+type SubMenuItem = HomeSubMenuItem
 
-interface SubMenuItem {
-  label: Record<AppLanguage, string>
-  icon: string
-  to?: string
-  action?: 'logout'
-  externalUrl?: string
-}
+const HOME_SIDEBAR_KEY = 'agro_home_sidebar'
 
 function openExternalApp(url: string): void {
   const trimmed = url.trim()
@@ -49,13 +44,6 @@ const menuItems: MenuItem[] = [
     icon: 'fa-solid fa-chart-pie',
     color: '#F97316',
     to: '/dashboards/agro-cloud',
-  },
-  {
-    id: 'agro-cloud-platform',
-    label: { en: 'AgroCloud Platform', ar: 'منصة AgroCloud' },
-    icon: 'fa-solid fa-seedling',
-    color: '#F97316',
-    to: '/dashboards/agro-cloud-platform',
   },
   {
     id: 'satellite-intelligence',
@@ -132,13 +120,6 @@ const menuItems: MenuItem[] = [
         externalUrl: GPS_VEHICLE_TRACKING_SIGNIN_URL,
       },
     ]
-  },
-  {
-    id: 'aiAgroCloud',
-    label: { en: 'AI AgroCloud', ar: 'سحابة Agro الذكية' },
-    icon: 'fa-solid fa-cloud-bolt',
-    color: '#059669',
-    to: '/dashboards/ai-agro-cloud',
   },
   {
     id: 'weather',
@@ -299,6 +280,79 @@ export default function Home() {
     }
   }
 
+  // --- Sidebar navigation + command palette -------------------------------------------------
+  const auth = useContext(AuthContextOptional)
+  const nav = useMemo(() => buildHomeNavigation(menuItems, language), [language])
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try {
+      return localStorage.getItem(HOME_SIDEBAR_KEY) !== 'closed'
+    } catch {
+      return true
+    }
+  })
+
+  const toggleSidebar = () => {
+    setSidebarOpen((open) => {
+      try {
+        localStorage.setItem(HOME_SIDEBAR_KEY, open ? 'closed' : 'open')
+      } catch {
+        /* per-browser convenience only */
+      }
+      return !open
+    })
+  }
+
+  const runNav = useCallback(
+    (id: string) => {
+      const action = nav.actions.get(id)
+      if (!action) return
+      setMobileNavOpen(false)
+      if (action.kind === 'search') setPaletteOpen(true)
+      else if (action.kind === 'external') openExternalApp(action.url)
+      else if (action.kind === 'logout') {
+        startSession(null)
+        navigate('/login', { replace: true })
+      } else if (action.to === '/') {
+        setActiveGroup(null)
+      } else navigate(action.to)
+    },
+    [nav, navigate],
+  )
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen(true)
+      } else if (e.key === 'Escape') {
+        setMobileNavOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const workspaces = [
+    {
+      name: 'Elite AgroCloud',
+      subtitle: String(auth?.user?.role || auth?.user?.email || '').trim() || undefined,
+    },
+  ]
+  const sidebarLabel = language === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'
+  const sidebar = (className: string) => (
+    <SidebarNav
+      className={className}
+      groups={nav.groups}
+      bottomItems={nav.bottomItems}
+      workspaces={workspaces}
+      activeId={activeGroup ? `group:${activeGroup.id}` : '/'}
+      onSelect={runNav}
+      ariaLabel={sidebarLabel}
+    />
+  )
+
   const handleBack = () => {
     setActiveGroup(null)
   }
@@ -369,6 +423,59 @@ export default function Home() {
 
   return (
     <div className="page home-page" style={homeBackgroundStyle}>
+      <div className="flex items-start gap-5">
+        {/* Desktop sidebar: collapsible, remembered per browser. */}
+        <aside
+          className={`sticky top-4 hidden shrink-0 overflow-hidden transition-[width,opacity] duration-300 ease-in-out lg:block ${
+            sidebarOpen ? 'w-[260px] opacity-100' : 'w-0 opacity-0'
+          }`}
+          aria-hidden={!sidebarOpen}
+          {...((!sidebarOpen ? { inert: '' } : {}) as Record<string, string>)}
+        >
+          <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-sm">
+            {sidebar('h-[calc(100vh-150px)] min-h-[460px] border-none')}
+          </div>
+        </aside>
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground transition-colors hover:text-foreground lg:inline-flex"
+              aria-label={sidebarOpen ? (language === 'ar' ? 'إخفاء القائمة' : 'Hide sidebar') : language === 'ar' ? 'إظهار القائمة' : 'Show sidebar'}
+              aria-expanded={sidebarOpen}
+            >
+              {sidebarOpen ? (
+                <PanelLeftClose className="h-[18px] w-[18px] rtl:-scale-x-100" strokeWidth={1.5} />
+              ) : (
+                <PanelLeftOpen className="h-[18px] w-[18px] rtl:-scale-x-100" strokeWidth={1.5} />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground transition-colors hover:text-foreground lg:hidden"
+              aria-label={language === 'ar' ? 'فتح القائمة' : 'Open menu'}
+              aria-expanded={mobileNavOpen}
+            >
+              <Menu className="h-[18px] w-[18px]" strokeWidth={1.5} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="inline-flex h-9 min-w-0 max-w-[340px] flex-1 items-center gap-2 rounded-lg border border-border/60 bg-card px-3 text-start text-[13px] text-muted-foreground transition-colors hover:text-foreground sm:flex-none sm:w-[300px]"
+              aria-label={language === 'ar' ? 'بحث' : 'Search'}
+            >
+              <Search className="h-4 w-4 shrink-0" strokeWidth={1.5} aria-hidden />
+              <span className="min-w-0 flex-1 truncate">
+                {language === 'ar' ? 'ابحث عن صفحة أو تطبيق…' : 'Search pages and apps…'}
+              </span>
+              <kbd className="hidden h-5 items-center rounded-[4px] border border-border/60 bg-background/60 px-1.5 font-mono text-[10px] sm:inline-flex">
+                Ctrl K
+              </kbd>
+            </button>
+          </div>
       {activeGroup ? (
         <div className="home-sublist-view fade-in">
           <div className="home-header">
@@ -483,6 +590,34 @@ export default function Home() {
           </div>
         </div>
       )}
+        </div>
+      </div>
+
+      {/* Phone / tablet: the same sidebar as a slide-in panel. */}
+      {mobileNavOpen ? (
+        <div className="fixed inset-0 z-[12000] lg:hidden" role="dialog" aria-modal="true" aria-label={sidebarLabel}>
+          <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => setMobileNavOpen(false)} aria-hidden />
+          <div className="absolute inset-y-0 start-0 flex max-w-[85vw] bg-card shadow-2xl animate-in slide-in-from-left duration-200 rtl:slide-in-from-right">
+            {sidebar('h-full max-w-full')}
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(false)}
+              className="absolute end-[-44px] top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border-0 bg-card text-foreground shadow"
+              aria-label={language === 'ar' ? 'إغلاق القائمة' : 'Close menu'}
+            >
+              <X className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <HomeCommandPalette
+        open={paletteOpen}
+        entries={nav.entries}
+        language={language}
+        onClose={() => setPaletteOpen(false)}
+        onPick={(entry: HomeNavEntry) => runNav(entry.id)}
+      />
     </div>
   )
 }
