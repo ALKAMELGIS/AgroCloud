@@ -369,7 +369,6 @@ export default defineConfig({
               ],
             },
             includeAssets: [
-              'agrocloud-pwa-logo.png',
               'agrocloud-logo.png',
               'agrocloud-logo-core.png',
               'agrocloud-logo-leaf.png',
