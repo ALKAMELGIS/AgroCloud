@@ -2459,3 +2459,42 @@ html[data-theme='dark'] .navmenu.navmenu--mobile {
     color: inherit;
   }
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * Inline utilities (notifications / theme / language / account) inside the app top bar
+ * (AppChrome renders <NavMenu utilitiesOnly />). The bar's own styling applies, not the old row's.
+ * ------------------------------------------------------------------------------------------- */
+.app-topbar-utilities .navmenu.navmenu--inline {
+  position: static;
+  inset: auto;
+  width: auto;
+  max-width: none;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  transform: none;
+  overflow: visible;
+}
+
+.app-topbar-utilities .navmenu--inline .nav-collapse-toggle {
+  display: none;
+}
+
+.app-topbar-utilities .navmenu--inline .navmenu-list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}

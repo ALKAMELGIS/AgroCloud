@@ -2,8 +2,7 @@ import { Component, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { MAIN_CONTENT_ID, SkipLink } from '@/components/navigation/SkipLink'
 import { HashRouter, Navigate, useLocation } from 'react-router-dom'
 import { AppDialogProvider } from './providers/AppDialogProvider'
-import HeaderBar from '@/app/layouts/HeaderBar'
-import NavMenu from '@/app/layouts/NavMenu'
+import AppChrome from '@/app/layouts/AppChrome'
 import AppRoutes from './routes/AppRoutes'
 import PersistentAgroCloudEmbed from './layouts/PersistentAgroCloudEmbed'
 import PwaInstallPrompt from './startup/PwaInstallPrompt'
@@ -438,15 +437,10 @@ function AppShell() {
   const { user, logout } = useAuth()
   const { settings } = useSystemSettings()
   const location = useLocation()
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   const handleLogout = () => {
     logout()
   }
-
-  useEffect(() => {
-    setMobileNavOpen(false)
-  }, [location.pathname])
 
   // The app rendered successfully — drop the one-shot reload guards and strip
   // cache-bust / HMR recovery params so a FUTURE failure can self-heal again.
@@ -530,23 +524,21 @@ function AppShell() {
         <SkipLink />
       ) : null}
       {showAppChrome ? (
-        <HeaderBar
-          onToggleMobileNav={() => setMobileNavOpen(v => !v)}
-          mobileNavOpen={mobileNavOpen}
-        />
-      ) : null}
-      <div className={showChrome ? layoutChromeClass : 'layout'}>
-        {showAppChrome ? (
-          <NavMenu
-            onLogout={handleLogout}
-            mobileNavOpen={mobileNavOpen}
-            onCloseMobileNav={() => setMobileNavOpen(false)}
-          />
-        ) : null}
-        <main id={MAIN_CONTENT_ID} tabIndex={-1} className={mainContentClass}>
-          {routeBody}
-        </main>
-      </div>
+        // Sidebar + top bar shell (AppChrome) replaces the old green header and menu row.
+        <AppChrome onLogout={handleLogout}>
+          <div className={layoutChromeClass}>
+            <main id={MAIN_CONTENT_ID} tabIndex={-1} className={mainContentClass}>
+              {routeBody}
+            </main>
+          </div>
+        </AppChrome>
+      ) : (
+        <div className="layout">
+          <main id={MAIN_CONTENT_ID} tabIndex={-1} className={mainContentClass}>
+            {routeBody}
+          </main>
+        </div>
+      )}
     </>
   )
 }

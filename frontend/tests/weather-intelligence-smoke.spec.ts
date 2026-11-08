@@ -13,7 +13,8 @@ test.describe('Weather Intelligence smoke', () => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-    const weatherCard = page.getByRole('button', { name: /Weather|الطقس/i })
+    // The home card (the sidebar has a Weather entry too).
+    const weatherCard = page.getByRole('main').getByRole('button', { name: /Weather|الطقس/i })
     await expect(weatherCard).toBeVisible()
     await weatherCard.click()
 

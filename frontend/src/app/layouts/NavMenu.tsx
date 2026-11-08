@@ -22,6 +22,11 @@ type NavMenuProps = {
   onLogout?: () => void
   mobileNavOpen?: boolean
   onCloseMobileNav?: () => void
+  /**
+   * Render only the account / notifications / theme / language controls, inline (no links, no
+   * phone drawer). Used by the app top bar, where AppShellNav (the sidebar) provides navigation.
+   */
+  utilitiesOnly?: boolean
 }
 
 type AppNotification = {
@@ -156,7 +161,7 @@ const navTranslations = {
   },
 } as const
 
-export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobileNav }: NavMenuProps) {
+export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobileNav, utilitiesOnly = false }: NavMenuProps) {
   const getViewport = (): 'desktop' | 'tablet' | 'mobile' => {
     if (typeof window === 'undefined') return 'desktop'
     const w = window.innerWidth
@@ -186,7 +191,9 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
   const location = useLocation()
   // The home page has its own sidebar with the same destinations, so the bar keeps only the
   // account / notifications / theme / language controls there (the phone drawer keeps everything).
-  const hidePrimaryLinks = location.pathname === '/' && !isMobile
+  const hidePrimaryLinks = utilitiesOnly || (location.pathname === '/' && !isMobile)
+  // Inline utilities never become the phone drawer.
+  const drawerMode = isMobile && !utilitiesOnly
   const navRef = useRef<HTMLElement | null>(null)
   const groupContainerRefs = useRef<Record<string, HTMLLIElement | null>>({})
   const groupHeaderRefs = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -487,12 +494,12 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
 
   const handleNavigate = () => {
     closeAll()
-    if (isMobile && onCloseMobileNav) onCloseMobileNav()
+    if (drawerMode && onCloseMobileNav) onCloseMobileNav()
   }
 
   return (
     <>
-      {isMobile && mobileNavOpen ? (
+      {drawerMode && mobileNavOpen ? (
         <div
           className="navmenu-backdrop"
           aria-hidden="true"
@@ -503,18 +510,19 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
         className={[
           'navmenu',
           hidePrimaryLinks ? 'navmenu--utilities-only' : '',
-          !isMobile ? 'navmenu--compact' : '',
-          isMobile && mobileNavOpen ? 'navmenu-open' : '',
-          isMobile ? 'navmenu--mobile' : '',
+          utilitiesOnly ? 'navmenu--inline' : '',
+          !drawerMode ? 'navmenu--compact' : '',
+          drawerMode && mobileNavOpen ? 'navmenu-open' : '',
+          drawerMode ? 'navmenu--mobile' : '',
         ]
           .filter(Boolean)
           .join(' ')}
         aria-label="Primary"
-        aria-hidden={isMobile && !mobileNavOpen ? true : undefined}
+        aria-hidden={drawerMode && !mobileNavOpen ? true : undefined}
         ref={navRef}
         data-viewport={viewport}
       >
-      {isMobile ? (
+      {drawerMode ? (
         <button
           type="button"
           className="navmenu-close"
@@ -540,8 +548,8 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
       <ul
         id="primary-nav"
         className="navmenu-list"
-        data-open={isMobile ? 'true' : undefined}
-        aria-hidden={isMobile ? false : undefined}
+        data-open={drawerMode ? 'true' : undefined}
+        aria-hidden={drawerMode ? false : undefined}
       >
         {mergedHome.visible && !hidePrimaryLinks ? (
           <li className="navmenu-li">
