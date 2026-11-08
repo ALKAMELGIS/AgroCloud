@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { developEliteAccent } from '@/theme/dashboardTokens'
+import { normalizeBuilderElements, type BuilderElementConfig } from './builder/builderTypes'
 import type {
   DevelopEliteGridBreakpoint,
   DevelopEliteResponsiveGridLayouts,
@@ -30,6 +31,8 @@ export type DevelopEliteLayoutConfig = {
   gridLayouts?: DevelopEliteResponsiveGridLayouts
   /** Widgets removed from the grid until restored from settings. */
   gridHiddenWidgets?: string[]
+  /** Dashboard Builder elements added from the element library, keyed by widget id (`el-…`). */
+  builderElements?: Record<string, BuilderElementConfig>
   /** Saved row height (px) per breakpoint so view mode matches layout edit after Done. */
   gridRowStrideByBp?: Partial<Record<DevelopEliteGridBreakpoint, number>>
   /** Dashboard border / line color (hex). */
@@ -76,6 +79,7 @@ export const DEFAULT_DEVELOP_ELITE_LAYOUT: DevelopEliteLayoutConfig = {
   widgetFloat: {},
   gridLayouts: undefined,
   gridHiddenWidgets: [],
+  builderElements: {},
   gridRowStrideByBp: undefined,
   themeBorderColor: '#2f6b4a',
   themeBorderWidthPx: 1,
@@ -248,6 +252,7 @@ export function normalizeDevelopEliteLayout(
     gridHiddenWidgets: Array.isArray(p.gridHiddenWidgets)
       ? p.gridHiddenWidgets.map(id => String(id).trim()).filter(Boolean)
       : d.gridHiddenWidgets ?? [],
+    builderElements: normalizeBuilderElements(p.builderElements ?? d.builderElements),
     gridRowStrideByBp: normalizeGridRowStrideByBp(p.gridRowStrideByBp) ?? d.gridRowStrideByBp,
     themeBorderColor: normalizeDevelopEliteHexColor(p.themeBorderColor, d.themeBorderColor),
     themeBorderWidthPx: clamp(Number(p.themeBorderWidthPx ?? d.themeBorderWidthPx), 1, 4),

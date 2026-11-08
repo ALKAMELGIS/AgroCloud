@@ -1,4 +1,15 @@
-import { useMemo, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import './builder/builder.css'
+import { BuilderElementView } from './builder/BuilderElementView'
+import { BuilderLibraryPanel } from './builder/BuilderLibraryPanel'
+import { BuilderBuiltInPanel, BuilderPropertiesPanel } from './builder/BuilderPropertiesPanel'
+import { BuilderSelectionProvider } from './builder/BuilderSelectionContext'
+import { isBuilderElementId, type BuilderElementType } from './builder/builderTypes'
+import { removeFromLayouts, useDashboardBuilder } from './builder/useDashboardBuilder'
+import { developEliteGridWidgetLabel } from './developEliteGridWidgetLabels'
+import { resolveDevelopEliteGridWidgetContentId, settingsTabForDevelopEliteWidget } from './developEliteGridWidgetActions'
+import { reflowAfterWidgetRemoval } from './developEliteGridEngine'
+import { DEVELOP_ELITE_GRID_COLS, type DevelopEliteGridBreakpoint } from './developEliteGridLayout'
 import { DevelopEliteCharts } from './DevelopEliteCharts'
 import { DevelopEliteMap } from './DevelopEliteMap'
 import { DevelopEliteDashboardGrid } from './DevelopEliteDashboardGrid'
@@ -125,6 +136,70 @@ export function DevelopEliteAgroGridSection({
       gridHiddenWidgets,
     )
   }, [gridHiddenWidgets, layout.gridLayouts, kpiCardIds])
+
+  // ---- Dashboard Builder (element library, properties, cross-filter) --------------------------
+  const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(true)
+  const builderElements = useMemo(() => layout.builderElements ?? {}, [layout.builderElements])
+  const [scrollToId, setScrollToId] = useState<string | null>(null)
+  const selectAndReveal = useCallback((id: string | null) => {
+    setSelectedWidgetId(id)
+    setScrollToId(id)
+  }, [])
+  useEffect(() => {
+    if (!scrollToId) return
+    const raf = requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-widget-id="${CSS.escape(scrollToId)}"]`)
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      setScrollToId(null)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [scrollToId, layout.gridLayouts])
+  const builder = useDashboardBuilder({
+    gridLayouts,
+    nudgeLayout,
+    commitLayoutPatch,
+    onSelect: selectAndReveal,
+  })
+  const { flush: flushBuilder } = builder
+
+  useEffect(() => {
+    if (layoutEditMode) return
+    flushBuilder()
+    setSelectedWidgetId(null)
+  }, [flushBuilder, layoutEditMode])
+
+  const widgetLabel = useCallback(
+    (id: string) => builderElements[id]?.title || developEliteGridWidgetLabel(resolveDevelopEliteGridWidgetContentId(id)),
+    [builderElements],
+  )
+
+  const hiddenBuiltIns = useMemo(
+    () =>
+      (layout.gridHiddenWidgets ?? [])
+        .filter(id => !isBuilderElementId(id))
+        .map(id => ({ id, label: developEliteGridWidgetLabel(id) })),
+    [layout.gridHiddenWidgets],
+  )
+
+  const hideBuiltIn = useCallback(
+    (widgetId: string) => {
+      const base = resolveDevelopEliteGridWidgetContentId(widgetId)
+      commitLayoutPatch(prev => {
+        const next = removeFromLayouts(gridLayouts, widgetId)
+        for (const bp of Object.keys(DEVELOP_ELITE_GRID_COLS) as DevelopEliteGridBreakpoint[]) {
+          next[bp] = reflowAfterWidgetRemoval(next[bp] ?? [], DEVELOP_ELITE_GRID_COLS[bp])
+        }
+        return {
+          gridLayouts: next,
+          gridHiddenWidgets: widgetId === base ? Array.from(new Set([...(prev.gridHiddenWidgets ?? []), base])) : prev.gridHiddenWidgets,
+        }
+      })
+      setSelectedWidgetId(null)
+    },
+    [commitLayoutPatch, gridLayouts],
+  )
 
   const chartProps = useMemo(
     () => ({
@@ -409,7 +484,25 @@ export function DevelopEliteAgroGridSection({
     visibleKpiCards,
   ])
 
-  return (
+  const allWidgets = useMemo(() => {
+    const out: Record<string, ReactNode> = { ...widgets }
+    for (const el of Object.values(builderElements)) {
+      out[el.id] = (
+        <DevelopEliteGridWidget className={`develop-elite-grid-widget--builder develop-elite-grid-widget--builder-${el.type}`}>
+          <BuilderElementView element={el} config={data.config} editMode={layoutEditMode} />
+        </DevelopEliteGridWidget>
+      )
+    }
+    return out
+  }, [builderElements, data.config, layoutEditMode, widgets])
+
+  const selectedElement = selectedWidgetId ? builderElements[selectedWidgetId] : undefined
+  const otherElements = useMemo(
+    () => Object.values(builderElements).filter(e => e.id !== selectedWidgetId).map(e => ({ id: e.id, title: e.title })),
+    [builderElements, selectedWidgetId],
+  )
+
+  const grid = (
     <div className="develop-elite__grid-workspace">
       <DevelopEliteDashboardGrid
         layouts={gridLayouts}
@@ -423,12 +516,64 @@ export function DevelopEliteAgroGridSection({
           }))
         }
         layoutEditMode={layoutEditMode}
-        widgets={widgets}
+        widgets={allWidgets}
         gridHiddenWidgets={gridHiddenWidgets}
         compactListLayout={compactViewport}
         onGridHiddenWidgetsChange={ids => commitLayoutPatch({ gridHiddenWidgets: ids })}
-        onWidgetConfigure={onWidgetConfigure}
+        onWidgetConfigure={(id, tab) => {
+          if (isBuilderElementId(id)) setSelectedWidgetId(id)
+          else onWidgetConfigure?.(id, tab)
+        }}
+        selectedWidgetId={selectedWidgetId}
+        onWidgetSelect={setSelectedWidgetId}
+        onLibraryDrop={(type, cell) => builder.addElement(type as BuilderElementType, cell)}
+        onWidgetDuplicate={builder.duplicateElement}
+        onWidgetDelete={builder.deleteElement}
+        widgetLabel={widgetLabel}
       />
     </div>
+  )
+
+  // One stable tree in view and edit mode, so toggling edit never remounts the map or charts.
+  return (
+    <BuilderSelectionProvider elements={builderElements}>
+      <div className={`deb-shell${layoutEditMode ? ' is-editing' : ''}${layoutEditMode && libraryOpen ? ' has-library' : ''}${layoutEditMode && selectedWidgetId ? ' has-props' : ''}`}>
+        {!layoutEditMode ? null : libraryOpen ? (
+          <BuilderLibraryPanel
+            onAdd={type => builder.addElement(type)}
+            hiddenBuiltIns={hiddenBuiltIns}
+            onRestoreBuiltIn={builder.restoreBuiltIn}
+            onClose={() => setLibraryOpen(false)}
+          />
+        ) : (
+          <button type="button" className="deb-library-tab" onClick={() => setLibraryOpen(true)} aria-label="Show element library">
+            <i className="fa-solid fa-plus" aria-hidden />
+            <span>Add element</span>
+          </button>
+        )}
+        {grid}
+        {!layoutEditMode ? null : selectedElement ? (
+          <BuilderPropertiesPanel
+            key={selectedElement.id}
+            element={selectedElement}
+            config={data.config}
+            otherElements={otherElements}
+            onChange={patch => builder.updateElement(selectedElement.id, patch)}
+            onDuplicate={() => builder.duplicateElement(selectedElement.id)}
+            onDelete={() => builder.deleteElement(selectedElement.id)}
+            onClose={() => setSelectedWidgetId(null)}
+          />
+        ) : selectedWidgetId ? (
+          <BuilderBuiltInPanel
+            key={selectedWidgetId}
+            label={widgetLabel(selectedWidgetId)}
+            canRemove={selectedWidgetId !== 'kpi-hero' && selectedWidgetId !== 'kpi-hero-zone'}
+            onOpenSettings={() => onWidgetConfigure?.(selectedWidgetId, settingsTabForDevelopEliteWidget(selectedWidgetId))}
+            onRemove={() => hideBuiltIn(selectedWidgetId)}
+            onClose={() => setSelectedWidgetId(null)}
+          />
+        ) : null}
+      </div>
+    </BuilderSelectionProvider>
   )
 }

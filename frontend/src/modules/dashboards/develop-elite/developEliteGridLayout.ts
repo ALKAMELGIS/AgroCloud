@@ -1,3 +1,5 @@
+import { isBuilderElementId } from './builder/builderTypes'
+
 export const DEVELOP_ELITE_GRID_ROW_HEIGHT = 28
 export const DEVELOP_ELITE_GRID_BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }
 export const DEVELOP_ELITE_GRID_COLS = { lg: 24, md: 20, sm: 12, xs: 8, xxs: 4 }
@@ -330,12 +332,36 @@ export function normalizeDevelopEliteGridLayouts(
     const cols = DEVELOP_ELITE_GRID_COLS[bp]
     const def = defaults[bp] ?? []
     if (isDevelopEliteNarrowGridBreakpoint(bp)) {
-      out[bp] = def.filter(item => !hidden.has(item.i))
+      const base = def.filter(item => !hidden.has(item.i))
+      out[bp] = [...base, ...stackBuilderItems(p[bp] ?? p.lg ?? [], cols, gridMaxRow(base), hidden)]
     } else {
       out[bp] = mergeLayoutItems(def, p[bp], cols, hidden)
     }
   }
   return out
+}
+
+function gridMaxRow(items: DevelopEliteGridLayoutItem[]): number {
+  return items.reduce((m, it) => Math.max(m, it.y + it.h), 0)
+}
+
+/** Phone/tablet presets are rebuilt from defaults: append builder elements full-width at the end. */
+function stackBuilderItems(
+  saved: DevelopEliteGridLayoutItem[],
+  cols: number,
+  startY: number,
+  hidden: Set<string>,
+): DevelopEliteGridLayoutItem[] {
+  let y = startY
+  return saved
+    .filter(item => isBuilderElementId(item.i) && !hidden.has(item.i))
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map(item => {
+      const h = clampInt(item.h, 2, 40)
+      const placed = { ...item, x: 0, y, w: cols, h, minW: 1, minH: Math.min(item.minH ?? 2, h) }
+      y += h
+      return placed
+    })
 }
 
 /** Keeps only active widgets and packs layout (after hide/remove). */
@@ -417,7 +443,9 @@ export function syncDevelopEliteGridLayoutsForWidgets(
     const cols = DEVELOP_ELITE_GRID_COLS[bp]
     const migrated = stripDevelopEliteZonesGridWidget(migrateDevelopEliteSidebarGridItem(normalized[bp] ?? []))
     const pruned = migrated.filter(
-      item => !hidden.has(item.i) && (allowed.has(item.i) || isDevelopEliteGridLayoutCloneId(item.i)),
+      item =>
+        !hidden.has(item.i) &&
+        (allowed.has(item.i) || isDevelopEliteGridLayoutCloneId(item.i) || isBuilderElementId(item.i)),
     )
     const reflowed = reflow(pruned, cols)
     out[bp] = reflowed

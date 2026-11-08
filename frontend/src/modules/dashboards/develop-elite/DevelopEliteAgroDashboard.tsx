@@ -96,8 +96,10 @@ export default function DevelopEliteAgroDashboard() {
   useEffect(() => {
     if (!layoutEditMode) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.shiftKey || event.key.toLowerCase() !== 'z') return
-      if (event.ctrlKey || event.metaKey || event.altKey) return
+      if (event.key.toLowerCase() !== 'z' || event.altKey) return
+      // Ctrl/⌘+Z (standard) or Shift+Z (original shortcut); Ctrl+Shift+Z is left for redo.
+      const modifier = event.ctrlKey || event.metaKey
+      if (modifier ? event.shiftKey : !event.shiftKey) return
       const target = event.target
       if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) {
         return
@@ -190,6 +192,17 @@ export default function DevelopEliteAgroDashboard() {
               </div>
             </div>
             <div className="develop-elite__header-meta-actions">
+              {layoutEditMode ? (
+                <button
+                  type="button"
+                  className="develop-elite__layout-edit-btn develop-elite__layout-undo-btn"
+                  onClick={() => undoLayout()}
+                  title="Undo last layout change (Ctrl+Z)"
+                >
+                  <i className="fa-solid fa-rotate-left" aria-hidden />
+                  <span>Undo</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={`develop-elite__layout-edit-btn${layoutEditMode ? ' is-active' : ''}`}

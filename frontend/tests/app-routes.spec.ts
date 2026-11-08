@@ -9,7 +9,7 @@ import { horizontalOverflow, signInAsAdmin, trackPageErrors } from './helpers/se
  * Map workspaces are covered separately (they need WebGL and external tiles).
  */
 const ROUTES: { path: string; heading: RegExp }[] = [
-  { path: '/', heading: /good (morning|afternoon|evening)/i },
+  { path: '/', heading: /^(home|الرئيسية)$/i },
   { path: '/dashboards/overview', heading: /dashboard/i },
   { path: '/dashboards/ai-agro-chat', heading: /./ },
   { path: '/dashboards/model', heading: /./ },

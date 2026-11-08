@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
@@ -49,6 +50,16 @@ import { DevelopEliteGridCardControls } from './DevelopEliteGridCardControls'
 import { resizeGridItemFromDelta, type GridResizeEdge } from './developEliteGridResize'
 import { notifyDevelopEliteGridDrag, notifyDevelopEliteLayoutChanged } from './useDevelopEliteLiveLayout'
 
+/** MIME type carried by element-library drags. Payload: JSON `{ type, w, h }` (w/h in 24-col units). */
+export const DEVELOP_ELITE_LIBRARY_DRAG_MIME = 'application/x-agrocloud-dashboard-element'
+
+/** Size of the element being dragged from the library (dataTransfer payload is unreadable during dragover). */
+let activeLibraryDrag: { type: string; w: number; h: number } | null = null
+
+export function setDevelopEliteLibraryDrag(drag: { type: string; w: number; h: number } | null): void {
+  activeLibraryDrag = drag
+}
+
 const GRID_MARGIN_X = 3
 const GRID_MARGIN_Y = 3
 const MIN_ROW_STRIDE_PX = 24
@@ -67,6 +78,16 @@ type Props = {
   onWidgetConfigure?: (widgetId: string, tab: ReturnType<typeof settingsTabForDevelopEliteWidget>) => void
   /** Phone/tablet: use list-free stacked layout and slide drawer for lists. */
   compactListLayout?: boolean
+  /** Builder: currently selected widget (edit mode). */
+  selectedWidgetId?: string | null
+  onWidgetSelect?: (widgetId: string | null) => void
+  /** Builder: an element was dropped from the library at grid cell (x, y) of the active breakpoint. */
+  onLibraryDrop?: (type: string, cell: { x: number; y: number; w: number; h: number; cols: number }) => void
+  /** Builder: return true when the parent handled duplicate/delete itself (builder elements). */
+  onWidgetDuplicate?: (widgetId: string) => boolean
+  onWidgetDelete?: (widgetId: string) => boolean
+  /** Label for drag ghost / accessibility (builder elements have user titles). */
+  widgetLabel?: (widgetId: string) => string
 }
 
 function resolveBreakpoint(width: number): DevelopEliteGridBreakpoint {
@@ -117,7 +138,14 @@ export function DevelopEliteDashboardGrid({
   onGridHiddenWidgetsChange,
   onWidgetConfigure,
   compactListLayout = false,
+  selectedWidgetId = null,
+  onWidgetSelect,
+  onLibraryDrop,
+  onWidgetDuplicate,
+  onWidgetDelete,
+  widgetLabel = developEliteGridWidgetLabel,
 }: Props) {
+  const [libraryPreview, setLibraryPreview] = useState<GridDragPlaceholder | null>(null)
   const [openMenuWidgetId, setOpenMenuWidgetId] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const scrollParentRef = useRef<HTMLElement | null>(null)
@@ -171,7 +199,10 @@ export function DevelopEliteDashboardGrid({
 
   const narrowStackLayout =
     compactListLayout || isDevelopEliteNarrowGridBreakpoint(layoutBreakpoint)
-  const rowCount = dragRowCountLocked ?? gridLayoutMaxRow(layoutForPaint)
+  const rowCount =
+    dragRowCountLocked ??
+    Math.max(gridLayoutMaxRow(layoutForPaint), libraryPreview ? libraryPreview.y + libraryPreview.h : 0) +
+      (layoutEditMode && onLibraryDrop ? 4 : 0)
   const visualLayout = layoutForPaint
 
   const setDraftLayoutLive = useCallback((next: DevelopEliteGridLayoutItem[] | null) => {
@@ -284,6 +315,7 @@ export function DevelopEliteDashboardGrid({
         return
       }
       if (action === 'duplicate') {
+        if (onWidgetDuplicate?.(widgetId)) return
         patchAllBreakpoints((layout, bpCols) => {
           const duped = duplicateDevelopEliteGridWidgetItem(layout, widgetId, bpCols)
           return duped ?? layout
@@ -292,6 +324,7 @@ export function DevelopEliteDashboardGrid({
       }
       if (action === 'delete') {
         if (widgetId === 'kpi-hero' || widgetId === 'kpi-hero-zone') return
+        if (onWidgetDelete?.(widgetId)) return
         const base = resolveDevelopEliteGridWidgetContentId(widgetId)
         if (widgetId === base) {
           const nextHidden = Array.from(new Set([...gridHiddenWidgets, base]))
@@ -302,7 +335,7 @@ export function DevelopEliteDashboardGrid({
         )
       }
     },
-    [gridHiddenWidgets, onGridHiddenWidgetsChange, onWidgetConfigure, patchAllBreakpoints],
+    [gridHiddenWidgets, onGridHiddenWidgetsChange, onWidgetConfigure, onWidgetDelete, onWidgetDuplicate, patchAllBreakpoints],
   )
 
   const updateDragPreview = useCallback(
@@ -648,6 +681,72 @@ export function DevelopEliteDashboardGrid({
         )
       : null
 
+  const libraryCell = useCallback(
+    (e: ReactDragEvent<HTMLDivElement>): GridDragPlaceholder | null => {
+      const root = rootRef.current
+      const drag = activeLibraryDrag
+      if (!root || !drag) return null
+      const scale = cols / DEVELOP_ELITE_GRID_COLS.lg
+      const w = Math.max(1, Math.min(cols, Math.round(drag.w * scale)))
+      const h = Math.max(2, drag.h)
+      const cell = pointerToGridCell(
+        e.clientX,
+        e.clientY,
+        root.getBoundingClientRect(),
+        0,
+        cols,
+        rowStrideRef.current,
+        GRID_MARGIN_X,
+        GRID_MARGIN_Y,
+        w,
+        h,
+      )
+      return { x: Math.max(0, Math.min(cols - w, cell.x)), y: Math.max(0, cell.y), w, h }
+    },
+    [cols],
+  )
+
+  const onLibraryDragOver = useCallback(
+    (e: ReactDragEvent<HTMLDivElement>) => {
+      if (!layoutEditMode || !onLibraryDrop || !e.dataTransfer.types.includes(DEVELOP_ELITE_LIBRARY_DRAG_MIME)) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+      const next = libraryCell(e)
+      setLibraryPreview(prev => (prev && next && prev.x === next.x && prev.y === next.y && prev.w === next.w ? prev : next))
+    },
+    [layoutEditMode, libraryCell, onLibraryDrop],
+  )
+
+  const onLibraryDragLeave = useCallback((e: ReactDragEvent<HTMLDivElement>) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    setLibraryPreview(null)
+  }, [])
+
+  const onLibraryDropEvent = useCallback(
+    (e: ReactDragEvent<HTMLDivElement>) => {
+      if (!onLibraryDrop || !e.dataTransfer.types.includes(DEVELOP_ELITE_LIBRARY_DRAG_MIME)) return
+      e.preventDefault()
+      let type = ''
+      try {
+        type = String((JSON.parse(e.dataTransfer.getData(DEVELOP_ELITE_LIBRARY_DRAG_MIME)) as { type?: string }).type ?? '')
+      } catch {
+        type = activeLibraryDrag?.type ?? ''
+      }
+      const cell = libraryCell(e)
+      setLibraryPreview(null)
+      setDevelopEliteLibraryDrag(null)
+      if (type && cell) onLibraryDrop(type, { ...cell, cols })
+    },
+    [cols, libraryCell, onLibraryDrop],
+  )
+
+  /** Ids in layout order (includes duplicated widgets and builder elements). */
+  const renderIds = useMemo(() => {
+    const known = new Set(widgetIds)
+    const ordered = visualLayout.map(item => item.i)
+    return [...widgetIds.filter(id => layoutById.has(id)), ...ordered.filter(id => !known.has(id))]
+  }, [layoutById, visualLayout, widgetIds])
+
   const moveHint = shiftActive
     ? 'Hold shift to group'
     : 'Drag to new position'
@@ -659,7 +758,25 @@ export function DevelopEliteDashboardGrid({
       style={gridStyle}
       data-shift-active={shiftActive ? 'true' : 'false'}
       data-row-stride={String(Math.round(rowStridePx))}
+      onDragOver={onLibraryDragOver}
+      onDragLeave={onLibraryDragLeave}
+      onDrop={onLibraryDropEvent}
+      onPointerDown={e => {
+        if (layoutEditMode && e.target === e.currentTarget) onWidgetSelect?.(null)
+      }}
     >
+      {libraryPreview ? (
+        <div
+          className="develop-elite-grid-drop-preview develop-elite-grid-drop-preview--library"
+          style={{
+            gridColumn: `${libraryPreview.x + 1} / span ${libraryPreview.w}`,
+            gridRow: `${libraryPreview.y + 1} / span ${libraryPreview.h}`,
+            zIndex: 17,
+            pointerEvents: 'none',
+          }}
+          aria-hidden
+        />
+      ) : null}
       {placeholder ? (
         <div
           className="develop-elite-grid-drop-preview"
@@ -675,14 +792,14 @@ export function DevelopEliteDashboardGrid({
       {ghostRect && draggingId ? (
         <DevelopEliteGridDragGhost
           widgetId={draggingId}
-          label={developEliteGridWidgetLabel(draggingId)}
+          label={widgetLabel(draggingId)}
           rect={ghostRect}
         >
           {widgets[draggingId]}
         </DevelopEliteGridDragGhost>
       ) : null}
-      {widgetIds
-        .filter(id => widgets[id] != null && layoutById.has(id))
+      {renderIds
+        .filter(id => (widgets[resolveDevelopEliteGridWidgetContentId(id)] ?? widgets[id]) != null)
         .map(id => {
           const visualItem = layoutById.get(id)!
           const committedItem = committedById.get(id) ?? visualItem
@@ -692,8 +809,12 @@ export function DevelopEliteDashboardGrid({
           return (
             <div
               key={id}
-              className={`develop-elite-grid-item develop-elite-grid-item--cell${isResizing ? ' is-resizing' : ''}${isDragSource ? ' is-drag-source' : ''}${isStackTarget ? ' is-stack-target' : ''}`}
+              className={`develop-elite-grid-item develop-elite-grid-item--cell${isResizing ? ' is-resizing' : ''}${isDragSource ? ' is-drag-source' : ''}${isStackTarget ? ' is-stack-target' : ''}${layoutEditMode && selectedWidgetId === id ? ' is-selected' : ''}`}
               style={gridAreaStyle(visualItem)}
+              data-widget-id={id}
+              onPointerDownCapture={() => {
+                if (layoutEditMode) onWidgetSelect?.(id)
+              }}
             >
               <DevelopEliteGridCardControls
                 layoutEditMode={layoutEditMode}

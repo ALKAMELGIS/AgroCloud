@@ -171,6 +171,8 @@ export default function Home() {
 
   return (
     <div className="page home-page" style={homeBackgroundStyle}>
+      {/* Page heading for screen readers and outline; the visible page opens straight on the cards. */}
+      <h1 className="sr-only">{language === 'ar' ? 'الرئيسية' : 'Home'}</h1>
       {activeGroup ? (
         <div className="home-sublist-view fade-in">
           <div className="home-header">
