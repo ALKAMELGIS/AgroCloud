@@ -372,6 +372,7 @@ export default defineConfig({
               'agrocloud-pwa-logo.png',
               'agrocloud-logo.png',
               'agrocloud-logo-core.png',
+              'agrocloud-logo-leaf.png',
               'agrocloud-mark-leaves.png',
               'elite-agro-logo-white.png',
               'favicon.png',

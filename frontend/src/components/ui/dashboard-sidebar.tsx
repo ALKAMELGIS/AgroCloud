@@ -147,8 +147,8 @@ function WorkspaceSwitcher({
       >
         <span className="flex min-w-0 items-center gap-3">
           {'logoSrc' in current && current.logoSrc ? (
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-primary/10 ring-1 ring-primary/20">
-              <img src={current.logoSrc} alt="" className="h-7 w-7 object-contain" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center">
+              <img src={current.logoSrc} alt="" className="h-10 w-10 object-contain" />
             </span>
           ) : (
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-primary text-[13px] font-semibold text-primary-foreground shadow-sm">

@@ -144,7 +144,7 @@ export default function AppChrome({ children, onLogout }: { children: ReactNode;
     (ar ? systemSettings?.settings.headerSettings?.logoTextAr?.trim() : '') ||
     systemSettings?.settings.headerSettings?.logoText?.trim() ||
     'Elite AgroCloud'
-  const logoSrc = systemSettings?.settings.logoIcon?.trim() || `${import.meta.env.BASE_URL}agrocloud-logo-core.png`
+  const logoSrc = systemSettings?.settings.logoIcon?.trim() || `${import.meta.env.BASE_URL}agrocloud-logo-leaf.png`
   const workspaces = [
     { name: brand, subtitle: String(auth?.user?.role || auth?.user?.email || '').trim() || undefined, logoSrc },
   ]
