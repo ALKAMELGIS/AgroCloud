@@ -5,9 +5,9 @@ describe('developEliteDataSourceRegistry', () => {
   it('parses FeatureServer path into short label', () => {
     expect(
       developEliteArcGisUrlShortLabel(
-        'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/ArcGIS/rest/services/Irrigation_Pressure_Main_Pipe/FeatureServer/0',
+        'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/ArcGIS/rest/services/Irrigation_Pressure_Main_Pipe/FeatureServer/56',
       ),
-    ).toBe('Irrigation_Pressure_Main_Pipe /0')
+    ).toBe('Irrigation_Pressure_Main_Pipe /56')
   })
 
   it('groups irrigation sources together', () => {

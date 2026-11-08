@@ -32,23 +32,32 @@ function parseAgroStructuresServiceBase(layerUrl: string): string | null {
   return match ? match[1]! : null
 }
 
+/** Agro_Structures layer ids that are never the polygon layer (portal viewer id, crops tables). */
+const AGRO_STRUCTURES_NON_POLYGON_IDS = new Set([1, 27, 32])
+
 /**
- * REST query endpoints for Agro_Structures polygons.
- * Portal layer ids (e.g. /27) are not GeoJSON-queryable; layer 0/21 share Farm_Code with crops table /1.
+ * REST query endpoints for Agro_Structures polygons, best first.
+ * The polygon layer is /21 (older publishes used /0); portal viewer id /27 and the crops tables
+ * (/1, /32) are not polygon layers. A configured polygon id is tried first, then /21 and /0.
  */
 export function developEliteStructuresQueryLayerUrls(configLayerUrl: string): string[] {
   const trimmed = normalizeLayerEndpoint(configLayerUrl)
-  const serviceBase = parseAgroStructuresServiceBase(trimmed)
-  if (serviceBase) {
-    const layerId = Number(trimmed.split('/').pop())
-    if (layerId === 0) return [`${serviceBase}/0`]
-    if (layerId === 1) return [`${serviceBase}/0`]
-    return [`${serviceBase}/0`, `${serviceBase}/21`]
+  const serviceBase =
+    parseAgroStructuresServiceBase(trimmed) ??
+    parseAgroStructuresServiceBase(normalizeLayerEndpoint(resolveAgroStructuresLayerUrl(configLayerUrl)))
+  if (!serviceBase) {
+    const resolved = normalizeLayerEndpoint(resolveAgroStructuresLayerUrl(configLayerUrl))
+    return [resolved || AGRO_STRUCTURES_FS21_URL]
   }
-  const resolved = normalizeLayerEndpoint(resolveAgroStructuresLayerUrl(configLayerUrl))
-  const resolvedBase = parseAgroStructuresServiceBase(resolved)
-  if (resolvedBase) return [`${resolvedBase}/0`, `${resolvedBase}/21`]
-  return [resolved || AGRO_STRUCTURES_FS21_URL]
+  const layerId = Number(trimmed.split('/').pop())
+  const ids = [
+    ...(Number.isInteger(layerId) && !AGRO_STRUCTURES_NON_POLYGON_IDS.has(layerId) && trimmed.startsWith(serviceBase)
+      ? [layerId]
+      : []),
+    21,
+    0,
+  ]
+  return [...new Set(ids)].map(id => `${serviceBase}/${id}`)
 }
 
 /** Primary polygon layer URL used for queries (first candidate). */
@@ -58,6 +67,62 @@ export function resolveDevelopEliteFeatureLayerUrl(layerUrl: string): string {
 
 function layerQueryBase(layerUrl: string): string {
   return resolveDevelopEliteFeatureLayerUrl(layerUrl)
+}
+
+type ArcgisLayerKind = 'layer' | 'table'
+
+const liveLayerEndpointCache = new Map<string, Promise<string>>()
+
+function normalizeServiceName(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * Hosted FeatureServer layer ids change when a service is republished (Agro_Structures/0 → /21,
+ * Irrigation_Pressure_Main_Pipe/0 → /56). When the configured id no longer exists, pick the live
+ * layer (or table) of the same service — by name first, else the only/first one of that kind.
+ * Returns the input unchanged when it is valid, not a FeatureServer layer URL, or on network errors.
+ */
+export function resolveLiveArcgisLayerEndpoint(
+  layerUrl: string,
+  kind: ArcgisLayerKind = 'layer',
+  token?: string,
+): Promise<string> {
+  const endpoint = normalizeLayerEndpoint(layerUrl)
+  const match = endpoint.match(/^(.*\/([^/]+)\/featureserver)\/(\d+)$/i)
+  if (!match) return Promise.resolve(endpoint)
+  const key = `${kind}|${endpoint.toLowerCase()}`
+  const cached = liveLayerEndpointCache.get(key)
+  if (cached) return cached
+  const [, serviceBase, serviceName] = match as unknown as [string, string, string, string]
+  const pending = (async () => {
+    try {
+      const probe = (await (await fetch(appendToken(`${endpoint}?f=json`, token))).json()) as {
+        error?: unknown
+        id?: number
+      }
+      if (!probe?.error) return endpoint
+      const service = (await (await fetch(appendToken(`${serviceBase}?f=json`, token))).json()) as {
+        layers?: Array<{ id: number; name?: string }>
+        tables?: Array<{ id: number; name?: string }>
+      }
+      const pool = (kind === 'table' ? service.tables : service.layers) ?? []
+      if (!pool.length) return endpoint
+      const wanted = normalizeServiceName(serviceName)
+      const byName = pool.find(l => normalizeServiceName(String(l.name ?? '')) === wanted)
+      return `${serviceBase}/${(byName ?? pool[0]!).id}`
+    } catch {
+      liveLayerEndpointCache.delete(key)
+      return endpoint
+    }
+  })()
+  liveLayerEndpointCache.set(key, pending)
+  return pending
+}
+
+/** Test hook. */
+export function clearLiveArcgisLayerEndpointCache(): void {
+  liveLayerEndpointCache.clear()
 }
 
 function isRetryableQueryHttpError(err: unknown): boolean {
@@ -136,6 +201,11 @@ export async function fetchFeatureLayerGeoJson(
       if (!isRetryableQueryHttpError(lastError)) throw lastError
     }
   }
+  // Every known id failed — the service may have been republished under a new layer id.
+  const live = candidates[0] ? await resolveLiveArcgisLayerEndpoint(candidates[0], 'layer', token) : ''
+  if (live && !candidates.some(c => normalizeLayerEndpoint(c).toLowerCase() === live.toLowerCase())) {
+    return fetchFeatureLayerGeoJsonFromEndpoint(live, token, signal)
+  }
   throw lastError ?? new Error('Feature layer query failed')
 }
 
@@ -145,7 +215,7 @@ export async function fetchArcgisFeatureLayerGeoJsonExact(
   token?: string,
   signal?: AbortSignal,
 ): Promise<GeoJSON.FeatureCollection> {
-  const endpoint = normalizeLayerEndpoint(layerUrl)
+  const endpoint = await resolveLiveArcgisLayerEndpoint(layerUrl, 'layer', token)
   return fetchFeatureLayerGeoJsonFromEndpoint(endpoint, token, signal)
 }
 
@@ -166,10 +236,11 @@ export async function fetchArcGisTableRows(
   signal?: AbortSignal,
 ): Promise<ArcGisTableRow[]> {
   const rows: ArcGisTableRow[] = []
+  const liveTableUrl = await resolveLiveArcgisLayerEndpoint(tableUrl, 'table', token)
   let offset = 0
   for (let page = 0; page < MAX_PAGES; page++) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    const res = await fetch(buildTableQueryUrl(tableUrl, offset, token), { signal })
+    const res = await fetch(buildTableQueryUrl(liveTableUrl, offset, token), { signal })
     if (!res.ok) throw new Error(`Table query failed (${res.status})`)
     const data = (await res.json()) as {
       features?: Array<{ attributes?: ArcGisTableRow }>
@@ -235,7 +306,7 @@ export async function fetchArcgisLayerDrawingInfoExact(
   token?: string,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const endpoint = normalizeLayerEndpoint(layerUrl)
+    const endpoint = await resolveLiveArcgisLayerEndpoint(layerUrl, 'layer', token)
     const url = appendToken(`${endpoint}?f=pjson`, token)
     const res = await fetch(url)
     if (!res.ok) return null
@@ -257,7 +328,7 @@ export async function fetchFeatureLayerDrawingInfo(
   token?: string,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const url = appendToken(`${layerQueryBase(layerUrl)}?f=pjson`, token)
+    const url = appendToken(`${await resolveLiveArcgisLayerEndpoint(layerQueryBase(layerUrl), 'layer', token)}?f=pjson`, token)
     const res = await fetch(url)
     if (!res.ok) return null
     const data = (await res.json()) as { drawingInfo?: unknown; error?: { message?: string } }
@@ -281,7 +352,7 @@ export async function fetchStructuresCountryLabelMap(
 ): Promise<Map<string, string>> {
   const merged = new Map<string, string>()
   try {
-    const url = appendToken(`${layerQueryBase(layerUrl)}?f=pjson`, token)
+    const url = appendToken(`${await resolveLiveArcgisLayerEndpoint(layerQueryBase(layerUrl), 'layer', token)}?f=pjson`, token)
     const res = await fetch(url)
     if (res.ok) {
       const data = (await res.json()) as Record<string, unknown>
@@ -300,7 +371,7 @@ export async function fetchStructuresCountryLabelMap(
 
 export async function fetchCropsTableMeta(tableUrl: string): Promise<DevelopEliteLayerMeta> {
   try {
-    const res = await fetch(`${tableUrl.replace(/\/+$/, '')}?f=pjson`)
+    const res = await fetch(`${await resolveLiveArcgisLayerEndpoint(tableUrl, 'table')}?f=pjson`)
     if (!res.ok) return developEliteEmptyLayerMeta()
     const data = (await res.json()) as { fields?: Array<{ name?: string; domain?: { codedValues?: ArcGisCodedValue[] } }> }
     const fieldDomainLabels = collectAllFieldDomainLabels(data.fields)

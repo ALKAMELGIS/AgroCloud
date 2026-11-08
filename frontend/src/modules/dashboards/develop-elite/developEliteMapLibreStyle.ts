@@ -12,10 +12,15 @@ export function isDevelopEliteMapLibreStyleReady(map: MaplibreMap | null | undef
   }
 }
 
+/**
+ * True when the layer exists. Deliberately does not require `isStyleLoaded()`: that flips to false
+ * while any GeoJSON source is re-parsing, which made existing layers look missing and the next
+ * `addLayer` throw "already exists" — aborting the rest of the overlay sync.
+ */
 export function developEliteMapLibreHasLayer(map: MaplibreMap | null | undefined, layerId: string): boolean {
-  if (!isDevelopEliteMapLibreStyleReady(map)) return false
+  if (!map) return false
   try {
-    return Boolean(map!.getLayer(layerId))
+    return Boolean(map.getLayer(layerId))
   } catch {
     return false
   }

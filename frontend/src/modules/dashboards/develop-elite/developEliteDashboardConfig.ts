@@ -66,10 +66,10 @@ export function normalizeDevelopEliteBasemapId(stored: unknown): string {
 }
 
 export const DEFAULT_DEVELOP_ELITE_STRUCTURES_URL =
-  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Agro_Structures/FeatureServer/0'
+  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Agro_Structures/FeatureServer/21'
 
 export const DEFAULT_DEVELOP_ELITE_CROPS_TABLE_URL =
-  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Agro_Structures/FeatureServer/1'
+  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Agro_Structures/FeatureServer/32'
 
 /** Zone catalog. Each feature's Name is the list label; ZONE_ID joins farms when present. */
 export const DEFAULT_DEVELOP_ELITE_ZONES_LAYER_URL =
@@ -88,9 +88,9 @@ export const DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL =
 export const DEFAULT_DEVELOP_ELITE_IRRIGATION_VALVES_LAYER_URL =
   'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Irrigation_System_Valve/FeatureServer/0'
 
-/** Irrigation pressure main pipe lines (FeatureServer /0). */
+/** Irrigation pressure main pipe lines (FeatureServer /56). */
 export const DEFAULT_DEVELOP_ELITE_IRRIGATION_MAIN_PIPE_LAYER_URL =
-  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/ArcGIS/rest/services/Irrigation_Pressure_Main_Pipe/FeatureServer/0'
+  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/ArcGIS/rest/services/Irrigation_Pressure_Main_Pipe/FeatureServer/56'
 
 export type DevelopEliteKpiSource =
   | 'totalAreaHa'
@@ -522,28 +522,29 @@ export function saveDevelopEliteDashboardConfig(config: DevelopEliteDashboardCon
   }
 }
 
-/** Crops attribute table is layer 1; layer 0 is structures polygons only. */
+/**
+ * The crops table is a separate table of the Agro_Structures service (currently /32); a crops URL
+ * pointing at the structures polygon layer itself is a misconfiguration.
+ */
 export function repairDevelopEliteCropsTableUrl(structuresUrl: string, cropsUrl: string): string {
   const crops = cropsUrl.trim() || DEFAULT_DEVELOP_ELITE_CROPS_TABLE_URL
-  const norm = crops.replace(/\/+$/, '')
-  const structuresNorm = structuresUrl.replace(/\/+$/, '')
-  if (norm.endsWith('/FeatureServer/0') && structuresNorm.endsWith('/FeatureServer/0')) {
-    return DEFAULT_DEVELOP_ELITE_CROPS_TABLE_URL
-  }
+  const norm = crops.replace(/\/+$/, '').toLowerCase()
+  const structuresNorm = structuresUrl.replace(/\/+$/, '').toLowerCase()
+  if (norm === structuresNorm) return DEFAULT_DEVELOP_ELITE_CROPS_TABLE_URL
   return crops
 }
 
-/** Portal viewer layer /27 is not queryable — use Agro_Structures FS/0 (polygons). */
+/** Portal viewer layer /27 is not queryable — use the Agro_Structures polygon layer (FS/21). */
 export function normalizeDevelopEliteStructuresLayerUrl(url: string): string {
   const trimmed = String(url || '').trim()
   const norm = (trimmed || DEFAULT_DEVELOP_ELITE_STRUCTURES_URL).replace(/\/+$/, '')
   if (/\/FeatureServer\/27$/i.test(norm)) {
-    return norm.replace(/\/27$/i, '/0')
+    return norm.replace(/\/27$/i, '/21')
   }
   return norm
 }
 
-/** Canonical polygon layer URL for queries (legacy /27 → FS/0). */
+/** Canonical polygon layer URL for queries (legacy /27 → FS/21). */
 export function resolveDevelopEliteStructuresQueryUrl(configUrl: string): string {
   return normalizeDevelopEliteStructuresLayerUrl(configUrl)
 }

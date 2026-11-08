@@ -1,5 +1,5 @@
 {
-  "total": 119,
+  "total": 114,
   "files": {
     "src/modules/ai/agent/geoAiMapLayerSources.ts": 2,
     "src/modules/ai/agent/geoAiResolveTableMapLink.ts": 1,
@@ -9,7 +9,6 @@
     "src/modules/dashboards/develop-elite/DevelopEliteCharts.tsx": 2,
     "src/modules/dashboards/develop-elite/developEliteKpiEngine.test.ts": 1,
     "src/modules/dashboards/develop-elite/developEliteMapIntelPick.ts": 2,
-    "src/modules/dashboards/develop-elite/developEliteMapLibreOverlays.ts": 5,
     "src/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries.ts": 1,
     "src/modules/dashboards/gis/agroCloudPlatform/hooks/useAcpPortalMapLayers.ts": 1,
     "src/modules/dashboards/gis/agroCloudPlatform/map/AcpImageryTimeSeriesPanel.tsx": 3,

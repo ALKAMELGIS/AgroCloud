@@ -16,3 +16,9 @@ test('CSP keeps the hardening directives', () => {
   assert.match(csp, /object-src 'none'/)
   assert.match(csp, /frame-ancestors 'self'/)
 })
+
+test('CSP lets the app embed HTTPS dashboards (ArcGIS, Windy) but not plain-HTTP frames', () => {
+  const frame = directive(buildContentSecurityPolicy(), 'frame-src')
+  assert.match(frame, /\shttps:(\s|$)/, 'ArcGIS Dashboards / Settings → Pages iframes were blocked')
+  assert.ok(!/\shttp:(\s|$)/.test(frame))
+})

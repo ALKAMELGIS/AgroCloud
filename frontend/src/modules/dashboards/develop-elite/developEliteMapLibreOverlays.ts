@@ -213,26 +213,41 @@ function ensureGeoJsonSource(map: MaplibreMap, id: string, data: GeoJSON.Feature
 
 type LayerFilter = readonly unknown[]
 
+/** Line properties MapLibre treats as layout, not paint (passing them as paint fails validation). */
+const LINE_LAYOUT_KEYS = new Set(['line-cap', 'line-join', 'line-miter-limit', 'line-round-limit'])
+
+/** Split mixed line style props into MapLibre's paint/layout groups. */
+export function splitDevelopEliteLinePaint(props: Record<string, unknown>): {
+  paint: Record<string, unknown>
+  layout: Record<string, unknown>
+} {
+  const paint: Record<string, unknown> = {}
+  const layout: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(props)) (LINE_LAYOUT_KEYS.has(k) ? layout : paint)[k] = v
+  return { paint, layout }
+}
+
+/** `filter: undefined` fails MapLibre validation ("array expected") — only set it when present. */
+function withFilter<T extends object>(spec: T, filter?: LayerFilter): T {
+  return filter ? { ...spec, filter: filter as Parameters<MaplibreMap['setFilter']>[1] } : spec
+}
+
 function ensureLineLayer(
   map: MaplibreMap,
   id: string,
   source: string,
-  paint: Record<string, unknown>,
+  props: Record<string, unknown>,
   filter?: LayerFilter,
   beforeId?: string,
 ) {
+  const { paint, layout } = splitDevelopEliteLinePaint(props)
   if (developEliteMapLibreHasLayer(map, id)) {
     Object.entries(paint).forEach(([k, v]) => map.setPaintProperty(id, k, v))
+    Object.entries(layout).forEach(([k, v]) => map.setLayoutProperty(id, k, v))
     return
   }
   map.addLayer(
-    {
-      id,
-      type: 'line',
-      source,
-      filter: filter as Parameters<MaplibreMap['setFilter']>[1],
-      paint,
-    },
+    withFilter({ id, type: 'line' as const, source, paint, layout }, filter) as Parameters<MaplibreMap['addLayer']>[0],
     beforeId,
   )
 }
@@ -250,13 +265,7 @@ function ensureFillExtrusionLayer(
     return
   }
   map.addLayer(
-    {
-      id,
-      type: 'fill-extrusion',
-      source,
-      filter: filter as Parameters<MaplibreMap['setFilter']>[1],
-      paint,
-    },
+    withFilter({ id, type: 'fill-extrusion' as const, source, paint }, filter) as Parameters<MaplibreMap['addLayer']>[0],
     beforeId,
   )
 }
@@ -274,13 +283,7 @@ function ensureFillLayer(
     return
   }
   map.addLayer(
-    {
-      id,
-      type: 'fill',
-      source,
-      filter: filter as Parameters<MaplibreMap['setFilter']>[1],
-      paint,
-    },
+    withFilter({ id, type: 'fill' as const, source, paint }, filter) as Parameters<MaplibreMap['addLayer']>[0],
     beforeId,
   )
 }
@@ -298,13 +301,7 @@ function ensureCircleLayer(
     return
   }
   map.addLayer(
-    {
-      id,
-      type: 'circle',
-      source,
-      filter: filter as Parameters<MaplibreMap['setFilter']>[1],
-      paint,
-    },
+    withFilter({ id, type: 'circle' as const, source, paint }, filter) as Parameters<MaplibreMap['addLayer']>[0],
     beforeId,
   )
 }
@@ -324,14 +321,7 @@ function ensureSymbolLayer(
     return
   }
   map.addLayer(
-    {
-      id,
-      type: 'symbol',
-      source,
-      filter: filter as Parameters<MaplibreMap['setFilter']>[1],
-      layout,
-      paint,
-    },
+    withFilter({ id, type: 'symbol' as const, source, layout, paint }, filter) as Parameters<MaplibreMap['addLayer']>[0],
     beforeId,
   )
 }

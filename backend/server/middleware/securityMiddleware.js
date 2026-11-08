@@ -22,6 +22,7 @@ function resolveTrustedConnectHosts() {
  * - App scripts/styles/fonts are self-hosted (no CDN libraries).
  * - Map tiles, ArcGIS, Sentinel, weather APIs use HTTPS connect/img (no mixed content).
  * - Media: self, blob: and www.esri.com (login/splash videos) only.
+ * - Frames: any HTTPS page (admin-configured embeds); nobody else may frame the app.
  * - Inline scripts in index.html require 'unsafe-inline' (hash nonces can replace later).
  */
 export function buildContentSecurityPolicy() {
@@ -44,7 +45,9 @@ export function buildContentSecurityPolicy() {
     `connect-src ${connectSrc}`,
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
-    "frame-src 'self' https://accounts.google.com https://www.dropbox.com https://onedrive.live.com",
+    // The app embeds external HTTPS pages the admin configures (ArcGIS Dashboards, Windy, Settings → Pages),
+    // so any HTTPS frame source is allowed. Being framed BY others is still blocked by frame-ancestors.
+    "frame-src 'self' https:",
     'upgrade-insecure-requests',
   ]
 
