@@ -4,14 +4,30 @@ import { Link } from 'react-router-dom'
 
 import { opsApi, type OpsListItem, type OpsSettings } from '../api'
 import { useOps, useOpsText } from '../opsContext'
+import { AuditLog, PermissionsEditor } from './OpsAccessPanels'
 
-type Tab = { kind: 'list'; key: string } | { kind: 'report' } | { kind: 'limits' }
+type Tab = { kind: 'list'; key: string } | { kind: 'report' } | { kind: 'limits' } | { kind: 'permissions' } | { kind: 'audit' }
 
 export default function OpsSettingsPage() {
-  const { schema, t, reload } = useOps()
+  const { schema, t, reload, canAdmin } = useOps()
   const tx = useOpsText()
-  const [tab, setTab] = useState<Tab>({ kind: 'report' })
+  const may = { settings: canAdmin('settings'), lists: canAdmin('lists'), audit: canAdmin('audit') }
+  const [tab, setTab] = useState<Tab>(() =>
+    may.settings ? { kind: 'report' } : may.audit ? { kind: 'audit' } : may.lists && schema?.lists[0] ? { kind: 'list', key: schema.lists[0].key } : { kind: 'report' },
+  )
   if (!schema) return null
+  if (!may.settings && !may.lists && !may.audit) {
+    return (
+      <div className="ops">
+        <div className="ops-alert" role="alert">
+          {tx('Your role cannot open the forms settings.', 'دورك لا يسمح بفتح إعدادات الاستمارات.')}
+        </div>
+        <Link to="/ops" className="ops-btn">
+          {tx('Back to forms', 'العودة للاستمارات')}
+        </Link>
+      </div>
+    )
+  }
   return (
     <div className="ops">
       <div className="ops-head">
@@ -20,18 +36,35 @@ export default function OpsSettingsPage() {
             {tx('Operations forms', 'استمارات العمليات')} /
           </Link>
           <h1>{tx('Settings & lists', 'الإعدادات والقوائم')}</h1>
-          <p>{tx('Report headers, quality limits and the lookup lists used by every form.', 'رؤوس التقارير وحدود الجودة والقوائم المستخدمة في كل الاستمارات.')}</p>
+          <p>{tx('Report headers, quality limits, lookup lists, permissions and the audit log.', 'رؤوس التقارير وحدود الجودة والقوائم والصلاحيات وسجل التدقيق.')}</p>
         </div>
       </div>
       <div className="ops-settings">
         <nav aria-label={tx('Settings sections', 'أقسام الإعدادات')}>
-          <button type="button" className={tab.kind === 'report' ? 'is-active' : ''} onClick={() => setTab({ kind: 'report' })}>
-            {tx('Report header', 'رأس التقارير')}
-          </button>
-          <button type="button" className={tab.kind === 'limits' ? 'is-active' : ''} onClick={() => setTab({ kind: 'limits' })}>
-            {tx('EC / pH limits', 'حدود EC / pH')}
-          </button>
-          {schema.lists.map(l => (
+          {may.settings || may.audit ? <div className="ops-nav-group">{tx('Administration', 'الإدارة')}</div> : null}
+          {may.settings ? (
+            <button type="button" className={tab.kind === 'permissions' ? 'is-active' : ''} onClick={() => setTab({ kind: 'permissions' })}>
+              {tx('Permissions', 'الصلاحيات')}
+            </button>
+          ) : null}
+          {may.audit ? (
+            <button type="button" className={tab.kind === 'audit' ? 'is-active' : ''} onClick={() => setTab({ kind: 'audit' })}>
+              {tx('Audit log', 'سجل التدقيق')}
+            </button>
+          ) : null}
+          {may.settings ? (
+            <>
+              <div className="ops-nav-group">{tx('Reports & quality', 'التقارير والجودة')}</div>
+              <button type="button" className={tab.kind === 'report' ? 'is-active' : ''} onClick={() => setTab({ kind: 'report' })}>
+                {tx('Report header', 'رأس التقارير')}
+              </button>
+              <button type="button" className={tab.kind === 'limits' ? 'is-active' : ''} onClick={() => setTab({ kind: 'limits' })}>
+                {tx('EC / pH limits', 'حدود EC / pH')}
+              </button>
+            </>
+          ) : null}
+          {may.lists ? <div className="ops-nav-group">{tx('Lookup lists', 'القوائم')}</div> : null}
+          {(may.lists ? schema.lists : []).map(l => (
             <button key={l.key} type="button" className={tab.kind === 'list' && tab.key === l.key ? 'is-active' : ''} onClick={() => setTab({ kind: 'list', key: l.key })}>
               {t(l.label)}
               <span>{schema.listItems[l.key]?.length ?? 0}</span>
@@ -39,8 +72,10 @@ export default function OpsSettingsPage() {
           ))}
         </nav>
         <section className="ops-card" style={{ minWidth: 0 }}>
-          {tab.kind === 'report' ? <ReportSettings settings={schema.settings} onSaved={reload} /> : null}
-          {tab.kind === 'limits' ? <LimitSettings settings={schema.settings} onSaved={reload} /> : null}
+          {tab.kind === 'permissions' && may.settings ? <PermissionsEditor onSaved={reload} /> : null}
+          {tab.kind === 'audit' && may.audit ? <AuditLog /> : null}
+          {tab.kind === 'report' && may.settings ? <ReportSettings settings={schema.settings} onSaved={reload} /> : null}
+          {tab.kind === 'limits' && may.settings ? <LimitSettings settings={schema.settings} onSaved={reload} /> : null}
           {tab.kind === 'list' ? <ListEditor key={tab.key} listKey={tab.key} items={schema.listItems[tab.key] ?? []} metaKeys={schema.lists.find(l => l.key === tab.key)?.meta ?? []} onChanged={reload} /> : null}
         </section>
       </div>

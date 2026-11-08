@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { useLanguage } from '@/core/localization/i18n'
-import { opsApi, type Bilingual, type OpsField, type OpsForm, type OpsSchema } from './api'
+import { opsApi, type Bilingual, type OpsAdminAction, type OpsField, type OpsForm, type OpsFormAction, type OpsSchema } from './api'
 
 type Ctx = {
   schema: OpsSchema | null
@@ -10,6 +10,9 @@ type Ctx = {
   reload: () => Promise<void>
   lang: 'en' | 'ar'
   t: (b: Bilingual | string) => string
+  /** Per-form right for the signed-in role (from the server's permissions matrix). */
+  can: (formId: string, action: OpsFormAction) => boolean
+  canAdmin: (action: OpsAdminAction) => boolean
 }
 
 const OpsCtx = createContext<Ctx | null>(null)
@@ -45,6 +48,8 @@ export function OpsProvider({ children }: { children: ReactNode }) {
       reload,
       lang,
       t: b => (typeof b === 'string' ? b : b[lang] || b.en),
+      can: (formId, action) => Boolean(schema?.me?.rights.forms[formId]?.includes(action)),
+      canAdmin: action => Boolean(schema?.me?.rights.admin.includes(action)),
     }),
     [error, lang, loading, reload, schema],
   )

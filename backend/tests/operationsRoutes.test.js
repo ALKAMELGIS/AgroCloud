@@ -32,10 +32,10 @@ test.after(() => {
   closeDatabase()
 })
 
-async function call(method, path, body) {
+async function call(method, path, body, role = 'Admin', user = 'tester') {
   const res = await fetch(base + path, {
     method,
-    headers: { 'content-type': 'application/json', 'x-agrocloud-user': 'tester' },
+    headers: { 'content-type': 'application/json', 'x-agrocloud-user': user, 'x-agrocloud-role': role },
     body: body ? JSON.stringify(body) : undefined,
   })
   return { status: res.status, body: await res.json() }
@@ -197,4 +197,65 @@ test('lists and settings round-trip', async () => {
   assert.equal(s.body.settings.ecPhLimits.phMax, 7)
   assert.equal(s.body.settings.ecPhLimits.phMin, 5.5)
   assert.equal(s.body.settings.bogus, undefined)
+})
+
+test('role permissions are enforced and editable; Admin keeps every right', async () => {
+  const rec = { harvest_date: '2026-02-01', product: 'Tomato', location: 'NH 09', segment: 'perm', quantity_kg: 5 }
+  // Viewer: read + export only
+  assert.equal((await call('GET', '/forms/harvest/records', undefined, 'Viewer')).status, 200)
+  assert.equal((await call('POST', '/forms/harvest/records', rec, 'Viewer')).status, 403)
+  assert.equal((await call('POST', '/forms/harvest/import', { rows: [rec] }, 'Viewer')).status, 403)
+  assert.equal((await call('GET', '/audit', undefined, 'Viewer')).status, 403)
+  // Editor: can add and edit but not delete or manage lists/settings
+  const created = await call('POST', '/forms/harvest/records', rec, 'Editor', 'editor@farm')
+  assert.equal(created.status, 201)
+  const id = created.body.record.id
+  assert.equal((await call('PUT', `/forms/harvest/records/${id}`, { quantity_kg: 6 }, 'Editor')).status, 200)
+  assert.equal((await call('DELETE', `/forms/harvest/records/${id}`, undefined, 'Editor')).status, 403)
+  assert.equal((await call('POST', '/lists/crops', { value: 'Okra' }, 'Editor')).status, 403)
+  assert.equal((await call('PUT', '/settings', { autoAddListValues: false }, 'Editor')).status, 403)
+  // Manager: delete yes, settings no
+  assert.equal((await call('DELETE', `/forms/harvest/records/${id}`, undefined, 'Manager')).status, 200)
+  assert.equal((await call('PUT', '/settings', { autoAddListValues: true }, 'Manager')).status, 403)
+
+  // schema tells the client who it is
+  const me = (await call('GET', '/schema', undefined, 'editor', 'editor@farm')).body.me
+  assert.equal(me.role, 'Editor')
+  assert.equal(me.actor, 'editor@farm')
+  assert.deepEqual(me.rights.forms.harvest, ['view', 'create', 'edit', 'import', 'export'])
+
+  // Admin takes "create" away from Editors on harvest — and cannot take anything from Admin
+  const matrix = (await call('GET', '/settings')).body.settings.permissions
+  matrix.Editor.forms.harvest = ['view']
+  matrix.Admin.forms.harvest = []
+  matrix.Admin.admin = []
+  const saved = (await call('PUT', '/settings', { permissions: matrix })).body.settings.permissions
+  assert.deepEqual(saved.Editor.forms.harvest, ['view'])
+  assert.equal(saved.Admin.forms.harvest.length, 6)
+  assert.deepEqual(saved.Admin.admin, ['lists', 'settings', 'audit'])
+  assert.equal((await call('POST', '/forms/harvest/records', { ...rec, segment: 'p2' }, 'Editor')).status, 403)
+  assert.equal((await call('POST', '/forms/ec_ph/records', { record_date: '2026-02-01', location: 'NH 09', valve: '1' }, 'Editor')).status, 201)
+  // a write right without view gets view added
+  matrix.Viewer.forms.ppp = ['export']
+  const fixed = (await call('PUT', '/settings', { permissions: matrix })).body.settings.permissions
+  assert.deepEqual(fixed.Viewer.forms.ppp, ['view', 'export'])
+  // reset
+  await call('PUT', '/settings', { permissions: {} })
+})
+
+test('audit log lists every change with filters, including settings and lists', async () => {
+  const all = await call('GET', '/audit?pageSize=500')
+  assert.equal(all.status, 200)
+  const actions = new Set(all.body.rows.map((r) => r.action))
+  for (const a of ['create', 'update', 'delete', 'import', 'settings', 'list-add', 'list-delete']) assert.ok(actions.has(a), a)
+  const byEditor = await call('GET', '/audit?actor=editor%40farm')
+  assert.ok(byEditor.body.total >= 1)
+  assert.ok(byEditor.body.rows.every((r) => r.actor === 'editor@farm'))
+  assert.ok(all.body.actors.some((a) => a.actor === 'editor@farm'))
+  const deletes = await call('GET', '/audit?form=harvest&action=delete')
+  assert.ok(deletes.body.rows.every((r) => r.form === 'harvest' && r.action === 'delete'))
+  const paged = await call('GET', '/audit?pageSize=2&page=2')
+  assert.equal(paged.body.rows.length, 2)
+  const future = await call('GET', '/audit?from=2999-01-01')
+  assert.equal(future.body.total, 0)
 })

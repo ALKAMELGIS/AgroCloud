@@ -5,6 +5,7 @@
 import { getDatabase } from '../database/connection.js'
 import { applyComputed } from './operationsCompute.js'
 import { DEFAULT_SETTINGS, FORMS, MASTER_LISTS, getForm } from './formSchemas.js'
+import { normalizePermissions } from './opsPermissions.js'
 
 export class OpsError extends Error {
   constructor(status, message, details) {
@@ -137,17 +138,25 @@ export function getSettings() {
     company: { ...DEFAULT_SETTINGS.company, ...(stored.company ?? {}) },
     ecPhLimits: { ...DEFAULT_SETTINGS.ecPhLimits, ...(stored.ecPhLimits ?? {}) },
     forms: stored.forms ?? {},
+    permissions: normalizePermissions(stored.permissions),
   }
 }
 
 export function saveSettings(patch, actor) {
-  const allowed = ['company', 'ecPhLimits', 'autoAddListValues', 'forms']
+  const allowed = ['company', 'ecPhLimits', 'autoAddListValues', 'forms', 'permissions']
   const stmt = db().prepare(
     `INSERT INTO ops_settings (key, value, updated_at, updated_by) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
   )
   db().transaction(() => {
-    for (const key of allowed) if (key in (patch ?? {})) stmt.run(key, JSON.stringify(patch[key]), actor)
+    const changed = []
+    for (const key of allowed) {
+      if (!(key in (patch ?? {}))) continue
+      const value = key === 'permissions' ? normalizePermissions(patch[key]) : patch[key]
+      stmt.run(key, JSON.stringify(value), actor)
+      changed.push(key)
+    }
+    if (changed.length) auditSystem('_settings', 'settings', actor, { keys: changed })
   })()
   return getSettings()
 }
@@ -165,7 +174,7 @@ export function getMasterLists() {
   return out
 }
 
-export function upsertMasterItem(listKey, item) {
+export function upsertMasterItem(listKey, item, actor) {
   if (!listKeyValid(listKey)) throw new OpsError(404, `Unknown list "${listKey}".`)
   const value = coerceText(item?.value)
   if (!value) throw new OpsError(400, 'Value is required.')
@@ -175,17 +184,21 @@ export function upsertMasterItem(listKey, item) {
       .prepare('UPDATE ops_master_items SET value = ?, label_ar = ?, meta = ?, active = ?, sort_order = ? WHERE id = ? AND list_key = ?')
       .run(value, coerceText(item.labelAr), meta, item.active === false ? 0 : 1, Number(item.sortOrder) || 0, item.id, listKey)
     if (!res.changes) throw new OpsError(404, 'Item not found.')
+    auditSystem('_lists', 'list-update', actor, { list: listKey, value })
     return item.id
   }
   const res = db()
     .prepare('INSERT INTO ops_master_items (list_key, value, label_ar, meta, active, sort_order) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(list_key, value) DO UPDATE SET active = 1')
     .run(listKey, value, coerceText(item.labelAr), meta, item.active === false ? 0 : 1, Number(item.sortOrder) || 0)
+  auditSystem('_lists', 'list-add', actor, { list: listKey, value })
   return Number(res.lastInsertRowid)
 }
 
-export function deleteMasterItem(listKey, id) {
+export function deleteMasterItem(listKey, id, actor) {
+  const row = db().prepare('SELECT value FROM ops_master_items WHERE id = ? AND list_key = ?').get(id, listKey)
   const res = db().prepare('DELETE FROM ops_master_items WHERE id = ? AND list_key = ?').run(id, listKey)
   if (!res.changes) throw new OpsError(404, 'Item not found.')
+  auditSystem('_lists', 'list-delete', actor, { list: listKey, value: row?.value ?? null })
 }
 
 /** Add values used in records to their lookup lists (when the setting is on). */
@@ -205,6 +218,54 @@ function rememberListValues(form, records) {
 }
 
 /* ------------------------------------------------------------------ audit */
+
+/** Settings / list changes are audited under pseudo-forms `_settings` and `_lists`. */
+function auditSystem(kind, action, actor, changes) {
+  db()
+    .prepare('INSERT INTO ops_audit (form, record_id, action, actor, changes) VALUES (?, NULL, ?, ?, ?)')
+    .run(kind, action, actor ?? null, changes ? JSON.stringify(changes) : null)
+}
+
+/** Paged audit log across every form: filters form, actor, action, from/to (dates), q (text). */
+export function listAudit(qs = {}) {
+  const where = []
+  const args = []
+  if (qs.form) {
+    where.push('form = ?')
+    args.push(String(qs.form))
+  }
+  if (qs.actor) {
+    where.push('actor = ?')
+    args.push(String(qs.actor))
+  }
+  if (qs.action) {
+    where.push('action = ?')
+    args.push(String(qs.action))
+  }
+  if (qs.from && /^\d{4}-\d{2}-\d{2}$/.test(qs.from)) {
+    where.push('at >= ?')
+    args.push(`${qs.from}T00:00:00`)
+  }
+  if (qs.to && /^\d{4}-\d{2}-\d{2}$/.test(qs.to)) {
+    where.push('at <= ?')
+    args.push(`${qs.to}T23:59:59.999Z`)
+  }
+  if (qs.q) {
+    where.push('(changes LIKE ? OR actor LIKE ? OR CAST(record_id AS TEXT) = ?)')
+    const like = `%${String(qs.q)}%`
+    args.push(like, like, String(qs.q))
+  }
+  const sql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const pageSize = Math.min(Math.max(Number(qs.pageSize) || 50, 1), 500)
+  const page = Math.max(Number(qs.page) || 1, 1)
+  const total = db().prepare(`SELECT COUNT(*) AS n FROM ops_audit ${sql}`).get(...args).n
+  const rows = db()
+    .prepare(`SELECT id, form, record_id AS recordId, action, actor, at, changes FROM ops_audit ${sql} ORDER BY id DESC LIMIT ? OFFSET ?`)
+    .all(...args, pageSize, (page - 1) * pageSize)
+    .map((r) => ({ ...r, changes: r.changes ? JSON.parse(r.changes) : null }))
+  const actors = db().prepare('SELECT actor, COUNT(*) AS n FROM ops_audit WHERE actor IS NOT NULL GROUP BY actor ORDER BY n DESC LIMIT 200').all()
+  return { rows, total, page, pageSize, actors }
+}
 
 function audit(form, recordId, action, actor, changes) {
   db()

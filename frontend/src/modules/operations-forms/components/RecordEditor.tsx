@@ -40,7 +40,7 @@ function toInputValue(f: OpsField, v: unknown): string {
 }
 
 export function RecordEditor({ form, recordId, query, initialValues, onClose, onSaved, onDeleted, onNavigate, onDuplicate }: Props) {
-  const { schema, t, lang } = useOps()
+  const { schema, t, lang, can } = useOps()
   const tx = useOpsText()
   const [values, setValuesRaw] = useState<Record<string, unknown>>(() => ({ ...emptyValues(form), ...(initialValues ?? {}) }))
   /** Values the record started from (loaded, blank, or carried over by Save & new) — "unsaved" means different from these. */
@@ -60,6 +60,10 @@ export function RecordEditor({ form, recordId, query, initialValues, onClose, on
   const firstInputRef = useRef<HTMLDivElement>(null)
 
   const isNew = recordId == null
+  const mayCreate = can(form.id, 'create')
+  const mayDelete = can(form.id, 'delete')
+  /** Can the fields be changed at all: a new record needs create, an existing one edit. */
+  const writable = isNew ? mayCreate : can(form.id, 'edit')
   const deleted = !!original?.deleted_at
 
   useEffect(() => {
@@ -162,15 +166,15 @@ export function RecordEditor({ form, recordId, query, initialValues, onClose, on
       if (!(e.ctrlKey || e.metaKey) || busy || deleted) return
       if (e.key.toLowerCase() === 's') {
         e.preventDefault()
-        void save('save')
-      } else if (e.key === 'Enter') {
+        if (writable) void save('save')
+      } else if (e.key === 'Enter' && writable && mayCreate) {
         e.preventDefault()
         void save('save-new')
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [busy, deleted, save])
+  }, [busy, deleted, save, writable, mayCreate])
 
   const go = (id: number | null) => {
     if (id == null) return
@@ -253,6 +257,7 @@ export function RecordEditor({ form, recordId, query, initialValues, onClose, on
                 <button type="button" className="ops-icon-btn" onClick={() => opsApi.history(form.id, recordId!).then(r => setHistory(r.history))} aria-label={tx('History', 'السجل التاريخي')} title={tx('History', 'السجل التاريخي')}>
                   <History aria-hidden />
                 </button>
+                {mayCreate ? (
                 <button
                   type="button"
                   className="ops-icon-btn"
@@ -267,17 +272,22 @@ export function RecordEditor({ form, recordId, query, initialValues, onClose, on
                 >
                   <Copy aria-hidden />
                 </button>
+                ) : null}
               </>
             ) : null}
           </div>
           <div className="ops-actions">
             {deleted ? (
-              <button type="button" className="ops-btn" onClick={restore} disabled={busy}>
-                <RotateCcw aria-hidden /> {tx('Restore', 'استعادة')}
-              </button>
+              mayDelete ? (
+                <button type="button" className="ops-btn" onClick={restore} disabled={busy}>
+                  <RotateCcw aria-hidden /> {tx('Restore', 'استعادة')}
+                </button>
+              ) : null
+            ) : !writable ? (
+              <span className="ops-field__hint">{tx('Read only — your role cannot change this record.', 'للقراءة فقط — دورك لا يسمح بتعديل هذا السجل.')}</span>
             ) : (
               <>
-                {!isNew ? (
+                {!isNew && mayDelete ? (
                   confirmDelete ? (
                     <>
                       <button type="button" className="ops-btn ops-btn--danger" onClick={remove} disabled={busy}>
@@ -293,9 +303,11 @@ export function RecordEditor({ form, recordId, query, initialValues, onClose, on
                     </button>
                   )
                 ) : null}
-                <button type="button" className="ops-btn" onClick={() => save('save-new')} disabled={busy || loading} title="Ctrl+Enter">
-                  {tx('Save & new', 'حفظ وجديد')}
-                </button>
+                {mayCreate ? (
+                  <button type="button" className="ops-btn" onClick={() => save('save-new')} disabled={busy || loading} title="Ctrl+Enter">
+                    {tx('Save & new', 'حفظ وجديد')}
+                  </button>
+                ) : null}
                 <button type="button" className="ops-btn ops-btn--primary" onClick={() => save('save')} disabled={busy || loading || (!isNew && !dirty)} title="Ctrl+S">
                   <Save aria-hidden /> {busy ? tx('Saving…', 'جارٍ الحفظ…') : tx('Save', 'حفظ')}
                 </button>
@@ -357,7 +369,7 @@ export function RecordEditor({ form, recordId, query, initialValues, onClose, on
                     field={f}
                     value={f.computed ? preview[f.key] : values[f.key]}
                     error={errors[f.key]}
-                    disabled={deleted}
+                    disabled={deleted || !writable}
                     options={f.list ? schema?.listItems[f.list] ?? [] : []}
                     lang={lang}
                     onChange={v => set(f.key, v)}

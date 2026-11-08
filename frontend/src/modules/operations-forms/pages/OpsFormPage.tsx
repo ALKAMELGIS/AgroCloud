@@ -59,9 +59,21 @@ function readJson<T>(key: string, fallback: T): T {
 
 export default function OpsFormPage() {
   const { formId = '' } = useParams()
-  const { schema, lang, t, reload } = useOps()
+  const { schema, lang, t, reload, can } = useOps()
   const form = schema?.forms.find(f => f.id === formId)
   if (!schema) return null
+  if (form && !can(form.id, 'view')) {
+    return (
+      <div className="ops">
+        <div className="ops-alert" role="alert">
+          {lang === 'ar' ? 'دورك لا يملك صلاحية عرض هذه الاستمارة.' : 'Your role does not have access to this form.'}
+        </div>
+        <Link to="/ops" className="ops-btn">
+          {lang === 'ar' ? 'العودة للاستمارات' : 'Back to forms'}
+        </Link>
+      </div>
+    )
+  }
   if (!form) {
     return (
       <div className="ops">
@@ -76,8 +88,15 @@ export default function OpsFormPage() {
 }
 
 function FormWorkspace({ form, lang, t, reloadSchema }: { form: OpsForm; lang: 'en' | 'ar'; t: ReturnType<typeof useOps>['t']; reloadSchema: () => Promise<void> }) {
-  const { schema } = useOps()
+  const { schema, can } = useOps()
   const tx = useOpsText()
+  const may = {
+    create: can(form.id, 'create'),
+    edit: can(form.id, 'edit'),
+    delete: can(form.id, 'delete'),
+    import: can(form.id, 'import'),
+    export: can(form.id, 'export'),
+  }
   const [preset, setPreset] = useState<Preset>(() => readJson(storageKey(form.id, 'preset'), 'all'))
   const [query, setQuery] = useState<OpsQuery>(() => readJson(storageKey(form.id, 'query'), { sort: form.dateField, dir: 'desc', page: 1, pageSize: 50, filters: {} }))
   const [searchText, setSearchText] = useState(query.q ?? '')
@@ -101,9 +120,12 @@ function FormWorkspace({ form, lang, t, reloadSchema }: { form: OpsForm; lang: '
   // Links from the forms hub: ?new=1 opens a blank record, ?report=1 the report dialog.
   const [params, setParams] = useSearchParams()
   useEffect(() => {
-    if (params.get('new') === '1') setEditor({ id: null, nonce: Date.now() })
-    if (params.get('report') === '1') setDialog('report')
-    if (params.has('new') || params.has('report')) setParams({}, { replace: true })
+    // ?open=<id> comes from the audit log.
+    const open = Number(params.get('open'))
+    if (params.get('new') === '1' && may.create) setEditor({ id: null, nonce: Date.now() })
+    else if (open > 0) setEditor({ id: open, nonce: Date.now() })
+    if (params.get('report') === '1' && may.export) setDialog('report')
+    if (params.has('new') || params.has('report') || params.has('open')) setParams({}, { replace: true })
     // Run once on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -212,9 +234,12 @@ function FormWorkspace({ form, lang, t, reloadSchema }: { form: OpsForm; lang: '
           </p>
         </div>
         <div className="ops-actions">
-          <button type="button" className="ops-btn" onClick={() => setDialog('import')}>
-            <Upload aria-hidden /> {tx('Import', 'استيراد')}
-          </button>
+          {may.import ? (
+            <button type="button" className="ops-btn" onClick={() => setDialog('import')}>
+              <Upload aria-hidden /> {tx('Import', 'استيراد')}
+            </button>
+          ) : null}
+          {may.export ? (
           <div className="ops-dd">
             <button type="button" className="ops-btn" aria-haspopup="menu" aria-expanded={exportOpen} onClick={() => setExportOpen(o => !o)} disabled={!!busy || !total}>
               <Download aria-hidden /> {tx('Export', 'تصدير')} <ChevronDown aria-hidden />
@@ -230,12 +255,17 @@ function FormWorkspace({ form, lang, t, reloadSchema }: { form: OpsForm; lang: '
               </div>
             ) : null}
           </div>
-          <button type="button" className="ops-btn" onClick={() => setDialog('report')} disabled={!total}>
-            <FileBarChart2 aria-hidden /> {tx('Report', 'تقرير')}
-          </button>
-          <button type="button" className="ops-btn ops-btn--primary" onClick={() => setEditor({ id: null, nonce: Date.now() })}>
-            <Plus aria-hidden /> {tx('New record', 'سجل جديد')}
-          </button>
+          ) : null}
+          {may.export ? (
+            <button type="button" className="ops-btn" onClick={() => setDialog('report')} disabled={!total}>
+              <FileBarChart2 aria-hidden /> {tx('Report', 'تقرير')}
+            </button>
+          ) : null}
+          {may.create ? (
+            <button type="button" className="ops-btn ops-btn--primary" onClick={() => setEditor({ id: null, nonce: Date.now() })}>
+              <Plus aria-hidden /> {tx('New record', 'سجل جديد')}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -297,11 +327,13 @@ function FormWorkspace({ form, lang, t, reloadSchema }: { form: OpsForm; lang: '
             </div>
           ) : null}
         </div>
-        <label className="ops-dd__opt" style={{ width: 'auto' }}>
-          <input type="checkbox" checked={!!query.deleted} onChange={e => setQuery(q => ({ ...q, deleted: e.target.checked || undefined, page: 1 }))} />
-          <Trash2 aria-hidden style={{ width: 14, height: 14 }} />
-          <span>{tx('Deleted', 'المحذوفة')}</span>
-        </label>
+        {may.delete ? (
+          <label className="ops-dd__opt" style={{ width: 'auto' }}>
+            <input type="checkbox" checked={!!query.deleted} onChange={e => setQuery(q => ({ ...q, deleted: e.target.checked || undefined, page: 1 }))} />
+            <Trash2 aria-hidden style={{ width: 14, height: 14 }} />
+            <span>{tx('Deleted', 'المحذوفة')}</span>
+          </label>
+        ) : null}
         {hasFilters ? (
           <button
             type="button"
@@ -393,12 +425,16 @@ function FormWorkspace({ form, lang, t, reloadSchema }: { form: OpsForm; lang: '
                   <strong>{tx('No records yet', 'لا توجد سجلات بعد')}</strong>
                   <span>{tx('Add the first record, or import your existing Excel file.', 'أضف أول سجل، أو استورد ملف Excel الحالي.')}</span>
                   <div className="ops-actions">
-                    <button type="button" className="ops-btn" onClick={() => setDialog('import')}>
-                      <Upload aria-hidden /> {tx('Import', 'استيراد')}
-                    </button>
-                    <button type="button" className="ops-btn ops-btn--primary" onClick={() => setEditor({ id: null, nonce: Date.now() })}>
-                      <Plus aria-hidden /> {tx('New record', 'سجل جديد')}
-                    </button>
+                    {may.import ? (
+                      <button type="button" className="ops-btn" onClick={() => setDialog('import')}>
+                        <Upload aria-hidden /> {tx('Import', 'استيراد')}
+                      </button>
+                    ) : null}
+                    {may.create ? (
+                      <button type="button" className="ops-btn ops-btn--primary" onClick={() => setEditor({ id: null, nonce: Date.now() })}>
+                        <Plus aria-hidden /> {tx('New record', 'سجل جديد')}
+                      </button>
+                    ) : null}
                   </div>
                 </>
               )}

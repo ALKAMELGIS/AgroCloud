@@ -47,9 +47,27 @@ export type OpsSettings = {
   ecPhLimits: { ecMin: number; ecMax: number; phMin: number; phMax: number; drainMin: number; drainMax: number }
   autoAddListValues: boolean
   forms: Record<string, { docCode?: string; docTitle?: string }>
+  permissions: OpsPermissionMatrix
+}
+
+export type OpsFormAction = 'view' | 'create' | 'edit' | 'delete' | 'import' | 'export'
+export type OpsAdminAction = 'lists' | 'settings' | 'audit'
+export type OpsRights = { forms: Record<string, OpsFormAction[]>; admin: OpsAdminAction[] }
+export type OpsPermissionMatrix = Record<string, OpsRights>
+
+export type OpsAuditRow = {
+  id: number
+  form: string
+  recordId: number | null
+  action: string
+  actor: string | null
+  at: string
+  changes: Record<string, unknown> | null
 }
 
 export type OpsSchema = {
+  me: { actor: string; role: string; rights: OpsRights }
+  permissionModel: { roles: string[]; formActions: OpsFormAction[]; adminActions: OpsAdminAction[] }
   forms: OpsForm[]
   groups: { id: string; label: Bilingual; forms: string[] }[]
   sections: Record<string, Bilingual>
@@ -98,6 +116,13 @@ export class OpsApiError extends Error {
   }
 }
 
+/** The signed-in profile's role; the server maps it onto the permissions matrix. */
+function actorRole(): string {
+  const u = readCurrentUser() as { role?: string; user?: { role?: string } } | null
+  const role = String(u?.role || u?.user?.role || '')
+  return /^[\x20-\x7e]*$/.test(role) ? role : encodeURIComponent(role)
+}
+
 function actorName(): string {
   const u = readCurrentUser() as { name?: string; email?: string; user?: { name?: string; email?: string } } | null
   const name = u?.name || u?.user?.name || u?.email || u?.user?.email || ''
@@ -111,7 +136,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     res = await fetch(apiUrl(`/api/ops${path}`), {
       method,
       credentials: 'include',
-      headers: { 'content-type': 'application/json', 'x-agrocloud-user': actorName() },
+      headers: { 'content-type': 'application/json', 'x-agrocloud-user': actorName(), 'x-agrocloud-role': actorRole() },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
@@ -167,6 +192,12 @@ export const opsApi = {
     item.id ? request<{ id: number }>('PUT', `/lists/${list}/${item.id}`, item) : request<{ id: number }>('POST', `/lists/${list}`, item),
   deleteListItem: (list: string, id: number) => request<{ ok: true }>('DELETE', `/lists/${list}/${id}`),
   saveSettings: (patch: Partial<OpsSettings>) => request<{ settings: OpsSettings }>('PUT', '/settings', patch),
+  audit: (q: { form?: string; actor?: string; action?: string; from?: string; to?: string; q?: string; page?: number; pageSize?: number }) => {
+    const p = new URLSearchParams()
+    for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') p.set(k, String(v))
+    const s = p.toString()
+    return request<{ rows: OpsAuditRow[]; total: number; page: number; pageSize: number; actors: { actor: string; n: number }[] }>('GET', `/audit${s ? `?${s}` : ''}`)
+  },
 }
 
 /** Fetch every record matching a query (for exports and reports), page by page. */

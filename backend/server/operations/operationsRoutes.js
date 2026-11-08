@@ -23,7 +23,8 @@ import express from 'express'
 import { requireIdentitySession } from '../identity/authMiddleware.js'
 import { isIdentityReady } from '../identity/db.js'
 import { runMigrations } from '../database/migrate.js'
-import { FORM_GROUPS, FORMS, MASTER_LISTS, SECTIONS } from './formSchemas.js'
+import { FORM_GROUPS, FORMS, MASTER_LISTS, SECTIONS, getForm } from './formSchemas.js'
+import { ADMIN_ACTIONS, FORM_ACTIONS, OPS_ROLES, canAdmin, canForm, rightsFor, roleOfRequest } from './opsPermissions.js'
 import {
   OpsError,
   aggregate,
@@ -36,6 +37,7 @@ import {
   getRecord,
   getSettings,
   importRecords,
+  listAudit,
   listRecords,
   recordHistory,
   recordNeighbours,
@@ -46,8 +48,8 @@ import {
 } from './operationsService.js'
 
 function actorOf(req) {
-  const a = req.identityActor
-  if (a) return String(a.email || a.username || a.id || 'user').slice(0, 120)
+  const u = req.identityActor?.user
+  if (u) return String(u.email || u.username || u.name || u.id || 'user').slice(0, 120)
   const header = String(req.get('x-agrocloud-user') || '').trim()
   return header ? header.slice(0, 120) : 'anonymous'
 }
@@ -75,6 +77,30 @@ export function parseRecordQuery(qs) {
   }
 }
 
+/** The caller's role and rights (read per request so matrix changes apply at once). */
+function accessOf(req) {
+  const role = roleOfRequest(req)
+  return { role, rights: rightsFor(getSettings().permissions, role) }
+}
+
+function deny(res, message) {
+  res.status(403).json({ ok: false, error: message, code: 'forbidden' })
+}
+
+/** Guard a /forms/:form/... route with a per-form action. Unknown forms fall through to the 404. */
+const formGuard = (action) => (req, res, next) => {
+  if (!getForm(req.params.form)) return next()
+  const { rights } = accessOf(req)
+  if (canForm(rights, req.params.form, action)) return next()
+  return deny(res, `Your role cannot ${action} records in this form.`)
+}
+
+const adminGuard = (action) => (req, res, next) => {
+  const { rights } = accessOf(req)
+  if (canAdmin(rights, action)) return next()
+  return deny(res, `Your role cannot manage ${action}.`)
+}
+
 const wrap = (fn) => (req, res) => {
   try {
     const out = fn(req, res)
@@ -96,7 +122,9 @@ export function createOperationsRouter() {
 
   router.get(
     '/schema',
-    wrap(() => ({
+    wrap((req) => ({
+      me: { actor: actorOf(req), ...accessOf(req) },
+      permissionModel: { roles: OPS_ROLES, formActions: FORM_ACTIONS, adminActions: ADMIN_ACTIONS },
       forms: FORMS,
       groups: FORM_GROUPS,
       sections: SECTIONS,
@@ -107,9 +135,10 @@ export function createOperationsRouter() {
     })),
   )
 
-  router.get('/forms/:form/records', wrap((req) => listRecords(req.params.form, parseRecordQuery(req.query))))
+  router.get('/forms/:form/records', formGuard('view'), wrap((req) => listRecords(req.params.form, parseRecordQuery(req.query))))
   router.get(
     '/forms/:form/records/:id',
+    formGuard('view'),
     wrap((req) => {
       const record = getRecord(req.params.form, Number(req.params.id))
       if (req.query.nav !== '1') return { record }
@@ -118,40 +147,45 @@ export function createOperationsRouter() {
   )
   router.post(
     '/forms/:form/records',
+    formGuard('create'),
     wrap((req, res) => {
       res.status(201).json({ record: createRecord(req.params.form, req.body ?? {}, actorOf(req), { allowDuplicate: req.query.allowDuplicate === '1' }) })
     }),
   )
-  router.put('/forms/:form/records/:id', wrap((req) => ({ record: updateRecord(req.params.form, Number(req.params.id), req.body ?? {}, actorOf(req)) })))
+  router.put('/forms/:form/records/:id', formGuard('edit'), wrap((req) => ({ record: updateRecord(req.params.form, Number(req.params.id), req.body ?? {}, actorOf(req)) })))
   router.delete(
     '/forms/:form/records/:id',
+    formGuard('delete'),
     wrap((req) => {
       deleteRecord(req.params.form, Number(req.params.id), actorOf(req))
       return { ok: true }
     }),
   )
-  router.post('/forms/:form/records/:id/restore', wrap((req) => ({ record: restoreRecord(req.params.form, Number(req.params.id), actorOf(req)) })))
-  router.get('/forms/:form/records/:id/history', wrap((req) => ({ history: recordHistory(req.params.form, Number(req.params.id)) })))
+  router.post('/forms/:form/records/:id/restore', formGuard('delete'), wrap((req) => ({ record: restoreRecord(req.params.form, Number(req.params.id), actorOf(req)) })))
+  router.get('/forms/:form/records/:id/history', formGuard('view'), wrap((req) => ({ history: recordHistory(req.params.form, Number(req.params.id)) })))
   router.post(
     '/forms/:form/import',
+    formGuard('import'),
     wrap((req) => importRecords(req.params.form, req.body?.rows, actorOf(req), { source: req.body?.source || 'import', dryRun: req.body?.dryRun === true })),
   )
-  router.get('/forms/:form/filters', wrap((req) => filterOptions(req.params.form)))
-  router.get('/forms/:form/aggregate', wrap((req) => aggregate(req.params.form, parseRecordQuery(req.query))))
+  router.get('/forms/:form/filters', formGuard('view'), wrap((req) => filterOptions(req.params.form)))
+  router.get('/forms/:form/aggregate', formGuard('view'), wrap((req) => aggregate(req.params.form, parseRecordQuery(req.query))))
 
   router.get('/lists', wrap(() => ({ lists: MASTER_LISTS, items: getMasterLists() })))
-  router.post('/lists/:list', wrap((req, res) => res.status(201).json({ id: upsertMasterItem(req.params.list, req.body ?? {}) })))
-  router.put('/lists/:list/:id', wrap((req) => ({ id: upsertMasterItem(req.params.list, { ...(req.body ?? {}), id: Number(req.params.id) }) })))
+  router.post('/lists/:list', adminGuard('lists'), wrap((req, res) => res.status(201).json({ id: upsertMasterItem(req.params.list, req.body ?? {}, actorOf(req)) })))
+  router.put('/lists/:list/:id', adminGuard('lists'), wrap((req) => ({ id: upsertMasterItem(req.params.list, { ...(req.body ?? {}), id: Number(req.params.id) }, actorOf(req)) })))
   router.delete(
     '/lists/:list/:id',
+    adminGuard('lists'),
     wrap((req) => {
-      deleteMasterItem(req.params.list, Number(req.params.id))
+      deleteMasterItem(req.params.list, Number(req.params.id), actorOf(req))
       return { ok: true }
     }),
   )
 
   router.get('/settings', wrap(() => ({ settings: getSettings() })))
-  router.put('/settings', wrap((req) => ({ settings: saveSettings(req.body ?? {}, actorOf(req)) })))
+  router.put('/settings', adminGuard('settings'), wrap((req) => ({ settings: saveSettings(req.body ?? {}, actorOf(req)) })))
+  router.get('/audit', adminGuard('audit'), wrap((req) => listAudit(req.query)))
   return router
 }
 

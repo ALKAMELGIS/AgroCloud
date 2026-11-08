@@ -127,3 +127,51 @@ test.describe('operations forms', () => {
     await expect(editor.getByLabel(/harvested quantity/i)).toHaveValue('') // cleared
   })
 })
+
+test.describe('operations forms — permissions and audit log', () => {
+  test('a Viewer only reads; an Admin edits the matrix and sees it in the audit log', async ({ page, browser }, testInfo) => {
+    test.setTimeout(90_000)
+    // Viewer: can open and report, cannot add / import / see deleted records or settings.
+    const viewerCtx = await browser.newContext({ viewport: page.viewportSize() ?? undefined })
+    const viewer = await viewerCtx.newPage()
+    await viewer.addInitScript(() => {
+      try {
+        sessionStorage.setItem('agroSplashShown', '1')
+        localStorage.setItem('agro_pwa_install_dismissed_v1', String(Date.now()))
+        localStorage.setItem('currentUser', JSON.stringify({ id: 9, name: 'Read Only', email: 'viewer@example.com', role: 'Viewer' }))
+      } catch {
+        /* ignore */
+      }
+    })
+    await viewer.goto('/AgroCloud/#/ops/harvest')
+    await expect(viewer.getByRole('heading', { level: 1, name: /harvest record/i })).toBeVisible()
+    await expect(viewer.getByRole('button', { name: /^new record$/i })).toHaveCount(0)
+    await expect(viewer.getByRole('button', { name: /^import$/i })).toHaveCount(0)
+    await expect(viewer.getByText(/^deleted$/i)).toHaveCount(0)
+    await viewer.goto('/AgroCloud/#/ops/settings')
+    await expect(viewer.getByRole('alert')).toContainText(/cannot open the forms settings/i)
+    await viewerCtx.close()
+
+    // Admin: flip one right for a role, save, flip it back, then find both changes in the audit log.
+    await prepare(page)
+    await page.goto('/AgroCloud/#/ops/settings')
+    await page.getByRole('button', { name: /^permissions$/i }).click()
+    const role = { desktop: 'Editor', tablet: 'Manager', mobile: 'Admin Manager' }[testInfo.project.name] ?? 'Editor'
+    await page.getByRole('tab', { name: role, exact: true }).click()
+    const box = page.getByRole('checkbox', { name: 'Plant protection (PPP) application: Import' })
+    const save = page.getByRole('button', { name: /save permissions/i })
+    for (let i = 0; i < 2; i++) {
+      await box.click()
+      await expect(save).toBeEnabled()
+      await save.click()
+      await expect(page.getByText(/permissions saved/i)).toBeVisible()
+    }
+    // Admin rows are locked
+    await page.getByRole('tab', { name: 'Admin', exact: true }).click()
+    await expect(page.getByRole('checkbox', { name: 'Plant protection (PPP) application: Import' })).toBeDisabled()
+
+    await page.getByRole('button', { name: /^audit log$/i }).click()
+    await page.getByRole('combobox', { name: /^action$/i }).selectOption('settings')
+    await expect(page.locator('.ops-audit tbody tr').first()).toContainText(/permissions/i)
+  })
+})
