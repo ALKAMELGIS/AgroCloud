@@ -1,4 +1,3 @@
-import { fetchPriorityAttr } from '@/core/utils/fetchPriority'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { normalizeEmail, normalizeRole, startSession } from '@/core/auth/auth'
@@ -13,7 +12,7 @@ import { hydrateProfileFromAdminUserRecord, hydrateProfileFromServer } from '@/c
 import { appendAuditLog } from '@/core/authorization/audit'
 import { useLanguage } from '@/core/localization/i18n'
 import './Login.css'
-import { ELITE_AGRO_LOGO_WHITE_URL } from '@/core/config/brandAssets'
+import { LoginShowcase } from './LoginShowcase'
 import { sha256Base64, sha256Hex } from '@/core/utils/sha256'
 import {
   loginAccount,
@@ -1007,18 +1006,13 @@ export default function Login() {
 
   return (
     <div className="login-page-root">
+      <LoginShowcase language={language} />
       <div className="login-page-content">
         <div className="login-card">
           <div className="login-card__brand">
-            <div className="login-logo-wrap">
-              <img src={ELITE_AGRO_LOGO_WHITE_URL} alt="Elite Agro Projects" width={351} height={101} {...fetchPriorityAttr('high')} />
-            </div>
-            <div className="login-leaf-badge">
-              <div className="login-leaf-circle">
-                <i className="fa-solid fa-leaf" aria-hidden></i>
-              </div>
-            </div>
-            <h1 className="login-card__title">Agro Cloud</h1>
+            <img className="login-card__mark" src={`${import.meta.env.BASE_URL}agrocloud-logo-leaf.png`} alt="" width={56} height={56} />
+            <h1 className="login-card__title">{mode === 'signin' ? (language === 'ar' ? 'مرحباً بعودتك' : 'Welcome back') : language === 'ar' ? 'إنشاء حساب' : 'Create your account'}</h1>
+            <p className="login-card__subtitle">{language === 'ar' ? 'Agro Cloud — منصة المزرعة الرقمية' : 'Agro Cloud — your digital farm platform'}</p>
             <div className="login-mode-toggle" role="group" aria-label={`${text.signIn} / ${text.signUp}`}>
               <button
                 type="button"
