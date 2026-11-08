@@ -7397,3 +7397,16 @@ html[data-theme='dark'] .develop-elite.page {
 .develop-elite-dashboard:not(.develop-elite--compact-viewport) .develop-elite__header-meta {
   justify-self: end;
 }
+
+/* Short KPI cards (laptop height, error banner shown): one title line so the value is never clipped. */
+@container (max-height: 74px) {
+  .develop-elite-dashboard.develop-elite-dashboard.develop-elite-dashboard .develop-elite-grid-widget--kpi .develop-elite__kpi-title.develop-elite__kpi-title {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    overflow-wrap: normal;
+    word-break: normal;
+    white-space: nowrap;
+    display: block;
+    text-overflow: ellipsis;
+  }
+}
