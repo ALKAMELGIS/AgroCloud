@@ -16,8 +16,11 @@
   color: var(--ops-fg);
   font-size: 13px;
   padding: 20px 24px 40px;
-  max-width: 1600px;
-  margin: 0 auto;
+  /* Same surface as the main sidebar (bg-card), edge to edge, in light and dark themes. */
+  background: var(--ops-card);
+  min-height: 100%;
+  width: 100%;
+  margin: 0;
   box-sizing: border-box;
 }
 
@@ -496,7 +499,7 @@
   z-index: 2;
   padding: 0;
   border-bottom: 1px solid var(--ops-border);
-  background: var(--ops-soft);
+  background: var(--ops-card);
   text-align: start;
   white-space: nowrap;
 }
@@ -709,7 +712,7 @@
   gap: 8px;
   padding: 12px 18px;
   border-top: 1px solid var(--ops-border);
-  background: var(--ops-soft);
+  background: var(--ops-card);
 }
 
 .ops-modal__foot .ops-actions {
@@ -927,6 +930,8 @@
 }
 
 .ops-settings nav {
+  padding-inline-end: 12px;
+  border-inline-end: 1px solid var(--ops-border);
   display: grid;
   align-content: start;
   gap: 2px;
