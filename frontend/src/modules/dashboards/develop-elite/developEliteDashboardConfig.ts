@@ -184,7 +184,7 @@ export const DEFAULT_DEVELOP_ELITE_KPI_CARDS: DevelopEliteKpiCardConfig[] = [
   },
   {
     id: 'wildfelid',
-    title: 'Wildfelid Projects',
+    title: 'Wildlife Projects',
     icon: 'fa-paw',
     visible: true,
     order: 3,
@@ -338,16 +338,18 @@ function mergeKpiCards(saved: DevelopEliteKpiCardConfig[]): DevelopEliteKpiCardC
       if (card.id === 'wildfelid') {
         const wildDef = DEFAULT_DEVELOP_ELITE_KPI_CARDS.find(c => c.id === 'wildfelid')
         if (!wildDef) return card
-        if (card.source === 'fieldFilterCount') {
+        // Saved layouts kept the old misspelled default title.
+        const named = card.title === 'Wildfelid Projects' ? { ...card, title: wildDef.title } : card
+        if (named.source === 'fieldFilterCount') {
           return {
-            ...card,
+            ...named,
             source: wildDef.source,
             fieldName: wildDef.fieldName,
             fieldMatch: wildDef.fieldMatch,
             fieldMatchMode: wildDef.fieldMatchMode,
           }
         }
-        return card
+        return named
       }
       if (card.id === 'vip-farm') {
         const vipDef = DEFAULT_DEVELOP_ELITE_KPI_CARDS.find(c => c.id === 'vip-farm')

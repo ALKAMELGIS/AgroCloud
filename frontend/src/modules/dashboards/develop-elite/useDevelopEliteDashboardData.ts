@@ -329,7 +329,7 @@ export function useDevelopEliteDashboardData() {
       })
       .catch(e => {
         if (cancelled) return
-        setError(e instanceof Error ? e.message : 'Failed to load ArcGIS data')
+        setError(developEliteLoadErrorMessage(e))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -1279,4 +1279,20 @@ export function useDevelopEliteDashboardData() {
     countryLabels,
     worldCountryDomain,
   }
+}
+
+/** Readable message for a failed ArcGIS load ("Failed to fetch" alone tells the user nothing). */
+export function developEliteLoadErrorMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e ?? '')
+  if (!raw || /failed to fetch|networkerror|load failed|network request failed/i.test(raw)) {
+    return 'Could not reach the ArcGIS map services. Check the internet connection, then retry.'
+  }
+  const status = raw.match(/\((\d{3})\)/)?.[1]
+  if (status === '401' || status === '403' || /token/i.test(raw)) {
+    return 'ArcGIS refused access to a layer. Check the layer sharing or the API key in Settings.'
+  }
+  if (status === '400' || status === '404' || /not found|invalid url/i.test(raw)) {
+    return 'A configured ArcGIS layer was not found. Check the layer URLs in Dashboard settings.'
+  }
+  return `Some dashboard data could not be loaded: ${raw}`
 }

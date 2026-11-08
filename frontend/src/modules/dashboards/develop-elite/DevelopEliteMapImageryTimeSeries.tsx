@@ -33,10 +33,6 @@ export function DevelopEliteMapImageryTimeSeries({
   const layerLive = useDevelopEliteMapLayerLive()
 
   useEffect(() => {
-    prefetchDevelopEliteImageryTimeSeriesPanel()
-  }, [])
-
-  useEffect(() => {
     if (open) prefetchDevelopEliteImageryTimeSeriesPanel()
   }, [open])
 

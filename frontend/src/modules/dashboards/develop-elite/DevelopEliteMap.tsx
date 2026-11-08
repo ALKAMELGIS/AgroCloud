@@ -2,7 +2,6 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
 import { DevelopEliteMapLegendRail, DevelopEliteMapTools } from './DevelopEliteMapTools'
 import { DevelopEliteMapImageryTimeSeriesHost } from './DevelopEliteMapImageryTimeSeries'
-import { prefetchDevelopEliteImageryTimeSeriesPanel } from './developElitePrefetchImageryTimeSeries'
 import { DevelopEliteMapChromeProvider } from './DevelopEliteMapChrome'
 import { SiInstanceScopeProvider } from '@/app/providers/siInstanceScope'
 import { DevelopEliteMapInsightProvider } from './DevelopEliteMapInsightTools'
@@ -136,10 +135,6 @@ function DevelopEliteMapContent({
   onSelectFieldKey,
   onViewportChange,
 }: Props) {
-  useEffect(() => {
-    prefetchDevelopEliteImageryTimeSeriesPanel()
-  }, [])
-
   const compactMapLayout = useDevelopEliteCompactViewport()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)

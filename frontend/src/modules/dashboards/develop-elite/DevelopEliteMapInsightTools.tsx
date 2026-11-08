@@ -305,9 +305,6 @@ export function DevelopEliteMapInsightToolbar({
   const insight = useInsight()
   const draw = useDevelopEliteMapDraw()
   const layerLive = useDevelopEliteMapLayerLiveOptional()
-  useEffect(() => {
-    prefetchDevelopEliteImageryTimeSeriesPanel()
-  }, [])
 
   if (!insight) return null
 
@@ -368,6 +365,8 @@ export function DevelopEliteMapInsightToolbar({
         aria-pressed={insight.imageryTimeSeriesOpen}
         disabled={!hasDrawnAoi}
         onClick={onImageryTimeSeries}
+        onPointerEnter={prefetchDevelopEliteImageryTimeSeriesPanel}
+        onFocus={prefetchDevelopEliteImageryTimeSeriesPanel}
       >
         <i className="fa-solid fa-chart-line" aria-hidden />
       </button>

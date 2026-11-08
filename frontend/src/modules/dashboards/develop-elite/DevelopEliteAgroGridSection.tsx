@@ -363,7 +363,7 @@ export function DevelopEliteAgroGridSection({
               }
             }}
           >
-            <span className="develop-elite__kpi-title">{card.title}</span>
+            <span className="develop-elite__kpi-title" title={card.title}>{card.title}</span>
             <div className="develop-elite__kpi-metric">
               <DevelopEliteKpiIcon cardId={card.id} icon={card.icon} />
               <strong className="develop-elite__kpi-value">{data.kpis.cards[card.id] ?? '—'}</strong>

@@ -247,8 +247,11 @@ export default function DevelopEliteAgroDashboard() {
       <div className="develop-elite__scroll-main">
       {data.error ? (
         <div className="develop-elite__error" role="alert">
-          {data.error}
-          <button type="button" onClick={data.refresh}>Retry</button>
+          <i className="fa-solid fa-triangle-exclamation develop-elite__error-icon" aria-hidden />
+          <span className="develop-elite__error-text">{data.error}</span>
+          <button type="button" className="develop-elite__error-retry" onClick={data.refresh} disabled={data.refreshing}>
+            {data.refreshing ? 'Retrying…' : 'Retry'}
+          </button>
         </div>
       ) : null}
       <DevelopEliteAgroGridSection
