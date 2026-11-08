@@ -54,6 +54,7 @@ import {
 } from './middleware/securityMiddleware.js'
 import { registerAuthRoutes } from './services/authService.js'
 import { bootstrapIdentity } from './identity/registerIdentity.js'
+import { registerOperationsRoutes } from './operations/operationsRoutes.js'
 
 loadProductionEnv()
 
@@ -153,6 +154,7 @@ app.use(
     type: (req) => {
       const path = String(req.originalUrl || req.url || '')
       if (
+        path.startsWith('/api/ops/') ||
         path.startsWith('/api/sam-detection/') ||
         path.startsWith('/api/sam2-refinement/') ||
         path.startsWith('/api/temporal-transformer/') ||
@@ -246,6 +248,9 @@ registerEmbedBrowseRoute(app)
 // Identity API (/api/v1/identity/*, /api/v1/manpower/*). Must come before the /api/v1 → /api bridge
 // below, which rewrites the URL; registered after it (as before), every identity request missed.
 await bootstrapIdentity(app)
+
+// Operations forms (harvest, EC/pH, PPP, irrigation, fertigation): /api/ops/*.
+registerOperationsRoutes(app)
 
 // New versioned API gateway: /api/v1/* and /api/v2/*
 app.use('/api', versionedRoutes)
