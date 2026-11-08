@@ -57,7 +57,8 @@ describe('NavMenu vertical responsive', () => {
   it('opens and closes group with keyboard and keeps aria-expanded updated', () => {
     setViewport(1280)
     render(
-      <MemoryRouter future={routerFuture}>
+      // Not "/": the home page has its own sidebar and hides these links (next test).
+      <MemoryRouter future={routerFuture} initialEntries={['/data/ec-ph']}>
         <SystemSettingsProvider>
           <NavMenu />
         </SystemSettingsProvider>
@@ -69,6 +70,31 @@ describe('NavMenu vertical responsive', () => {
     expect(dashboard).toHaveAttribute('aria-expanded', 'true')
     fireEvent.keyDown(dashboard, { key: 'Escape' })
     expect(dashboard).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('on the home page keeps only the utility controls (the sidebar has the links)', () => {
+    setViewport(1280)
+    const { unmount } = render(
+      <MemoryRouter future={routerFuture} initialEntries={['/']}>
+        <SystemSettingsProvider>
+          <NavMenu />
+        </SystemSettingsProvider>
+      </MemoryRouter>,
+    )
+    const nav = screen.getByRole('navigation', { name: /primary/i })
+    expect(nav).toHaveClass('navmenu--utilities-only')
+    expect(screen.queryByRole('button', { name: /^dashboard$/i })).toBeNull()
+    expect(nav.querySelector('.navmenu-account')).not.toBeNull()
+    unmount()
+
+    render(
+      <MemoryRouter future={routerFuture} initialEntries={['/data/ec-ph']}>
+        <SystemSettingsProvider>
+          <NavMenu />
+        </SystemSettingsProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('button', { name: /^dashboard$/i })).toBeInTheDocument()
   })
 
   it('keeps primary navigation expanded on mobile (no hamburger toggle)', () => {

@@ -986,3 +986,71 @@ html[data-theme] .home-page .home-apps-list .app-icon-card:hover {
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * Home sections (Quick access / Workspaces) and card titles
+ * ------------------------------------------------------------------------------------------- */
+.home-section {
+  display: grid;
+  gap: 4px;
+}
+
+.home-section + .home-section {
+  margin-top: 6px;
+}
+
+.home-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline: clamp(8px, 1.4vw, 12px);
+}
+
+.home-section-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ds-color-text-muted, #64748b);
+}
+
+:root[dir='rtl'] .home-section-title {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 13px;
+}
+
+.home-section-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-color-text-muted, #64748b);
+  background: color-mix(in srgb, var(--ds-color-text, #0f172a) 6%, transparent);
+}
+
+/* Full app names: wrap to two lines instead of "Agro Cloud Dashb…". */
+.home-page .app-icon-card .app-label {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  text-overflow: clip;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+/* With the sidebar beside it, four cards per row keep titles readable. */
+@media (min-width: 1024px) {
+  .home-page .home-apps-list {
+    grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
+  }
+}

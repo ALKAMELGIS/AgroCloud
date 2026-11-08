@@ -49,6 +49,8 @@ export type NavGroupData = {
 export type WorkspaceOption = {
   name: string
   subtitle?: string
+  /** Logo shown instead of the first letter. */
+  logoSrc?: string
 }
 
 const mockNavGroups: NavGroupData[] = [
@@ -144,9 +146,15 @@ function WorkspaceSwitcher({
         }`}
       >
         <span className="flex min-w-0 items-center gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-primary text-[13px] font-semibold text-primary-foreground shadow-sm">
-            {current.name.charAt(0)}
-          </span>
+          {'logoSrc' in current && current.logoSrc ? (
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-primary/10 ring-1 ring-primary/20">
+              <img src={current.logoSrc} alt="" className="h-7 w-7 object-contain" />
+            </span>
+          ) : (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-primary text-[13px] font-semibold text-primary-foreground shadow-sm">
+              {current.name.charAt(0)}
+            </span>
+          )}
           <span className="flex min-w-0 flex-col overflow-hidden">
             <span className="mb-1 max-w-[150px] truncate text-[13px] font-medium leading-none text-foreground">
               {current.name}
@@ -227,7 +235,8 @@ function NavItem({
         type="button"
         className={`group/nav flex w-full cursor-pointer items-center justify-between rounded-[6px] border-0 py-[7px] pe-2.5 text-start transition-all duration-200 select-none ${
           isActive
-            ? 'bg-black/5 font-medium text-foreground dark:bg-white/10'
+            ? // Active page: brand tint plus an accent bar on the leading edge.
+              'relative bg-primary/10 font-medium text-primary before:absolute before:inset-y-1.5 before:start-0 before:w-[3px] before:rounded-full before:bg-primary before:content-[""]'
             : 'bg-transparent text-muted-foreground hover:bg-black/5 hover:text-foreground/90 dark:hover:bg-white/5'
         }`}
         style={{ paddingInlineStart: `${level * 12 + 10}px` }}
@@ -238,7 +247,7 @@ function NavItem({
         <span className="flex min-w-0 items-center gap-2.5">
           <item.icon
             className={`h-[16px] w-[16px] shrink-0 transition-colors ${
-              isActive ? 'text-foreground' : 'text-muted-foreground/70 group-hover/nav:text-foreground/70'
+              isActive ? 'text-primary' : 'text-muted-foreground/70 group-hover/nav:text-foreground/70'
             }`}
             strokeWidth={1.5}
             aria-hidden

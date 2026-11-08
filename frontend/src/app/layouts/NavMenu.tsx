@@ -184,6 +184,9 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
     | null
   >(null)
   const location = useLocation()
+  // The home page has its own sidebar with the same destinations, so the bar keeps only the
+  // account / notifications / theme / language controls there (the phone drawer keeps everything).
+  const hidePrimaryLinks = location.pathname === '/' && !isMobile
   const navRef = useRef<HTMLElement | null>(null)
   const groupContainerRefs = useRef<Record<string, HTMLLIElement | null>>({})
   const groupHeaderRefs = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -499,6 +502,7 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
       <nav
         className={[
           'navmenu',
+          hidePrimaryLinks ? 'navmenu--utilities-only' : '',
           !isMobile ? 'navmenu--compact' : '',
           isMobile && mobileNavOpen ? 'navmenu-open' : '',
           isMobile ? 'navmenu--mobile' : '',
@@ -539,7 +543,7 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
         data-open={isMobile ? 'true' : undefined}
         aria-hidden={isMobile ? false : undefined}
       >
-        {mergedHome.visible ? (
+        {mergedHome.visible && !hidePrimaryLinks ? (
           <li className="navmenu-li">
             <NavLink
               to="/"
@@ -556,7 +560,7 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
           </li>
         ) : null}
 
-        {mergedGroups.map(group => {
+        {(hidePrimaryLinks ? [] : mergedGroups).map(group => {
           if (group.id === 'master' && !canSeeMaster) return null
           if (group.id === 'admin' && !canSeeAdmin) return null
           return renderMergedGroup(group)

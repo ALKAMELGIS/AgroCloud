@@ -338,9 +338,23 @@ export default function Home() {
     {
       name: 'Elite AgroCloud',
       subtitle: String(auth?.user?.role || auth?.user?.email || '').trim() || undefined,
+      logoSrc: `${import.meta.env.BASE_URL}agrocloud-logo-core.png`,
     },
   ]
   const sidebarLabel = language === 'ar' ? 'التنقل الرئيسي' : 'Main navigation'
+  // Main view: apps that open directly first, then the groups (each opens its own list).
+  const homeSections = [
+    {
+      id: 'apps',
+      title: language === 'ar' ? 'وصول سريع' : 'Quick access',
+      items: menuItems.filter((i) => !i.items?.length),
+    },
+    {
+      id: 'workspaces',
+      title: language === 'ar' ? 'مساحات العمل' : 'Workspaces',
+      items: menuItems.filter((i) => i.items?.length),
+    },
+  ].filter((section) => section.items.length)
   const sidebar = (className: string) => (
     <SidebarNav
       className={className}
@@ -556,9 +570,17 @@ export default function Home() {
       ) : (
         <div className="home-modern">
           <HomeWelcome language={language} />
-          <div className="home-apps-strip">
-            <div className="home-apps-list" aria-label="Applications">
-              {menuItems.map((item) => (
+          {homeSections.map((section) => (
+            <section key={section.id} className="home-section" aria-labelledby={`home-section-${section.id}`}>
+              <div className="home-section-head">
+                <h2 id={`home-section-${section.id}`} className="home-section-title">
+                  {section.title}
+                </h2>
+                <span className="home-section-count">{section.items.length}</span>
+              </div>
+              <div className="home-apps-strip">
+                <div className="home-apps-list">
+                  {section.items.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -586,8 +608,10 @@ export default function Home() {
                   {homePageSettings.showCardChevron && item.items ? <i className="fa-solid fa-chevron-right mini-chev" aria-hidden="true"></i> : null}
                 </button>
               ))}
-            </div>
-          </div>
+                </div>
+              </div>
+            </section>
+          ))}
         </div>
       )}
         </div>
