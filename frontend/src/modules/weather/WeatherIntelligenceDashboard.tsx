@@ -1,7 +1,7 @@
 import './weather-monitoring.css'
 import './weather-intelligence.css'
 import './weather-intelligence-arcgis-themes.css'
-import '@/modules/dashboard/develop-elite/develop-elite-dashboard.css'
+import '@/modules/dashboards/develop-elite/develop-elite-dashboard.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { WeatherLocationId } from './config/weatherFarmIds'
@@ -502,7 +502,7 @@ export default function WeatherIntelligenceDashboard() {
 
       {showMap ? (
         <>
-          <main
+          <div
             className={`weather-main${isArcgisLayout ? ' weather-main--arcgis-map' : ''}`}
           >
             {!isArcgisLayout ? (
@@ -546,7 +546,7 @@ export default function WeatherIntelligenceDashboard() {
               onApplyMapPick={loc => data.setCustomLocation(loc)}
             />
             <WeatherFieldPanel feature={data.selectedField} onClose={() => data.setSelectedField(null)} />
-          </main>
+          </div>
         </>
       ) : null}
 

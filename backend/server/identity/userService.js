@@ -4,8 +4,6 @@ import {
   assertCanManageUser,
   AuthzError,
   defaultScopeForRoleCode,
-  getRoleByCode,
-  hasPermission,
   isUserInActorScope,
   manpowerEnforced,
   requirePermission,
@@ -120,7 +118,7 @@ export async function listUsers(client, actor, query = {}) {
 
 export async function createUser(client, actor, payload) {
   requirePermission(actor, 'users.create')
-  const pool = client
+  const pool = client || getPool()
   const orgId = actor.user.organization_id
   const email = normalizeEmail(payload.email)
   const name = String(payload.name || '').trim()
@@ -206,7 +204,7 @@ async function loadUserRow(pool, userId) {
 
 export async function updateUser(client, actor, userId, patch) {
   const target = await assertCanManageUser(client, actor, userId)
-  const pool = client
+  const pool = client || getPool()
   const fields = []
   const values = []
   let i = 1
@@ -254,7 +252,7 @@ export async function updateUser(client, actor, userId, patch) {
 export async function disableUser(client, actor, userId) {
   requirePermission(actor, 'users.disable')
   await assertCanManageUser(client, actor, userId)
-  const pool = client
+  const pool = client || getPool()
   const full = await loadUserRow(pool, userId)
   await pool.query(`UPDATE users SET status = 'INACTIVE', updated_at = now() WHERE id = $1`, [userId])
   if (manpowerEnforced() && full.status === 'ACTIVE') {
@@ -273,7 +271,7 @@ export async function disableUser(client, actor, userId) {
 export async function activateUser(client, actor, userId) {
   requirePermission(actor, 'users.update')
   await assertCanManageUser(client, actor, userId)
-  const pool = client
+  const pool = client || getPool()
   const full = await loadUserRow(pool, userId)
   if (manpowerEnforced()) {
     await consumeManpower(pool, actor, full.role_code, 1, userId)
@@ -292,11 +290,11 @@ export async function activateUser(client, actor, userId) {
 export async function transferUser(client, actor, userId, { parentUserId, managedById }) {
   requirePermission(actor, 'users.update')
   const target = await assertCanManageUser(client, actor, userId)
-  const pool = client
+  const pool = client || getPool()
   let destParent = parentUserId
   if (managedById && !destParent) {
     const { rows } = await pool.query(
-      'SELECT id FROM users WHERE organization_id = $1 AND (legacy_directory_id = $2 OR id::text = $2)',
+      'SELECT id FROM users WHERE organization_id = $1 AND (legacy_directory_id = $2 OR id = $2)',
       [actor.user.organization_id, String(managedById)],
     )
     destParent = rows[0]?.id

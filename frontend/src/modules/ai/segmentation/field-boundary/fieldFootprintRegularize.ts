@@ -1372,23 +1372,24 @@ function maxInscribedCircle(ring: XY[]): { cx: number; cy: number; r: number } |
     }
   }
   if (!best) return null
+  let refined: { cx: number; cy: number; r: number } = best
 
   for (let pass = 0; pass < 5; pass++) {
     step /= 3
-    let local = best
+    let local: { cx: number; cy: number; r: number } = refined
     for (let dx = -2; dx <= 2; dx++) {
       for (let dy = -2; dy <= 2; dy++) {
         if (!dx && !dy) continue
-        const x = best.cx + dx * step
-        const y = best.cy + dy * step
+        const x = refined.cx + dx * step
+        const y = refined.cy + dy * step
         if (!pointInRing(ring, x, y)) continue
         const r = distanceToRing(ring, x, y)
         if (r > local.r) local = { cx: x, cy: y, r }
       }
     }
-    best = local
+    refined = local
   }
-  return best
+  return refined
 }
 
 /**

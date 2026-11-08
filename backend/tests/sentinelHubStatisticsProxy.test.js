@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { describeSentinelHubStatisticsConfig } from '../server/sentinelHubStatisticsProxy.js'
+import { describeSentinelHubStatisticsConfig } from '../server/proxies/sentinelHubStatisticsProxy.js'
 
 describe('sentinelHubStatisticsProxy public WMS config', () => {
   it('treats PUBLIC_DATA + WMS instance as configured via wms-zonal mode', () => {

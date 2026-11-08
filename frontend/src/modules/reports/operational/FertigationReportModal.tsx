@@ -2,6 +2,7 @@ import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintFertigationReport } from './PrintFertigationReport';
 import './ReportModal.css';
+import { useEscapeKey } from '@/core/hooks/useEscapeKey';
 
 interface FertigationReportModalProps {
   isOpen: boolean;
@@ -59,6 +60,8 @@ export const FertigationReportModal: React.FC<FertigationReportModalProps> = ({
 
     return data;
   }, [records, filterSite, dateRange]);
+
+  useEscapeKey(isOpen, onClose);
 
   if (!isOpen) return null;
 

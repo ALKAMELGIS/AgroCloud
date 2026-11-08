@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { appAlert, appPrompt } from '@/shared/dialogs/appDialog'
+import { appAlert, appPrompt } from '@/components/overlays/appDialog'
 import { getGisContentRowById } from '@/modules/gis/layers/gisContentPortalStore'
 import {
   AGROCLOUD_PRODUCT_NAME,
@@ -409,7 +409,7 @@ export default function AgroCloudDashboardBuilder() {
           />
         ) : null}
 
-        <main className="agrocloud-dashboard-builder__main">
+        <div className="agrocloud-dashboard-builder__main">
           {config.elements.length > 0 ? (
             <AgroCloudDashboardCanvas
               config={config}
@@ -466,7 +466,7 @@ export default function AgroCloudDashboardBuilder() {
             </nav>
           </div>
           )}
-        </main>
+        </div>
       </div>
 
       <SelectLayerModal

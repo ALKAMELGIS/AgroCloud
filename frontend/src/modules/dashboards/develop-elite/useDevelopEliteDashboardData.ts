@@ -1,0 +1,1298 @@
+import type { DevelopEliteFormattedTableRow } from './developEliteMapCropTablePopup'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ArcGisTableRow, type DevelopEliteLayerMeta } from './developEliteArcgisFetch'
+import { ensureDevelopEliteArcgisSnapshot } from './developEliteArcgisDataLoad'
+import {
+  aggregateChartSlices,
+  readArcGisField,
+  resolveCodedFieldLabel,
+  resolveCropLabel,
+  resolveDevelopEliteFieldDomainLabels,
+} from './developEliteChartAggregate'
+import {
+  type DevelopEliteDashboardConfig,
+  type DevelopEliteMapDataLayerId,
+  saveDevelopEliteDashboardConfig,
+} from './developEliteDashboardConfig'
+import {
+  isDevelopEliteMapDataLayerVisible,
+  normalizeDevelopEliteMapDataLayerOrder,
+  normalizeDevelopEliteMapLayerOpacity,
+  normalizeDevelopEliteMapLayerVisibility,
+} from './developEliteMapDataLayers'
+import {
+  buildDevelopEliteStructureFieldKeyByFarmName,
+  buildDevelopEliteStructureFieldKeyByJoinCode,
+  findDevelopEliteStructureFieldKey,
+  normalizeDevelopEliteFarmNameKey,
+  normalizeDevelopEliteJoinKey,
+  resolveDevelopEliteTableRowMapFlyTarget,
+} from './developEliteLayerJoin'
+import { sortDevelopEliteListBySearch } from './developEliteListSearch'
+import {
+  formatDevelopEliteCropHarvestDate,
+  formatDevelopEliteCropPlantingDate,
+} from './developEliteArcgisDate'
+import {
+  buildCountryListItems,
+  buildFarmListItems,
+  buildAgriLocationProjectCodeListItems,
+  filterProjectCodeListForCountry,
+  compareDevelopEliteCropTableRows,
+  compareDevelopEliteFarmListItems,
+  computeDevelopEliteKpis,
+  computeDevelopEliteStructuresTotalAreaHa,
+  developEliteAgriKpiFilters,
+  developEliteMapDisplayFilters,
+  computeDevelopEliteZoneLayerTotalAreaHa,
+  computeSideStructureCounts,
+  dedupeDevelopEliteCropTableRows,
+  developEliteCollectAgriProjectFarmCodes,
+  filterCropRowsForChartStats,
+  filterCropRowsForStructures,
+  developEliteCropTableRowDedupeKey,
+  filterGeoJsonFeaturesByMapView,
+  filterScopedTreeFeatures,
+  filterStructureFeatures,
+  filterStructureFeaturesByMapView,
+  developEliteShouldScopeKpisToMapView,
+  normalizeStructureFeatures,
+  resolveDevelopEliteCountryFilterLabel,
+  type DevelopEliteFilterContext,
+  type DevelopEliteFilters,
+  type DevelopEliteListContext,
+  type DevelopEliteMapView,
+  type DevelopEliteStructureFeature,
+} from './developEliteKpiEngine'
+import {
+  buildWorldCountryListItems,
+  filterWorldCountriesForMap,
+} from './developEliteWorldCountries'
+import { resolveDevelopEliteMapWorldCountriesGeoJson } from './developEliteMapWorldCountriesGeoJson'
+import {
+  clearDevelopEliteArcgisSessionCache,
+  developEliteArcgisBoot,
+  developEliteArcgisCacheKey,
+  developEliteArcgisLayerUrlsChanged,
+  getDevelopEliteArcgisSessionCache,
+  setDevelopEliteArcgisSessionCache,
+  type DevelopEliteArcgisDataSnapshot,
+} from './developEliteArcgisSessionCache'
+import { dispatchDevelopEliteDashboardRefresh } from './developEliteDashboardEvents'
+import { fetchDevelopEliteWorldCountriesGeoJson } from './developEliteWorldCountriesLoad'
+import {
+  quantizeDevelopEliteMapView,
+  shouldPublishDevelopEliteMapView,
+} from './developEliteMapViewPublish'
+import {
+  developEliteFilterZoneLayerGeoJson,
+  developEliteKpiCardSpatialPatch,
+  developEliteDashboardStructurePool,
+  developEliteStructureFeaturesToCollection,
+  resolveDevelopEliteExtentFlyCollection,
+  developEliteFiltersWithStructureSideType,
+  type DevelopEliteSideStructureKind,
+  DEVELOP_ELITE_SIDE_STRUCTURE_TYPE_CODES,
+} from './developEliteSpatialScope'
+
+export type DevelopEliteChartSlice = { label: string; value: number; color: string }
+
+export function useDevelopEliteDashboardData() {
+  const boot = developEliteArcgisBoot()
+  const bootSnapshot = boot.snapshot
+
+  const [config, setConfig] = useState<DevelopEliteDashboardConfig>(() => boot.config)
+  const [filters, setFilters] = useState<DevelopEliteFilters>({
+    country: 'all',
+    zoneId: 'all',
+    selectedFieldKey: null,
+    locationSearch: '',
+    structureTypeCode: null,
+    structureTypeCodes: null,
+    activeKpiCardId: null,
+  })
+  const [mapView, setMapView] = useState<DevelopEliteMapView | null>(null)
+  const mapViewRef = useRef<DevelopEliteMapView | null>(null)
+  const publishMapView = useCallback((view: DevelopEliteMapView) => {
+    const next = quantizeDevelopEliteMapView(view)
+    if (!shouldPublishDevelopEliteMapView(mapViewRef.current, next)) return
+    mapViewRef.current = next
+    startTransition(() => setMapView(next))
+  }, [])
+  const [structures, setStructures] = useState<GeoJSON.FeatureCollection | null>(
+    () => bootSnapshot?.structures ?? null,
+  )
+  const [zoneLayerStructures, setZoneLayerStructures] = useState<GeoJSON.FeatureCollection | null>(
+    () => bootSnapshot?.zoneLayerStructures ?? null,
+  )
+  const [structuresDrawingInfo, setStructuresDrawingInfo] = useState<Record<string, unknown> | null>(
+    () => bootSnapshot?.structuresDrawingInfo ?? null,
+  )
+  const [cropRows, setCropRows] = useState<ArcGisTableRow[]>(() => bootSnapshot?.cropRows ?? [])
+  const [treeFeatures, setTreeFeatures] = useState<GeoJSON.Feature[]>(
+    () => bootSnapshot?.treeFeatures ?? [],
+  )
+  const [treesDrawingInfo, setTreesDrawingInfo] = useState<Record<string, unknown> | null>(
+    () => bootSnapshot?.treesDrawingInfo ?? null,
+  )
+  const [agriLocationFeatures, setAgriLocationFeatures] = useState<GeoJSON.Feature[]>(
+    () => bootSnapshot?.agriLocationFeatures ?? [],
+  )
+  const [agriLocationDrawingInfo, setAgriLocationDrawingInfo] = useState<Record<string, unknown> | null>(
+    () => bootSnapshot?.agriLocationDrawingInfo ?? null,
+  )
+  const [irrigationValveFeatures, setIrrigationValveFeatures] = useState<GeoJSON.Feature[]>(
+    () => bootSnapshot?.irrigationValveFeatures ?? [],
+  )
+  const [irrigationValvesDrawingInfo, setIrrigationValvesDrawingInfo] = useState<
+    Record<string, unknown> | null
+  >(() => bootSnapshot?.irrigationValvesDrawingInfo ?? null)
+  const [irrigationMainPipeFeatures, setIrrigationMainPipeFeatures] = useState<GeoJSON.Feature[]>(
+    () => bootSnapshot?.irrigationMainPipeFeatures ?? [],
+  )
+  const [irrigationMainPipeDrawingInfo, setIrrigationMainPipeDrawingInfo] = useState<
+    Record<string, unknown> | null
+  >(() => bootSnapshot?.irrigationMainPipeDrawingInfo ?? null)
+  const [cropMeta, setCropMeta] = useState<DevelopEliteLayerMeta>(
+    () =>
+      bootSnapshot?.cropMeta ?? {
+        cropTypeLabels: new Map(),
+        fieldDomainLabels: new Map(),
+      },
+  )
+  const [countryLabels, setCountryLabels] = useState<Map<string, string>>(
+    () => bootSnapshot?.countryLabels ?? new Map(),
+  )
+  const [worldCountries, setWorldCountries] = useState<GeoJSON.FeatureCollection | null>(
+    () => bootSnapshot?.worldCountries ?? null,
+  )
+  const [worldCountriesDrawingInfo, setWorldCountriesDrawingInfo] = useState<Record<
+    string,
+    unknown
+  > | null>(() => bootSnapshot?.worldCountriesDrawingInfo ?? null)
+  const [worldCountryDomain, setWorldCountryDomain] = useState<Map<string, string>>(
+    () => bootSnapshot?.worldCountryDomain ?? new Map(),
+  )
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(() =>
+    bootSnapshot?.fetchedAt ? new Date(bootSnapshot.fetchedAt) : null,
+  )
+  const [reloadToken, setReloadToken] = useState(0)
+  const [tableHighlightRowId, setTableHighlightRowId] = useState<string | null>(null)
+  const [tableFlashRowId, setTableFlashRowId] = useState<string | null>(null)
+  const [mapHighlightFieldKey, setMapHighlightFieldKey] = useState<string | null>(null)
+  const [mapFlyToRequest, setMapFlyToRequest] = useState(0)
+  const [mapFlyToLngLat, setMapFlyToLngLat] = useState<{
+    lat: number
+    lng: number
+    nonce: number
+  } | null>(null)
+  const [mapTableIdentifyRequest, setMapTableIdentifyRequest] = useState<{
+    feature: GeoJSON.Feature
+    layerKey: 'agri-location'
+    nonce: number
+  } | null>(null)
+  const [mapPopupFieldKey, setMapPopupFieldKey] = useState<string | null>(null)
+  const [mapPopupRequest, setMapPopupRequest] = useState(0)
+  const [mapCountryFlyRequest, setMapCountryFlyRequest] = useState(0)
+  const [mapExtentFly, setMapExtentFly] = useState<{
+    fc: GeoJSON.FeatureCollection
+    nonce: number
+  } | null>(null)
+  const [farmListFlashFieldKey, setFarmListFlashFieldKey] = useState<string | null>(null)
+  const [chartCropTypeFilter, setChartCropTypeFilter] = useState<string | null>(null)
+  const tableRowsRef = useRef<Record<string, string>[]>([])
+
+  /** Refetch all ArcGIS layers + KPIs/charts/map without a browser reload. */
+  const refresh = useCallback(() => {
+    clearDevelopEliteArcgisSessionCache(developEliteArcgisCacheKey(configRef.current))
+    setError(null)
+    setChartCropTypeFilter(null)
+    setMapHighlightFieldKey(null)
+    setTableHighlightRowId(null)
+    setFarmListFlashFieldKey(null)
+    setFilters({
+      country: 'all',
+      zoneId: 'all',
+      selectedFieldKey: null,
+      locationSearch: '',
+      structureTypeCode: null,
+      structureTypeCodes: null,
+      activeKpiCardId: null,
+    })
+    setReloadToken(t => t + 1)
+    dispatchDevelopEliteDashboardRefresh({ resetMapViewport: true })
+  }, [])
+  const refreshing = loading && structures !== null
+  const initialLoading = false
+
+  const applyArcgisSnapshot = useCallback((snapshot: DevelopEliteArcgisDataSnapshot) => {
+    setStructures(snapshot.structures)
+    setZoneLayerStructures(snapshot.zoneLayerStructures)
+    setStructuresDrawingInfo(snapshot.structuresDrawingInfo)
+    setCropRows(snapshot.cropRows)
+    setTreeFeatures(snapshot.treeFeatures)
+    setTreesDrawingInfo(snapshot.treesDrawingInfo)
+    setAgriLocationFeatures(snapshot.agriLocationFeatures)
+    setAgriLocationDrawingInfo(snapshot.agriLocationDrawingInfo)
+    setIrrigationValveFeatures(snapshot.irrigationValveFeatures)
+    setIrrigationValvesDrawingInfo(snapshot.irrigationValvesDrawingInfo)
+    setIrrigationMainPipeFeatures(snapshot.irrigationMainPipeFeatures)
+    setIrrigationMainPipeDrawingInfo(snapshot.irrigationMainPipeDrawingInfo)
+    setCropMeta(snapshot.cropMeta)
+    setCountryLabels(snapshot.countryLabels)
+    setWorldCountries(snapshot.worldCountries)
+    setWorldCountryDomain(snapshot.worldCountryDomain)
+    setWorldCountriesDrawingInfo(snapshot.worldCountriesDrawingInfo)
+    setLastRefreshedAt(new Date(snapshot.fetchedAt))
+  }, [])
+
+  const applyArcgisPartial = useCallback((patch: Partial<DevelopEliteArcgisDataSnapshot>) => {
+    if (patch.structures !== undefined) setStructures(patch.structures)
+    if (patch.zoneLayerStructures !== undefined) setZoneLayerStructures(patch.zoneLayerStructures)
+    if (patch.structuresDrawingInfo !== undefined) setStructuresDrawingInfo(patch.structuresDrawingInfo)
+    if (patch.cropRows !== undefined) setCropRows(patch.cropRows)
+    if (patch.treeFeatures !== undefined) setTreeFeatures(patch.treeFeatures)
+    if (patch.treesDrawingInfo !== undefined) setTreesDrawingInfo(patch.treesDrawingInfo)
+    if (patch.agriLocationFeatures !== undefined) setAgriLocationFeatures(patch.agriLocationFeatures)
+    if (patch.agriLocationDrawingInfo !== undefined)
+      setAgriLocationDrawingInfo(patch.agriLocationDrawingInfo)
+    if (patch.irrigationValveFeatures !== undefined)
+      setIrrigationValveFeatures(patch.irrigationValveFeatures)
+    if (patch.irrigationValvesDrawingInfo !== undefined)
+      setIrrigationValvesDrawingInfo(patch.irrigationValvesDrawingInfo)
+    if (patch.irrigationMainPipeFeatures !== undefined)
+      setIrrigationMainPipeFeatures(patch.irrigationMainPipeFeatures)
+    if (patch.irrigationMainPipeDrawingInfo !== undefined)
+      setIrrigationMainPipeDrawingInfo(patch.irrigationMainPipeDrawingInfo)
+    if (patch.cropMeta !== undefined) setCropMeta(patch.cropMeta)
+    if (patch.countryLabels !== undefined) setCountryLabels(patch.countryLabels)
+    if (patch.worldCountries !== undefined) setWorldCountries(patch.worldCountries)
+    if (patch.worldCountryDomain !== undefined) setWorldCountryDomain(patch.worldCountryDomain)
+    if (patch.worldCountriesDrawingInfo !== undefined)
+      setWorldCountriesDrawingInfo(patch.worldCountriesDrawingInfo)
+    if (patch.fetchedAt !== undefined) setLastRefreshedAt(new Date(patch.fetchedAt))
+    if (patch.structures?.features?.length) setLoading(false)
+  }, [])
+
+  const structuresRef = useRef(structures)
+  structuresRef.current = structures
+  const configRef = useRef(config)
+  configRef.current = config
+
+  const persistConfig = useCallback((next: DevelopEliteDashboardConfig) => {
+    setConfig(prev => {
+      saveDevelopEliteDashboardConfig(next)
+      if (developEliteArcgisLayerUrlsChanged(prev, next)) {
+        setReloadToken(t => t + 1)
+      }
+      return next
+    })
+  }, [])
+
+  const patchConfig = useCallback((patch: Partial<DevelopEliteDashboardConfig>) => {
+    setConfig(prev => {
+      const next = { ...prev, ...patch }
+      saveDevelopEliteDashboardConfig(next)
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    const force = reloadToken > 0
+    let cancelled = false
+
+    const cacheKey = developEliteArcgisCacheKey(config)
+    if (!force) {
+      const cached = getDevelopEliteArcgisSessionCache(cacheKey)
+      if (cached) {
+        applyArcgisSnapshot(cached)
+        return
+      }
+    }
+
+    const showBusy = force || structuresRef.current === null
+    if (showBusy) setLoading(true)
+    setError(null)
+
+    ensureDevelopEliteArcgisSnapshot(config, {
+      force,
+      onPartial: patch => {
+        if (cancelled) return
+        applyArcgisPartial(patch)
+      },
+    })
+      .then(snapshot => {
+        if (cancelled) return
+        applyArcgisSnapshot(snapshot)
+      })
+      .catch(e => {
+        if (cancelled) return
+        setError(developEliteLoadErrorMessage(e))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    applyArcgisPartial,
+    applyArcgisSnapshot,
+    config.structuresLayerUrl,
+    config.zonesLayerUrl,
+    config.cropsTableUrl,
+    config.treesLayerUrl,
+    config.agriLocationLayerUrl,
+    config.irrigationValvesLayerUrl,
+    config.irrigationMainPipeLayerUrl,
+    config.worldCountriesLayerUrl,
+    reloadToken,
+  ])
+
+  useEffect(() => {
+    const visible = worldCountries?.features?.length
+      ? filterWorldCountriesForMap(worldCountries.features, worldCountryDomain)
+      : []
+    if (visible.length) return
+
+    let cancelled = false
+    fetchDevelopEliteWorldCountriesGeoJson(config.worldCountriesLayerUrl)
+      .then(fc => {
+        if (cancelled || !fc?.features?.length) return
+        const mapReady = filterWorldCountriesForMap(fc.features, worldCountryDomain)
+        if (!mapReady.length) return
+        setWorldCountries(fc)
+        const key = developEliteArcgisCacheKey(config)
+        const cached = getDevelopEliteArcgisSessionCache(key)
+        if (cached) {
+          setDevelopEliteArcgisSessionCache(key, {
+            ...cached,
+            worldCountries: fc,
+            fetchedAt: Date.now(),
+          })
+        }
+      })
+      .catch(() => {
+        /* optional layer */
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [config.worldCountriesLayerUrl, worldCountries, worldCountryDomain])
+
+  const allFeatures = useMemo(() => normalizeStructureFeatures(structures), [structures])
+  const allFeaturesRef = useRef(allFeatures)
+  allFeaturesRef.current = allFeatures
+
+  const mergedCountryLabels = useMemo(() => {
+    const merged = new Map(countryLabels)
+    for (const [code, label] of worldCountryDomain) {
+      if (!merged.has(code)) merged.set(code, label)
+    }
+    return merged
+  }, [countryLabels, worldCountryDomain])
+
+  const listContext = useMemo(
+    (): DevelopEliteListContext => ({ countryLabels: mergedCountryLabels }),
+    [mergedCountryLabels],
+  )
+
+  const zoneListMapSortFeatures = useMemo((): DevelopEliteStructureFeature[] => {
+    return agriLocationFeatures.map((f, i) => ({
+      type: 'Feature',
+      geometry: f.geometry,
+      properties: { ...(f.properties ?? {}) },
+    })) as DevelopEliteStructureFeature[]
+  }, [agriLocationFeatures])
+
+  const zoneList = useMemo(() => {
+    const items = buildAgriLocationProjectCodeListItems(agriLocationFeatures)
+    return filterProjectCodeListForCountry(items, agriLocationFeatures, filters.country, {
+      countryLabels: mergedCountryLabels,
+      worldCountryDomain,
+    })
+  }, [agriLocationFeatures, filters.country, mergedCountryLabels, worldCountryDomain])
+
+  const filterContext = useMemo((): DevelopEliteFilterContext => {
+    const activeZoneLabel =
+      filters.zoneId && filters.zoneId !== 'all'
+        ? zoneList.find(z => z.zoneId === filters.zoneId)?.label ?? null
+        : null
+    const zoneProjectFarmCodes =
+      filters.zoneId && filters.zoneId !== 'all'
+        ? developEliteCollectAgriProjectFarmCodes(
+            agriLocationFeatures,
+            filters.zoneId,
+            'all',
+            {
+              countryLabels: mergedCountryLabels,
+              worldCountryDomain,
+            },
+          )
+        : null
+    return {
+      countryLabels: mergedCountryLabels,
+      worldCountryDomain,
+      activeZoneLabel,
+      zoneProjectFarmCodes:
+        zoneProjectFarmCodes && zoneProjectFarmCodes.size > 0 ? zoneProjectFarmCodes : null,
+    }
+  }, [
+    agriLocationFeatures,
+    filters.country,
+    filters.zoneId,
+    mergedCountryLabels,
+    worldCountryDomain,
+    zoneList,
+  ])
+
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
+  const filterContextRef = useRef(filterContext)
+  filterContextRef.current = filterContext
+  const zoneLayerStructuresRef = useRef(zoneLayerStructures)
+  zoneLayerStructuresRef.current = zoneLayerStructures
+  const agriLocationFeaturesRef = useRef(agriLocationFeatures)
+  agriLocationFeaturesRef.current = agriLocationFeatures
+  const treeFeaturesRef = useRef(treeFeatures)
+  treeFeaturesRef.current = treeFeatures
+  const agriLocationDrawingInfoRef = useRef(agriLocationDrawingInfo)
+  agriLocationDrawingInfoRef.current = agriLocationDrawingInfo
+
+  const scopedFeatures = useMemo(() => {
+    const base = developEliteDashboardStructurePool(
+      allFeatures,
+      filters,
+      filterContext,
+      config,
+      agriLocationFeatures,
+      agriLocationDrawingInfo,
+      treeFeatures,
+    )
+    return filterStructureFeaturesByMapView(base, mapView)
+  }, [
+    agriLocationDrawingInfo,
+    agriLocationFeatures,
+    allFeatures,
+    config,
+    filterContext,
+    filters,
+    mapView,
+    treeFeatures,
+  ])
+
+  const scopedCropRows = useMemo(
+    () =>
+      filterCropRowsForStructures(
+        cropRows,
+        scopedFeatures,
+        filters,
+        config.cropStructureJoinField,
+      ),
+    [cropRows, scopedFeatures, filters, config.cropStructureJoinField],
+  )
+
+  /** Pie / bar / crop table: zone + KPI only — sidebar country is map/KPI scope, not chart scope. */
+  const chartStatsFilters = useMemo(
+    (): DevelopEliteFilters => ({
+      country: 'all',
+      zoneId: filters.zoneId,
+      selectedFieldKey: null,
+      locationSearch: filters.locationSearch,
+      structureTypeCode: filters.structureTypeCode,
+      structureTypeCodes: filters.structureTypeCodes,
+      activeKpiCardId: filters.activeKpiCardId,
+    }),
+    [
+      filters.activeKpiCardId,
+      filters.locationSearch,
+      filters.structureTypeCode,
+      filters.structureTypeCodes,
+      filters.zoneId,
+    ],
+  )
+
+  /** Country / zone / KPI scope for pie, bar, and table stats (not clipped to map extent). */
+  const chartStructurePool = useMemo(() => {
+    return developEliteDashboardStructurePool(
+      allFeatures,
+      chartStatsFilters,
+      filterContext,
+      config,
+      agriLocationFeatures,
+      agriLocationDrawingInfo,
+      treeFeatures,
+    )
+  }, [
+    agriLocationDrawingInfo,
+    agriLocationFeatures,
+    allFeatures,
+    config,
+    filterContext,
+    chartStatsFilters,
+    treeFeatures,
+  ])
+
+  const tableCropRows = useMemo(
+    () =>
+      dedupeDevelopEliteCropTableRows(
+        filterCropRowsForChartStats(
+          cropRows,
+          chartStructurePool,
+          chartStatsFilters,
+          config.cropStructureJoinField,
+          filterContext,
+        ),
+        config.cropStructureJoinField,
+      ),
+    [
+      chartStructurePool,
+      cropRows,
+      filterContext,
+      chartStatsFilters,
+      config.cropStructureJoinField,
+    ],
+  )
+
+  const agriKpiFilters = useMemo(() => developEliteAgriKpiFilters(filters), [filters])
+
+  /** Country/zone scope for point layers — map extent is applied on the point features, not this pool. */
+  const agriKpiStructures = useMemo(() => {
+    return filterStructureFeatures(allFeatures, agriKpiFilters, filterContext)
+  }, [agriKpiFilters, allFeatures, filterContext])
+
+  const scopedTreeCount = useMemo(() => {
+    const scoped = filterScopedTreeFeatures(
+      treeFeatures,
+      agriKpiStructures,
+      agriKpiFilters,
+      filterContext,
+    )
+    return filterGeoJsonFeaturesByMapView(scoped, mapView).length
+  }, [treeFeatures, agriKpiStructures, agriKpiFilters, filterContext, mapView])
+
+  const kpiAgriLocationFeatures = useMemo(
+    () => filterGeoJsonFeaturesByMapView(agriLocationFeatures, mapView),
+    [agriLocationFeatures, mapView],
+  )
+
+  const mapLayerVisibility = useMemo(
+    () => normalizeDevelopEliteMapLayerVisibility(config.mapLayerVisibility),
+    [config.mapLayerVisibility],
+  )
+
+  const agroStructuresLayerVisible = isDevelopEliteMapDataLayerVisible(
+    mapLayerVisibility,
+    'agro-structures',
+  )
+
+  /** Same pool as the map canvas: all structures on the layer, clipped to the current map view. */
+  const mapLinkedStructureFeatures = useMemo(() => {
+    const base = filterStructureFeatures(
+      allFeatures,
+      developEliteMapDisplayFilters(filters),
+      filterContext,
+    )
+    return filterStructureFeaturesByMapView(base, mapView)
+  }, [allFeatures, filterContext, filters, mapView])
+
+  const heroZoneLayerTotalAreaHa = useMemo(() => {
+    if (!agroStructuresLayerVisible) return 0
+    if (zoneLayerStructures?.features?.length) {
+      return computeDevelopEliteZoneLayerTotalAreaHa(zoneLayerStructures, mapView)
+    }
+    return computeDevelopEliteStructuresTotalAreaHa(mapLinkedStructureFeatures)
+  }, [
+    agroStructuresLayerVisible,
+    mapLinkedStructureFeatures,
+    mapView,
+    zoneLayerStructures,
+  ])
+
+  const heroMapCultivatedAreaHa = useMemo(() => {
+    if (!agroStructuresLayerVisible) return 0
+    return computeDevelopEliteStructuresTotalAreaHa(mapLinkedStructureFeatures)
+  }, [agroStructuresLayerVisible, mapLinkedStructureFeatures])
+
+  const kpis = useMemo(() => {
+    const base = computeDevelopEliteKpis(
+      scopedFeatures,
+      scopedCropRows,
+      config,
+      scopedTreeCount,
+      kpiAgriLocationFeatures,
+      agriLocationDrawingInfo,
+      filters,
+      agriKpiStructures,
+      agriKpiFilters,
+      filterContext,
+    )
+    return {
+      ...base,
+      heroTotalAreaHa: heroMapCultivatedAreaHa,
+      heroZoneLayerTotalAreaHa,
+    }
+  }, [
+    scopedFeatures,
+    scopedCropRows,
+    config,
+    scopedTreeCount,
+    kpiAgriLocationFeatures,
+    agriLocationDrawingInfo,
+    agriKpiFilters,
+    agriKpiStructures,
+    filterContext,
+    filters,
+    heroMapCultivatedAreaHa,
+    heroZoneLayerTotalAreaHa,
+  ])
+
+  const farmListFilters = useMemo(
+    (): DevelopEliteFilters => ({
+      country: filters.country,
+      zoneId: filters.zoneId,
+      selectedFieldKey: null,
+      locationSearch: '',
+      structureTypeCode: filters.structureTypeCode,
+      structureTypeCodes: filters.structureTypeCodes,
+      activeKpiCardId: filters.activeKpiCardId,
+    }),
+    [
+      filters.activeKpiCardId,
+      filters.country,
+      filters.structureTypeCode,
+      filters.structureTypeCodes,
+      filters.zoneId,
+    ],
+  )
+
+  const farmList = useMemo(() => {
+    const scoped = developEliteDashboardStructurePool(
+      allFeatures,
+      farmListFilters,
+      filterContext,
+      config,
+      agriLocationFeatures,
+      agriLocationDrawingInfo,
+      treeFeatures,
+    )
+    const items = buildFarmListItems(scoped, listContext)
+    return sortDevelopEliteListBySearch(
+      items,
+      filters.locationSearch,
+      item => `${item.title} ${item.subtitle ?? ''}`,
+      compareDevelopEliteFarmListItems,
+    )
+  }, [
+    agriLocationDrawingInfo,
+    agriLocationFeatures,
+    allFeatures,
+    config,
+    farmListFilters,
+    filterContext,
+    filters.locationSearch,
+    listContext,
+    treeFeatures,
+  ])
+
+  const countryList = useMemo(() => {
+    const fromWorld = buildWorldCountryListItems(worldCountries, worldCountryDomain)
+    if (fromWorld.length) return fromWorld
+    return buildCountryListItems(allFeatures, listContext)
+  }, [allFeatures, listContext, worldCountries, worldCountryDomain])
+  const sideCounts = useMemo(() => {
+    const pool = filterStructureFeatures(
+      allFeatures,
+      {
+        country: filters.country,
+        zoneId: filters.zoneId,
+        selectedFieldKey: null,
+        locationSearch: filters.locationSearch,
+        structureTypeCode: null,
+        structureTypeCodes: null,
+        activeKpiCardId: null,
+      },
+      filterContext,
+    )
+    return computeSideStructureCounts(filterStructureFeaturesByMapView(pool, mapView))
+  }, [
+    allFeatures,
+    filterContext,
+    filters.country,
+    filters.locationSearch,
+    filters.zoneId,
+    mapView,
+  ])
+
+  /** Pie/bar use the same Farm_Code–joined crop rows as the grid table (not a separate chart-only filter). */
+  const chartSlices = useMemo(
+    () =>
+      aggregateChartSlices(
+        tableCropRows,
+        config.chartGroupField,
+        cropMeta,
+        config.chartValueField,
+      ),
+    [tableCropRows, config.chartGroupField, config.chartValueField, cropMeta],
+  )
+
+  const cropTypeColors = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const slice of chartSlices) map.set(slice.label, slice.color)
+    return map
+  }, [chartSlices])
+
+  const activeCountryLabel = useMemo(
+    () => resolveDevelopEliteCountryFilterLabel(filters.country, countryList, mergedCountryLabels),
+    [countryList, mergedCountryLabels, filters.country],
+  )
+
+  const mapWorldCountriesPortfolioExtentGeoJson = useMemo(
+    () => resolveDevelopEliteMapWorldCountriesGeoJson(worldCountries, worldCountryDomain),
+    [worldCountries, worldCountryDomain],
+  )
+
+  /** Portfolio country outlines — always show full set; country filter only scopes KPIs/farms and map fly-to. */
+  const mapWorldCountriesGeoJson = useMemo(
+    () => resolveDevelopEliteMapWorldCountriesGeoJson(worldCountries, worldCountryDomain),
+    [worldCountries, worldCountryDomain],
+  )
+
+  const mapGeoJson = useMemo((): GeoJSON.FeatureCollection => {
+    return { type: 'FeatureCollection', features: allFeatures as DevelopEliteStructureFeature[] }
+  }, [allFeatures])
+
+  const mapTreesGeoJson = useMemo((): GeoJSON.FeatureCollection => {
+    return { type: 'FeatureCollection', features: treeFeatures }
+  }, [treeFeatures])
+
+  const mapAgriLocationGeoJson = useMemo((): GeoJSON.FeatureCollection => {
+    return { type: 'FeatureCollection', features: agriLocationFeatures }
+  }, [agriLocationFeatures])
+
+  const mapIrrigationValvesGeoJson = useMemo((): GeoJSON.FeatureCollection => {
+    return { type: 'FeatureCollection', features: irrigationValveFeatures }
+  }, [irrigationValveFeatures])
+
+  const mapIrrigationMainPipeGeoJson = useMemo((): GeoJSON.FeatureCollection => {
+    return { type: 'FeatureCollection', features: irrigationMainPipeFeatures }
+  }, [irrigationMainPipeFeatures])
+
+  const mapDataLayerOrder = useMemo(
+    () => normalizeDevelopEliteMapDataLayerOrder(config.mapDataLayerOrder),
+    [config.mapDataLayerOrder],
+  )
+
+  const mapDataLayerOpacity = useMemo(
+    () => normalizeDevelopEliteMapLayerOpacity(config.mapDataLayerOpacity),
+    [config.mapDataLayerOpacity],
+  )
+
+  const setMapLayerVisible = useCallback((id: DevelopEliteMapDataLayerId, visible: boolean) => {
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        mapLayerVisibility: {
+          ...normalizeDevelopEliteMapLayerVisibility(prev.mapLayerVisibility),
+          [id]: visible,
+        },
+      }
+      saveDevelopEliteDashboardConfig(next)
+      return next
+    })
+  }, [])
+
+  const setMapDataLayerOrder = useCallback((order: DevelopEliteMapDataLayerId[]) => {
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        mapDataLayerOrder: normalizeDevelopEliteMapDataLayerOrder(order),
+      }
+      saveDevelopEliteDashboardConfig(next)
+      return next
+    })
+  }, [])
+
+  const setMapDataLayerOpacity = useCallback((id: DevelopEliteMapDataLayerId, opacity: number) => {
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        mapDataLayerOpacity: normalizeDevelopEliteMapLayerOpacity({
+          ...prev.mapDataLayerOpacity,
+          [id]: opacity,
+        }),
+      }
+      saveDevelopEliteDashboardConfig(next)
+      return next
+    })
+  }, [])
+
+  const structureFieldKeyByJoinCode = useMemo(
+    () => buildDevelopEliteStructureFieldKeyByJoinCode(allFeatures, config.cropStructureJoinField),
+    [allFeatures, config.cropStructureJoinField],
+  )
+
+  const structureFieldKeyByFarmName = useMemo(
+    () => buildDevelopEliteStructureFieldKeyByFarmName(allFeatures),
+    [allFeatures],
+  )
+
+  const tableRows = useMemo(() => {
+    const joinField = config.cropStructureJoinField
+    const sorted = [...tableCropRows].sort((a, b) =>
+      compareDevelopEliteCropTableRows(a, b, joinField),
+    )
+    return sorted.slice(0, 200).map((row, i) => {
+      const dedupeKey = developEliteCropTableRowDedupeKey(row, joinField)
+      const out: DevelopEliteFormattedTableRow = {
+        _rowId: String(row.OBJECTID ?? row.objectid ?? dedupeKey),
+      }
+      const rawFc = readArcGisField(row, joinField)
+      const fc = rawFc != null && rawFc !== '' ? normalizeDevelopEliteJoinKey(String(rawFc)) : ''
+      let fieldKey = fc ? structureFieldKeyByJoinCode.get(fc) ?? '' : ''
+      if (!fieldKey) {
+        const farmNameRaw = readArcGisField(row, 'Farm_Name')
+        const farmName =
+          farmNameRaw != null && farmNameRaw !== ''
+            ? normalizeDevelopEliteFarmNameKey(String(farmNameRaw))
+            : ''
+        if (farmName) fieldKey = structureFieldKeyByFarmName.get(farmName) ?? ''
+      }
+      out._fieldKey = fieldKey
+      for (const col of config.tableColumns) {
+        if (col === 'OBJECTID') {
+          out[col] = String(i + 1)
+        } else if (col === 'Crop_Type') {
+          out[col] = resolveCropLabel(row, cropMeta, col)
+        } else if (resolveDevelopEliteFieldDomainLabels(cropMeta, col)) {
+          out[col] = resolveCodedFieldLabel(row, cropMeta, col)
+        } else if (col === 'Planting_Date') {
+          out[col] = formatDevelopEliteCropPlantingDate(row)
+        } else if (col === 'Harvest_Date') {
+          out[col] = formatDevelopEliteCropHarvestDate(row)
+        } else if (col === 'Total_Tree') {
+          const v = readArcGisField(row, col)
+          out[col] = v != null && v !== '' ? String(v) : ''
+        } else {
+          const v = readArcGisField(row, col)
+          out[col] = v != null && v !== '' ? String(v) : ''
+        }
+      }
+      return out
+    })
+  }, [
+    tableCropRows,
+    config.tableColumns,
+    config.cropStructureJoinField,
+    cropMeta,
+    structureFieldKeyByJoinCode,
+    structureFieldKeyByFarmName,
+  ])
+
+  tableRowsRef.current = tableRows
+
+  const displayTableRows = useMemo(() => {
+    if (!chartCropTypeFilter) return tableRows
+    return tableRows.filter(row => row.Crop_Type === chartCropTypeFilter)
+  }, [chartCropTypeFilter, tableRows])
+
+  const publishMapExtentFly = useCallback((fc: GeoJSON.FeatureCollection) => {
+    if (!fc.features.length) return
+    setMapExtentFly({ fc, nonce: Date.now() })
+  }, [])
+
+  const publishExtentFlyForFilters = useCallback(
+    (scopeFilters: DevelopEliteFilters, preferZoneLayer = false) => {
+      let fc = resolveDevelopEliteExtentFlyCollection(null, {
+        config: configRef.current,
+        scopeFilters,
+        allFeatures: allFeaturesRef.current,
+        ctx: filterContextRef.current,
+        agriLocationFeatures: agriLocationFeaturesRef.current,
+        agriLocationDrawingInfo: agriLocationDrawingInfoRef.current,
+        treeFeatures: treeFeaturesRef.current,
+        zoneLayer: zoneLayerStructuresRef.current,
+      })
+      if (!fc.features.length && preferZoneLayer) {
+        fc = developEliteFilterZoneLayerGeoJson(zoneLayerStructuresRef.current, scopeFilters)
+      }
+      publishMapExtentFly(fc)
+    },
+    [publishMapExtentFly],
+  )
+
+  const selectCountry = useCallback((code: string) => {
+    setChartCropTypeFilter(null)
+    setMapHighlightFieldKey(null)
+    setFilters(f => ({
+      ...f,
+      country: code || 'all',
+      zoneId: 'all',
+      selectedFieldKey: null,
+      structureTypeCode: null,
+      structureTypeCodes: null,
+      activeKpiCardId: null,
+    }))
+    setMapCountryFlyRequest(n => n + 1)
+  }, [])
+
+  const selectZone = useCallback(
+    (zoneId: string) => {
+      setMapHighlightFieldKey(null)
+      setChartCropTypeFilter(null)
+      setFilters(f => {
+        const next = { ...f, zoneId: zoneId || 'all', selectedFieldKey: null }
+        queueMicrotask(() => publishExtentFlyForFilters(next))
+        return next
+      })
+    },
+    [publishExtentFlyForFilters],
+  )
+
+  const selectStructureSideType = useCallback(
+    (kind: DevelopEliteSideStructureKind) => {
+      setChartCropTypeFilter(null)
+      setMapHighlightFieldKey(null)
+      setFilters(f => {
+        const next = developEliteFiltersWithStructureSideType(f, DEVELOP_ELITE_SIDE_STRUCTURE_TYPE_CODES[kind])
+        queueMicrotask(() => publishExtentFlyForFilters(next))
+        return next
+      })
+    },
+    [publishExtentFlyForFilters],
+  )
+
+  const activateKpiCard = useCallback(
+    (cardId: string) => {
+      setChartCropTypeFilter(null)
+      setMapHighlightFieldKey(null)
+      const card = configRef.current.kpiCards.find(c => c.id === cardId)
+      if (!card) return
+      const patch = developEliteKpiCardSpatialPatch(card)
+      if (!patch) return
+
+      setFilters(f => {
+        const togglingStructure =
+          patch.structureTypeCode != null &&
+          f.structureTypeCode === patch.structureTypeCode &&
+          !f.structureTypeCodes?.length &&
+          !f.activeKpiCardId
+        const togglingCodes =
+          Boolean(patch.structureTypeCodes?.length) &&
+          Boolean(f.structureTypeCodes?.length) &&
+          patch.structureTypeCodes!.every(c => f.structureTypeCodes!.includes(c)) &&
+          f.structureTypeCodes!.length === patch.structureTypeCodes!.length &&
+          !f.activeKpiCardId
+        const togglingAgri = Boolean(patch.activeKpiCardId) && f.activeKpiCardId === patch.activeKpiCardId
+
+        const cleared: DevelopEliteFilters = {
+          ...f,
+          selectedFieldKey: null,
+          structureTypeCode: null,
+          structureTypeCodes: null,
+          activeKpiCardId: null,
+        }
+        const next =
+          togglingStructure || togglingCodes || togglingAgri
+            ? cleared
+            : { ...cleared, ...patch }
+
+        queueMicrotask(() => {
+          const fc = resolveDevelopEliteExtentFlyCollection(card, {
+            config: configRef.current,
+            scopeFilters: next,
+            allFeatures: allFeaturesRef.current,
+            ctx: filterContextRef.current,
+            agriLocationFeatures: agriLocationFeaturesRef.current,
+            agriLocationDrawingInfo: agriLocationDrawingInfoRef.current,
+            treeFeatures: treeFeaturesRef.current,
+            zoneLayer: zoneLayerStructuresRef.current,
+          })
+          publishMapExtentFly(fc)
+        })
+        return next
+      })
+    },
+    [publishExtentFlyForFilters, publishMapExtentFly],
+  )
+
+  const flyToHeroZoneLayer = useCallback(() => {
+    setChartCropTypeFilter(null)
+    setMapHighlightFieldKey(null)
+    const current = filtersRef.current
+    const zoneFc = developEliteFilterZoneLayerGeoJson(zoneLayerStructuresRef.current, current)
+    if (zoneFc.features.length) publishMapExtentFly(zoneFc)
+    else publishExtentFlyForFilters(current, true)
+  }, [publishExtentFlyForFilters, publishMapExtentFly])
+
+  const flyToHeroCultivatedArea = useCallback(() => {
+    setChartCropTypeFilter(null)
+    setMapHighlightFieldKey(null)
+    const current = filtersRef.current
+    const scope: DevelopEliteFilters = {
+      ...current,
+      selectedFieldKey: null,
+      structureTypeCode: null,
+      structureTypeCodes: null,
+      activeKpiCardId: null,
+    }
+    const structures = filterStructureFeatures(
+      allFeaturesRef.current,
+      scope,
+      filterContextRef.current,
+    )
+    const fc = developEliteStructureFeaturesToCollection(structures)
+    if (fc.features.length) publishMapExtentFly(fc)
+    else publishExtentFlyForFilters(scope)
+  }, [publishExtentFlyForFilters, publishMapExtentFly])
+
+  const selectFarm = useCallback((fieldKey: string | null) => {
+    setChartCropTypeFilter(null)
+    setMapHighlightFieldKey(fieldKey)
+    setFilters(f => ({ ...f, selectedFieldKey: fieldKey }))
+    if (fieldKey) setMapFlyToRequest(n => n + 1)
+  }, [])
+
+  const focusFarmOnMap = useCallback((fieldKey: string) => {
+    setChartCropTypeFilter(null)
+    setMapHighlightFieldKey(fieldKey)
+    setFilters(f => ({ ...f, selectedFieldKey: fieldKey }))
+    setMapFlyToRequest(n => n + 1)
+    setFarmListFlashFieldKey(null)
+    requestAnimationFrame(() => setFarmListFlashFieldKey(fieldKey))
+    window.setTimeout(() => {
+      setFarmListFlashFieldKey(current => (current === fieldKey ? null : current))
+    }, 1600)
+  }, [])
+
+  const resolveTableRowFieldKey = useCallback(
+    (row: Record<string, string> | undefined): string | null => {
+      if (!row) return null
+      if (row._fieldKey?.trim()) return row._fieldKey.trim()
+      const joinField = config.cropStructureJoinField
+      const farmCode = row.Farm_Code ?? row[joinField] ?? ''
+      const farmName = row.Farm_Name ?? ''
+      if (!farmCode.trim() && !farmName.trim()) return null
+      const fromLive = findDevelopEliteStructureFieldKey(
+        allFeaturesRef.current,
+        joinField,
+        farmCode,
+        farmName,
+      )
+      if (fromLive) return fromLive
+      if (farmCode.trim()) {
+        const fromMap = structureFieldKeyByJoinCode.get(normalizeDevelopEliteJoinKey(farmCode))
+        if (fromMap) return fromMap
+      }
+      if (farmName.trim()) {
+        return structureFieldKeyByFarmName.get(normalizeDevelopEliteFarmNameKey(farmName)) ?? null
+      }
+      return null
+    },
+    [config.cropStructureJoinField, structureFieldKeyByFarmName, structureFieldKeyByJoinCode],
+  )
+
+  const requestMapPopupForFieldKey = useCallback((fieldKey: string) => {
+    const key = fieldKey.trim()
+    if (!key) return
+    setMapPopupFieldKey(key)
+    setMapPopupRequest(n => n + 1)
+  }, [])
+
+  const syncTableRowFromMapPopup = useCallback((rowId: string) => {
+    setTableHighlightRowId(rowId)
+    setTableFlashRowId(rowId)
+    window.setTimeout(() => {
+      setTableFlashRowId(current => (current === rowId ? null : current))
+    }, 1600)
+  }, [])
+
+  const focusTableRow = useCallback(
+    (rowId: string) => {
+      setTableHighlightRowId(rowId)
+      const row = tableRowsRef.current.find(r => r._rowId === rowId)
+      const fieldKey = resolveTableRowFieldKey(row)
+      if (!fieldKey) return
+      setMapHighlightFieldKey(fieldKey)
+      setFilters(f => ({ ...f, selectedFieldKey: fieldKey }))
+      requestMapPopupForFieldKey(fieldKey)
+    },
+    [requestMapPopupForFieldKey, resolveTableRowFieldKey],
+  )
+
+  const selectChartCropType = useCallback((cropLabel: string) => {
+    const next = chartCropTypeFilter === cropLabel ? null : cropLabel
+    setChartCropTypeFilter(next)
+    setMapHighlightFieldKey(null)
+    setFilters(f => ({ ...f, selectedFieldKey: null }))
+    if (!next) return
+    const row = tableRowsRef.current.find(r => r.Crop_Type === next)
+    if (row) {
+      setTableHighlightRowId(row._rowId)
+      setTableFlashRowId(row._rowId)
+      window.setTimeout(() => {
+        setTableFlashRowId(current => (current === row._rowId ? null : current))
+      }, 1600)
+    }
+  }, [chartCropTypeFilter])
+
+  const activateTableRowOnMap = useCallback(
+    (rowId: string) => {
+      const row = tableRowsRef.current.find(r => r._rowId === rowId)
+      if (!row) return
+      setTableHighlightRowId(rowId)
+      setTableFlashRowId(rowId)
+      window.setTimeout(() => {
+        setTableFlashRowId(current => (current === rowId ? null : current))
+      }, 1600)
+
+      const target = resolveDevelopEliteTableRowMapFlyTarget(
+        allFeaturesRef.current,
+        mapAgriLocationGeoJson,
+        config.cropStructureJoinField,
+        row,
+      )
+      if (!target) return
+
+      if (target.kind === 'structure') {
+        focusFarmOnMap(target.fieldKey)
+        requestMapPopupForFieldKey(target.fieldKey)
+        return
+      }
+
+      const agriHit = target.feature
+      const coords =
+        agriHit.geometry?.type === 'Point'
+          ? agriHit.geometry.coordinates
+          : agriHit.geometry?.type === 'MultiPoint'
+            ? agriHit.geometry.coordinates[0]
+            : null
+      if (!coords || coords.length < 2) return
+      setMapHighlightFieldKey(null)
+      setFilters(f => ({ ...f, selectedFieldKey: null }))
+      setMapFlyToLngLat({ lat: coords[1], lng: coords[0], nonce: Date.now() })
+      setMapTableIdentifyRequest({
+        feature: agriHit,
+        layerKey: 'agri-location',
+        nonce: Date.now(),
+      })
+    },
+    [
+      config.cropStructureJoinField,
+      focusFarmOnMap,
+      mapAgriLocationGeoJson,
+      requestMapPopupForFieldKey,
+    ],
+  )
+
+  const cropTablePopupLink = useMemo(
+    () => ({
+      joinField: config.cropStructureJoinField,
+      tableColumns: config.tableColumns,
+      cropRows: tableCropRows,
+      formattedTableRows: tableRows,
+      cropMeta,
+    }),
+    [config.cropStructureJoinField, config.tableColumns, cropMeta, tableCropRows, tableRows],
+  )
+
+  const mapFieldHighlightKey = mapHighlightFieldKey ?? filters.selectedFieldKey
+
+  const setLocationSearch = useCallback((q: string) => {
+    setFilters(f => ({ ...f, locationSearch: q }))
+  }, [])
+
+  return {
+    config,
+    persistConfig,
+    patchConfig,
+    filters,
+    loading,
+    error,
+    refresh,
+    refreshing,
+    initialLoading,
+    lastRefreshedAt,
+    kpis,
+    farmList,
+    zoneList,
+    zoneListMapSortFeatures,
+    mapView,
+    mapKpisLinkedToView: developEliteShouldScopeKpisToMapView(mapView),
+    setMapView: publishMapView,
+    countryList,
+    sideCounts,
+    chartSlices,
+    cropTypeColors,
+    mapGeoJson,
+    mapTreesGeoJson,
+    mapAgriLocationGeoJson,
+    mapIrrigationValvesGeoJson,
+    mapIrrigationMainPipeGeoJson,
+    treesDrawingInfo,
+    agriLocationDrawingInfo,
+    irrigationValvesDrawingInfo,
+    irrigationMainPipeDrawingInfo,
+    mapLayerVisibility,
+    mapDataLayerOrder,
+    mapDataLayerOpacity,
+    setMapLayerVisible,
+    setMapDataLayerOrder,
+    setMapDataLayerOpacity,
+    mapWorldCountriesGeoJson,
+    mapWorldCountriesPortfolioExtentGeoJson,
+    worldCountriesDrawingInfo,
+    structuresDrawingInfo,
+    tableRows: displayTableRows,
+    chartCropTypeFilter,
+    selectChartCropType,
+    tableHighlightRowId,
+    tableFlashRowId,
+    mapFieldHighlightKey,
+    focusTableRow,
+    activateTableRowOnMap,
+    mapFlyToRequest,
+    mapFlyToLngLat,
+    mapTableIdentifyRequest,
+    mapPopupFieldKey,
+    mapPopupRequest,
+    cropTablePopupLink,
+    syncTableRowFromMapPopup,
+    mapCountryFlyRequest,
+    mapExtentFly,
+    activeCountryLabel,
+    selectCountry,
+    selectZone,
+    selectStructureSideType,
+    activateKpiCard,
+    flyToHeroZoneLayer,
+    flyToHeroCultivatedArea,
+    selectFarm,
+    focusFarmOnMap,
+    farmListFlashFieldKey,
+    setLocationSearch,
+    scopedFeatures,
+    countryLabels,
+    worldCountryDomain,
+  }
+}
+
+/** Readable message for a failed ArcGIS load ("Failed to fetch" alone tells the user nothing). */
+export function developEliteLoadErrorMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e ?? '')
+  if (!raw || /failed to fetch|networkerror|load failed|network request failed/i.test(raw)) {
+    return 'Could not reach the ArcGIS map services. Check the internet connection, then retry.'
+  }
+  const status = raw.match(/\((\d{3})\)/)?.[1]
+  if (status === '401' || status === '403' || /token/i.test(raw)) {
+    return 'ArcGIS refused access to a layer. Check the layer sharing or the API key in Settings.'
+  }
+  if (status === '400' || status === '404' || /not found|invalid url/i.test(raw)) {
+    return 'A configured ArcGIS layer was not found. Check the layer URLs in Dashboard settings.'
+  }
+  return `Some dashboard data could not be loaded: ${raw}`
+}

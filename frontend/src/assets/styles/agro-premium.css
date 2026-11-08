@@ -378,3 +378,43 @@ html[data-theme='dark'] :is(.ds-btn-primary, .gis-btn-primary, .ec-btn-primary, 
     transition: none !important;
   }
 }
+
+/* ============================== Keyboard access (Web Interface Guidelines) == */
+/* Skip link: first tab stop, visible only when focused. */
+.ds-skip-link {
+  position: fixed;
+  inset-inline-start: 12px;
+  top: 8px;
+  z-index: 2147483000;
+  padding: 10px 16px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-color-primary);
+  color: var(--ds-color-on-primary);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--ds-shadow-lg);
+  transform: translateY(-160%);
+  transition: transform var(--ds-motion-fast) var(--ds-ease-out);
+}
+
+.ds-skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--ds-color-on-primary);
+  outline-offset: -4px;
+}
+
+/* The landmark receives programmatic focus from the skip link; no ring needed on it. */
+#main-content:focus {
+  outline: none;
+}
+
+/*
+ * Guaranteed focus indicator for non-MUI controls. 173 legacy rules set `outline: none`, and
+ * some also reset box-shadow, leaving keyboard focus invisible (measured: header theme toggle,
+ * settings tabs, theme pickers). The MUI theme uses the same outline ring.
+ * Text fields are excluded: their wrappers show focus with :focus-within.
+ */
+:is(button, a[href], summary, input[type='checkbox'], input[type='radio'], input[type='range'], input[type='color'], [role='button'], [role='tab'], [role='menuitem'], [role='option'], [role='switch'], [tabindex]:not([tabindex='-1'])):not(.ds-skip-link):not(.maplibregl-canvas):not(.mapboxgl-canvas):focus-visible {
+  outline: 2px solid var(--ds-color-primary) !important;
+  outline-offset: 2px !important;
+}

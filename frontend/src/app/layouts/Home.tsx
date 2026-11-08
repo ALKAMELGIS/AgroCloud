@@ -1,31 +1,17 @@
-import { useContext, useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useTheme } from '@mui/material/styles'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './Home.css'
-import { useLanguage, type AppLanguage } from '@/core/localization/i18n'
+import { useLanguage } from '@/core/localization/i18n'
 import { useSystemSettingsOptional } from '@/core/state/SystemSettingsContext'
-import { AuthContextOptional } from '@/core/state/auth'
 import { startSession } from '@/core/auth/auth'
-import { GPS_VEHICLE_TRACKING_SIGNIN_URL } from '@/core/routing/defaultPageLinks'
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
+import { HomeMenuIcon } from './HomeNavigation'
+import { menuItems } from './homeMenu'
+import type { HomeMenuItem, HomeSubMenuItem } from './HomeNavigation'
 
-interface MenuItem {
-  id: string
-  label: Record<AppLanguage, string>
-  icon: string
-  color: string
-  items?: SubMenuItem[]
-  to?: string
-  /** Opens in a new tab (e.g. John Deere sign-in). */
-  externalUrl?: string
-}
-
-interface SubMenuItem {
-  label: Record<AppLanguage, string>
-  icon: string
-  to?: string
-  action?: 'logout'
-  externalUrl?: string
-}
+type MenuItem = HomeMenuItem
+type SubMenuItem = HomeSubMenuItem
 
 function openExternalApp(url: string): void {
   const trimmed = url.trim()
@@ -33,165 +19,6 @@ function openExternalApp(url: string): void {
   window.open(trimmed, '_blank', 'noopener,noreferrer')
 }
 
-const menuItems: MenuItem[] = [
-  {
-    id: 'dashboard',
-    label: { en: 'Dashboard', ar: 'لوحة التحكم' },
-    icon: 'fa-solid fa-chart-line',
-    color: '#F97316',
-    items: [
-      { label: { en: 'Develop Dashboard', ar: 'تطوير لوحة التحكم' }, icon: 'fa-solid fa-grip', to: '/dashboard/develop' },
-      { label: { en: 'Agro Cloud Dashboard', ar: 'لوحة Agro Cloud' }, icon: 'fa-solid fa-chart-pie', to: '/dashboards/agro-cloud' },
-      {
-        label: { en: 'AgroCloud Platform', ar: 'منصة AgroCloud' },
-        icon: 'fa-solid fa-seedling',
-        to: '/dashboards/agro-cloud-platform',
-      },
-    ]
-  },
-  {
-    id: 'application',
-    label: { en: 'Application', ar: 'التطبيقات' },
-    icon: 'fa-solid fa-cubes',
-    color: '#0EA5E9',
-    items: [
-      {
-        label: { en: 'AgroCloud Management', ar: 'إدارة AgroCloud' },
-        icon: 'fa-solid fa-building-user',
-        to: '/applications/agrocloud-management',
-      },
-      {
-        label: { en: 'AgroCloud Platform', ar: 'منصة AgroCloud' },
-        icon: 'fa-solid fa-seedling',
-        to: '/dashboards/agro-cloud-platform',
-      },
-    ],
-  },
-  {
-    id: 'satellite',
-    label: { en: 'Satellite Imagery', ar: 'صور الأقمار الصناعية' },
-    icon: 'fa-solid fa-satellite-dish',
-    color: '#8B5CF6', // Violet
-    items: [
-      { label: { en: 'Satellite Intelligence', ar: 'التحليل الفضائي الذكي' }, icon: 'fa-solid fa-layer-group', to: '/satellite/indices' },
-    ]
-  },
-  {
-    id: 'data',
-    label: { en: 'Operations', ar: 'العمليات' },
-    icon: 'fa-solid fa-screwdriver-wrench',
-    color: '#F59E0B', // Amber
-    items: [
-      {
-        label: { en: 'EC/PH', ar: 'الملوحة والحموضة' },
-        icon: 'fa-solid fa-droplet',
-        to: '/data/ec-ph',
-      },
-      {
-        label: { en: 'Irrigation Scheduling', ar: 'جدولة الري' },
-        icon: 'fa-solid fa-water',
-        to: '/data/irrigation',
-      },
-      {
-        label: { en: 'Harvest Logging', ar: 'تسجيل الحصاد' },
-        icon: 'fa-solid fa-tractor',
-        to: '/data/harvest',
-      },
-      {
-        label: { en: 'QHIS', ar: 'الجودة والسلامة' },
-        icon: 'fa-solid fa-shield-halved',
-        to: '/data/qhis',
-      },
-      {
-        label: { en: 'Product & Sales Tracking', ar: 'تتبع المنتجات والمبيعات' },
-        icon: 'fa-solid fa-boxes-stacked',
-        to: '/data/production',
-      },
-    ],
-  },
-  {
-    id: 'sensors',
-    label: { en: 'Sensors', ar: 'الحساسات' },
-    icon: 'fa-solid fa-microchip',
-    color: '#0EA5E9', // Sky
-    items: [
-      { label: { en: 'Soil Sensors', ar: 'حساسات التربة' }, icon: 'fa-solid fa-seedling', to: '/sensors/soil' },
-      { label: { en: 'Weather Sensors', ar: 'حساسات الطقس' }, icon: 'fa-solid fa-cloud-sun', to: '/sensors/weather' },
-      { label: { en: 'Irrigation Sensors', ar: 'حساسات الري' }, icon: 'fa-solid fa-faucet-drip', to: '/sensors/irrigation' },
-      { label: { en: 'Camera', ar: 'الكاميرا' }, icon: 'fa-solid fa-camera', to: '/sensors/camera' },
-      {
-        label: { en: 'GPS Vehicle Tracking', ar: 'تتبع مركبات GPS' },
-        icon: 'fa-solid fa-route',
-        to: '/sensors/gps',
-        externalUrl: GPS_VEHICLE_TRACKING_SIGNIN_URL,
-      },
-    ]
-  },
-  {
-    id: 'aiAgroCloud',
-    label: { en: 'AI AgroCloud', ar: 'سحابة Agro الذكية' },
-    icon: 'fa-solid fa-cloud-bolt',
-    color: '#059669',
-    to: '/dashboards/ai-agro-cloud',
-  },
-  {
-    id: 'weather',
-    label: { en: 'Weather', ar: 'الطقس' },
-    icon: 'fa-solid fa-cloud-sun',
-    color: '#22D3EE',
-    to: '/weather/intelligence',
-  },
-  {
-    id: 'camera-direct',
-    label: { en: 'Camera', ar: 'الكاميرا' },
-    icon: 'fa-solid fa-camera',
-    color: '#0EA5E9',
-    to: '/sensors/camera'
-  },
-  {
-    id: 'gps-direct',
-    label: { en: 'GPS Vehicle Tracking', ar: 'تتبع مركبات GPS' },
-    icon: 'fa-solid fa-route',
-    color: '#10B981',
-    to: '/sensors/gps',
-    externalUrl: GPS_VEHICLE_TRACKING_SIGNIN_URL,
-  },
-  {
-    id: 'master',
-    label: { en: 'Master Data', ar: 'البيانات الرئيسية' },
-    icon: 'fa-solid fa-gear',
-    color: '#64748B',
-    items: [
-      { label: { en: 'Data Management', ar: 'إدارة البيانات' }, icon: 'fa-solid fa-database', to: '/master/workflow-settings' },
-      { label: { en: 'Dashboard Settings', ar: 'إعدادات لوحة التحكم' }, icon: 'fa-solid fa-link', to: '/master/dashboard-settings' },
-      { label: { en: 'GIS Content', ar: 'محتوى GIS' }, icon: 'fa-solid fa-map-location-dot', to: '/master/gis-content' },
-    ]
-  },
-  {
-    id: 'admin',
-    label: { en: 'Settings', ar: 'الإعدادات' },
-    icon: 'fa-solid fa-user-shield',
-    color: '#6366F1',
-    items: [
-      { label: { en: 'User Management', ar: 'إدارة المستخدمين' }, icon: 'fa-solid fa-users', to: '/admin/users' },
-      { label: { en: 'Manpower', ar: 'القوى العاملة' }, icon: 'fa-solid fa-people-group', to: '/admin/manpower' },
-      { label: { en: 'Roles & Permissions', ar: 'الأدوار والصلاحيات' }, icon: 'fa-solid fa-shield-halved', to: '/admin/roles' },
-      { label: { en: 'Hierarchy', ar: 'التسلسل الهرمي' }, icon: 'fa-solid fa-sitemap', to: '/admin/hierarchy' },
-      { label: { en: 'GitHub Integration', ar: 'تكامل GitHub' }, icon: 'fa-brands fa-github', to: '/admin/github' },
-      { label: { en: 'System Settings', ar: 'إعدادات النظام' }, icon: 'fa-solid fa-sliders', to: '/admin/system-settings' },
-    ]
-  },
-  {
-    id: 'account',
-    label: { en: 'Account', ar: 'الحساب' },
-    icon: 'fa-solid fa-circle-user',
-    color: '#0EA5E9',
-    items: [
-      { label: { en: 'Settings', ar: 'الإعدادات' }, icon: 'fa-solid fa-gear', to: '/account/settings' },
-      { label: { en: 'Logout', ar: 'تسجيل الخروج' }, icon: 'fa-solid fa-arrow-right-from-bracket', action: 'logout' },
-    ]
-  }
-]
 
 function homeIconAccentColor(hexColor: string, darkCanvas: boolean): string {
   if (!darkCanvas) return hexColor
@@ -213,38 +40,6 @@ function homeCardAccentStyle(accentHex: string, darkCanvas: boolean): CSSPropert
     '--app-accent': accent,
     '--app-accent-rgb': toRgbTriplet(accent),
   } as CSSProperties
-}
-
-function homeGreeting(language: AppLanguage, now: Date): string {
-  const h = now.getHours()
-  if (language === 'ar') return h < 12 ? 'صباح الخير' : h < 18 ? 'مساء الخير' : 'مساء الخير'
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
-}
-
-function HomeWelcome({ language }: { language: AppLanguage }) {
-  const auth = useContext(AuthContextOptional)
-  const now = new Date()
-  const firstName = String(auth?.user?.name || '').trim().split(/\s+/)[0]
-  const dateLabel = now.toLocaleDateString(language === 'ar' ? 'ar' : 'en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  return (
-    <header className="home-welcome">
-      <p className="home-welcome__date">{dateLabel}</p>
-      <h1 className="home-welcome__title">
-        {homeGreeting(language, now)}
-        {firstName ? `, ${firstName}` : ''}
-      </h1>
-      <p className="home-welcome__sub">
-        {language === 'ar'
-          ? 'اختر مساحة العمل للبدء — الخرائط، صور الأقمار الصناعية، العمليات والتقارير.'
-          : 'Pick a workspace to get started — maps, satellite imagery, field operations and reports.'}
-      </p>
-    </header>
-  )
 }
 
 export default function Home() {
@@ -291,6 +86,20 @@ export default function Home() {
       navigate(item.to)
     }
   }
+
+  // Main view: apps that open directly first, then the groups (each opens its own list).
+  const homeSections = [
+    {
+      id: 'apps',
+      title: language === 'ar' ? 'وصول سريع' : 'Quick access',
+      items: menuItems.filter((i) => !i.items?.length),
+    },
+    {
+      id: 'workspaces',
+      title: language === 'ar' ? 'مساحات العمل' : 'Workspaces',
+      items: menuItems.filter((i) => i.items?.length),
+    },
+  ].filter((section) => section.items.length)
 
   const handleBack = () => {
     setActiveGroup(null)
@@ -362,12 +171,14 @@ export default function Home() {
 
   return (
     <div className="page home-page" style={homeBackgroundStyle}>
+      {/* Page heading for screen readers and outline; the visible page opens straight on the cards. */}
+      <h1 className="sr-only">{language === 'ar' ? 'الرئيسية' : 'Home'}</h1>
       {activeGroup ? (
         <div className="home-sublist-view fade-in">
           <div className="home-header">
             <div className="home-header-row">
               <button className="back-btn" onClick={handleBack} aria-label="Back">
-                <i className="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                <ChevronLeft className="home-lucide home-back-icon" strokeWidth={2} aria-hidden="true" />
               </button>
               <div className="header-title">
                 <span
@@ -379,7 +190,7 @@ export default function Home() {
                     } as CSSProperties
                   }
                 >
-                  <i className={activeGroup.icon} aria-hidden="true"></i>
+                  <HomeMenuIcon faClass={activeGroup.icon} className="home-lucide" />
                 </span>
                 <h2>{activeGroup.label[language]}</h2>
               </div>
@@ -390,7 +201,7 @@ export default function Home() {
                 aria-controls={`home-sublist-${activeGroup.id}`}
                 onClick={() => setSublistOpen(v => !v)}
               >
-                <i className={`fa-solid ${sublistOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`} aria-hidden="true"></i>
+                {sublistOpen ? <ChevronUp className="home-lucide" strokeWidth={2} aria-hidden="true" /> : <ChevronDown className="home-lucide" strokeWidth={2} aria-hidden="true" />}
               </button>
             </div>
 
@@ -414,7 +225,7 @@ export default function Home() {
                         style={homeCardAccentStyle(activeGroup.color, darkHomeCanvas)}
                       >
                         <span className="app-icon-tile" aria-hidden="true">
-                          <i className={`app-icon ${subItem.icon} fa-fw`}></i>
+                          <HomeMenuIcon faClass={subItem.icon} className="app-icon app-icon--lucide" />
                         </span>
                         <span className="app-label">{subItem.label[language]}</span>
                         {homePageSettings.showItemCounts ? (
@@ -429,7 +240,7 @@ export default function Home() {
                           </span>
                         ) : null}
                         {homePageSettings.showCardChevron ? (
-                          <i className="fa-solid fa-chevron-right mini-chev" aria-hidden="true"></i>
+                          <ChevronRight className="mini-chev home-lucide" strokeWidth={2} aria-hidden="true" />
                         ) : null}
                       </button>
                     ))}
@@ -441,10 +252,17 @@ export default function Home() {
         </div>
       ) : (
         <div className="home-modern">
-          <HomeWelcome language={language} />
-          <div className="home-apps-strip">
-            <div className="home-apps-list" aria-label="Applications">
-              {menuItems.map((item) => (
+          {homeSections.map((section) => (
+            <section key={section.id} className="home-section" aria-labelledby={`home-section-${section.id}`}>
+              <div className="home-section-head">
+                <h2 id={`home-section-${section.id}`} className="home-section-title">
+                  {section.title}
+                </h2>
+                <span className="home-section-count">{section.items.length}</span>
+              </div>
+              <div className="home-apps-strip">
+                <div className="home-apps-list">
+                  {section.items.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -455,7 +273,7 @@ export default function Home() {
                   style={homeCardAccentStyle(item.color, darkHomeCanvas)}
                 >
                   <span className="app-icon-tile" aria-hidden="true">
-                    <i className={`app-icon ${item.icon} fa-fw`}></i>
+                    <HomeMenuIcon faClass={item.icon} className="app-icon app-icon--lucide" />
                   </span>
                   <span className="app-label">{item.label[language]}</span>
                   {homePageSettings.showItemCounts ? (
@@ -469,11 +287,13 @@ export default function Home() {
                           : 'Open'}
                     </span>
                   ) : null}
-                  {homePageSettings.showCardChevron && item.items ? <i className="fa-solid fa-chevron-right mini-chev" aria-hidden="true"></i> : null}
+                  {homePageSettings.showCardChevron && item.items ? <ChevronRight className="mini-chev home-lucide" strokeWidth={2} aria-hidden="true" /> : null}
                 </button>
               ))}
-            </div>
-          </div>
+                </div>
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>

@@ -10,7 +10,7 @@ import { WEATHER_GFS_RASTER_LAYER_OPTIONS } from '../config/weatherGfsRaster'
 import { WEATHER_OPEN_METEO_RASTER_LAYER_IDS } from '../config/weatherOpenMeteoRaster'
 import type { WeatherFarmSite } from '../services/weatherFarmService'
 import type { OpenMeteoDashboardBundle } from '../services/openMeteoWeatherDashboard'
-import { DevelopEliteHeaderDigitalClock } from '@/modules/dashboard/develop-elite/DevelopEliteHeaderDigitalClock'
+import { DevelopEliteHeaderDigitalClock } from '@/modules/dashboards/develop-elite/DevelopEliteHeaderDigitalClock'
 
 type Props = {
   locationLabel: string

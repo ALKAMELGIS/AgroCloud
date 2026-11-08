@@ -221,7 +221,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
       }
 
       let chirpsPoints = null as Awaited<ReturnType<typeof fetchChirpsPrecipForImageryChart>> | null
-      if (precipLayerIds.length) {
+      if (precipLayerIds.length && field.geometry) {
         chirpsPoints = await fetchChirpsPrecipForImageryChart({
           geometry: field.geometry,
           start: fromDate,

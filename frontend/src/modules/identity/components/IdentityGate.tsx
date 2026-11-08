@@ -9,7 +9,7 @@ const copy = {
   en: {
     offlineTitle: 'Identity service is offline',
     offlineBody:
-      'This page reads roles, users and permissions from the server identity service (PostgreSQL). It did not respond. Check that the API server is running with DATABASE_URL configured, then retry.',
+      'This page reads roles, users and permissions from the server identity service. It did not respond. Check that the API server is running with AGROCLOUD_IDENTITY=on, then retry.',
     retry: 'Retry',
     home: 'Back to home',
     forbiddenTitle: 'You do not have access to this page',
@@ -18,7 +18,7 @@ const copy = {
   ar: {
     offlineTitle: 'خدمة الهوية غير متاحة',
     offlineBody:
-      'تقرأ هذه الصفحة الأدوار والمستخدمين والصلاحيات من خدمة الهوية على الخادم (PostgreSQL) ولم تستجب. تأكد من تشغيل خادم API مع إعداد DATABASE_URL ثم أعد المحاولة.',
+      'تقرأ هذه الصفحة الأدوار والمستخدمين والصلاحيات من خدمة الهوية على الخادم ولم تستجب. تأكد من تشغيل خادم API مع إعداد AGROCLOUD_IDENTITY=on ثم أعد المحاولة.',
     retry: 'إعادة المحاولة',
     home: 'العودة للرئيسية',
     forbiddenTitle: 'ليست لديك صلاحية لعرض هذه الصفحة',

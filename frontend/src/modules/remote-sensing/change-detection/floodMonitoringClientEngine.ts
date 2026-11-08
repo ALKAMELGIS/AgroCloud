@@ -2,7 +2,7 @@
  * Client-side SAR flood-monitoring engine.
  *
  * Faithful in-browser port of the backend orchestrator
- * (`backend/server/floodMonitoringProxy.js`). Lets the Flood Monitoring tool run
+ * (`backend/server/proxies/floodMonitoringProxy.js`). Lets the Flood Monitoring tool run
  * fully client-side on a static deployment (GitHub Pages / Hostinger static) with
  * NO Node backend:
  *   AOI → Sentinel-1 GRD/RTC (VV/VH) via the Microsoft Planetary Computer (free,

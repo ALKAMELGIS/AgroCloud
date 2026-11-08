@@ -1,0 +1,196 @@
+# AgroCloud — production deployment
+
+## Live application (frontend)
+
+| Item | Value |
+|------|--------|
+| **Public URL** | [https://alkamelgis.github.io/AgroCloud/#/](https://alkamelgis.github.io/AgroCloud/#/) |
+| **Hosting** | GitHub Pages (branch `main`, folder `/docs`) |
+| **HTTPS** | Provided by `*.github.io` (Let's Encrypt) |
+| **CDN** | GitHub / Fastly edge (global) |
+| **PWA** | Enabled on production builds (install on mobile) |
+| **Compression** | Brotli + gzip precompressed assets at build time |
+| **Caching** | Service Worker (Workbox) + browser cache for static assets |
+
+Every push to `main` (except automated `[pages-sync]` commits) runs **[Deploy to GitHub Pages](../../.github/workflows/deploy-pages.yml)**, which builds the SPA without local secrets and publishes `frontend/dist` to `docs/` (`scripts/publish-pages-docs.mjs`). The order keeps the site up: push `docs/` → point Pages at `/docs` → remove the legacy build older deploys left in the repo root (one-time).
+
+### GitHub Pages settings
+
+**Settings → Pages → Build and deployment**
+
+- **Source:** Deploy from a branch  
+- **Branch:** `main`  
+- **Folder:** `/docs`  (GitHub allows only `/` or `/docs` for branch publishing)
+
+The workflow sets this itself (`scripts/ensure-pages-branch-source.mjs`; needs `PAGES_ADMIN_TOKEN` if the default token may not edit Pages). If the site shows 404 while `docs/index.html` exists on `main`, run the workflow manually. **Rollback** to the old root layout: revert the commit and run that script with `PAGES_SOURCE_PATH=/`.
+
+The custom domain file lives in `frontend/public/CNAME`, so every build carries it.
+
+---
+
+## Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  Users (desktop / mobile / tablet — any browser)            │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ HTTPS
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  GitHub Pages — static SPA (React + Vite + PWA)             │
+│  https://alkamelgis.github.io/AgroCloud/                    │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+  Mapbox / ArcGIS      Gemini / weather      Optional Node API
+  (tokens in browser   (external HTTPS)      (your VPS / Docker)
+   or build-time)                           reverse proxy + TLS
+```
+
+**GitHub Pages serves only the frontend.** Maps, satellite layers, and AI features that call third-party APIs work from the browser when tokens are configured under **System Settings → API Tokens** (stored in the browser and optionally synced to your API server).
+
+Features that call **`/api/*`** (login email, admin directory, server-side API secrets) require a **separately hosted Node backend** (see below).
+
+---
+
+## Full-stack hosting (recommended for teams)
+
+For API routes, WebSockets, SMTP, and serving the SPA from the same origin (simplest CORS):
+
+### Option A — Docker (single server)
+
+```bash
+# On a VPS with Docker, clone the repo and set production env (see .env.production.example)
+docker build -t agrocloud .
+docker run -d --name agrocloud -p 443:3001 \
+  -e NODE_ENV=production \
+  -e APP_ORIGIN=https://your-domain.com/AgroCloud \
+  -e CORS_ALLOWED_ORIGINS=https://your-domain.com,https://alkamelgis.github.io \
+  -v /data/agro:/app/backend/server \
+  agrocloud
+```
+
+Put **nginx** or **Caddy** in front for TLS termination and HTTP/2. Example nginx snippet: [scripts/nginx-agrocloud.conf.example](../../scripts/nginx-agrocloud.conf.example).
+
+### Option B — GitHub Pages + API on VPS
+
+1. Keep the public app on GitHub Pages (this repo’s CI).  
+2. Run `backend` on a VPS (Hostinger, Azure, AWS, etc.) with HTTPS.  
+3. At build time (private CI or server build), set:
+   - `VITE_AGRI_API_SECRETS_URL=https://api.your-domain.com/api/system/api-secrets`
+   - `VITE_AGRI_USER_PROFILE_URL=https://api.your-domain.com/api/v1/account/profile-extra`
+   - `VITE_AGRI_ADMIN_DIRECTORY_URL=https://api.your-domain.com/api/v1/admin/directory`
+4. Set backend `CORS_ALLOWED_ORIGINS=https://alkamelgis.github.io`.
+
+---
+
+## Environment variables
+
+| File | Purpose |
+|------|---------|
+| [.env.example](../../.env.example) | Local development |
+| [.env.production.example](../../.env.production.example) | Production / VPS / private CI |
+
+Never commit real API keys. GitHub Actions builds with **empty** `VITE_*` secrets.
+
+---
+
+## Database and persistent data
+
+The API keeps all of its records in one SQLite file, `agrocloud.sqlite`: users, API tokens saved in System Settings, profiles, EC/pH entries, dashboards and identity. Details are in [backend/database/README.md](../../backend/database/README.md).
+
+| Host | Where the file lives |
+|------|----------------------|
+| Docker / VPS compose | `agrocloud_data` volume → `/var/lib/agrocloud` (set by the image). Earlier compose files had no data volume, so data reset on every rebuild. |
+| Hostinger (Node) | `AGRI_DATA_DIR` (e.g. `/data/agrocloud`) — the same directory that held the JSON files; they are imported on first start and kept. |
+| Local dev | `backend/data/agrocloud.sqlite` (gitignored) |
+
+- **Backup:** `npm run db:backup -w backend` makes a consistent copy while the server runs. Copy the whole data directory off-host on a schedule.
+- **Upgrading from PostgreSQL identity:** keep `DATABASE_URL` for one start (or run `npm run db:import-postgres -w backend`), then remove it and set `AGROCLOUD_IDENTITY=on`.
+- **Single instance:** SQLite has one writer, so run one API process per data directory (the current Hostinger/VPS setups already do).
+
+---
+
+## Performance checklist (already in repo)
+
+- Vite code-splitting and hashed asset names  
+- `buildCompressionPlugin()` — `.br` / `.gz` siblings for JS/CSS  
+- PWA precache for shell and fonts  
+- Tablet/mobile responsive CSS  
+- Lazy-loaded heavy routes (maps, satellite, dashboards)
+
+---
+
+## Monitoring and logs
+
+| Layer | Mechanism |
+|-------|-----------|
+| **CI** | [production-health.yml](../../.github/workflows/production-health.yml) — smoke-checks live URL after deploy |
+| **Browser** | `initClientErrorMonitoring()` — ring buffer in `sessionStorage`; optional `VITE_CLIENT_ERROR_REPORT_URL` |
+| **Server** | Node process logs to stdout; keep the data directory (`agrocloud.sqlite`) on a persistent volume and back it up (`npm run db:backup -w backend`) |
+| **External** | Optional: Sentry, Datadog, or Azure App Insights (point `VITE_CLIENT_ERROR_REPORT_URL` to your collector) |
+
+---
+
+## Browser and device support
+
+Test matrix (manual QA recommended after each major release):
+
+| Platform | Browsers |
+|----------|----------|
+| Windows | Chrome, Edge, Firefox |
+| macOS | Chrome, Safari, Firefox |
+| Android | Chrome, Samsung Internet |
+| iOS / iPadOS | Safari (add to Home Screen for PWA) |
+
+Use **hard refresh** (Ctrl+F5) after deploys because static assets are cached aggressively.
+
+---
+
+## Security
+
+- HTTPS only on public endpoints  
+- CORS restricted via `CORS_ALLOWED_ORIGINS` on the Node server  
+- API secrets file protected with `AGRI_API_SECRETS_TOKEN` when exposed  
+- GitHub Pages build never embeds local `.env` values  
+- See [SECURITY.md](../../SECURITY.md) for secret handling and incident response  
+
+---
+
+## Quick commands
+
+```bash
+# Local full stack
+npm install && npm run dev
+
+# Production frontend build (matches CI)
+ENABLE_PWA=true npm run build
+
+# Publish to docs/ (maintainers — CI normally does this; docs/ is gitignored locally)
+npm run pages:publish
+```
+
+For repository layout and development, see [REPOSITORY.md](REPOSITORY.md) and [ARCHITECTURE.md](../../ARCHITECTURE.md).
+
+---
+
+## Fields of the World (Global) + VPS cutover
+
+**FTW Global** (pre-computed 2024/2025 field boundaries) streams PMTiles from Source Cooperative in the browser — **no VPS backend required**. It ships with the normal GitHub Pages deploy.
+
+### GitHub Pages (current)
+
+Push to `main` → [Deploy to GitHub Pages](../../.github/workflows/deploy-pages.yml) → live at [https://www.eliteagrocloud.com/#/](https://www.eliteagrocloud.com/#/).
+
+In **Field Boundary**, choose **Fields of the World (Global v3)** → **Show Global Fields** → zoom to **11+**.
+
+### VPS unified domain (optional cutover)
+
+When `eliteagrocloud.com` DNS points to the VPS (`2.24.11.216`):
+
+1. Copy [scripts/nginx-eliteagrocloud-vps.conf.example](../../scripts/nginx-eliteagrocloud-vps.conf.example) to nginx on the VPS.
+2. Run [scripts/deploy-vps-fullstack.sh](../../scripts/deploy-vps-fullstack.sh) (sets `VITE_ELITE_SAME_ORIGIN_API=true` so `/api/*` stays on the same domain).
+3. Configure GitHub secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` → [deploy-vps-fullstack.yml](../../.github/workflows/deploy-vps-fullstack.yml) auto-deploys on push.
+
+**Keep MX records** for Hostinger email when changing A records. Test with `/etc/hosts` before DNS cutover.

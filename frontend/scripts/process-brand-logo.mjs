@@ -1,6 +1,6 @@
 /**
  * One-off: copy brand PNG, remove near-white background, write agrocloud-logo.png.
- * Usage: node scripts/process-brand-logo.mjs [source.png]
+ * Usage: node scripts/process-brand-logo.mjs <source.png>
  */
 import sharp from 'sharp'
 import { fileURLToPath } from 'node:url'
@@ -9,12 +9,11 @@ import fs from 'node:fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pub = path.join(__dirname, '../public')
-const defaultSrc = path.join(
-  __dirname,
-  '../../../.cursor/projects/c-Users-mohamed-abass-WUSOOM-OneDrive-WUSOOM-Projects-AgroCloud-main/assets/c__Users_mohamed.abass.WUSOOM_AppData_Roaming_Cursor_User_workspaceStorage_f830f870ee72b8642b5a4b52cd166415_images_Gemini_Generated_Image_i9sm01i9sm01i9sm-63805230-13db-434f-9169-716c4fff5b2b.png',
-)
-
-const src = process.argv[2] ? path.resolve(process.argv[2]) : defaultSrc
+if (!process.argv[2]) {
+  console.error('Usage: node scripts/process-brand-logo.mjs <source.png>')
+  process.exit(1)
+}
+const src = path.resolve(process.argv[2])
 const out = path.join(pub, 'agrocloud-logo.png')
 
 if (!fs.existsSync(src)) {

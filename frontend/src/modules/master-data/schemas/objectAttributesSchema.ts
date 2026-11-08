@@ -23,7 +23,7 @@ export type ObjectAttributesSchema = {
 }
 
 /** Bundled template path (served from Vite public/). */
-export const OBJECT_ATTRIBUTES_TEMPLATE_URL = '/schemas/Example.xlsx'
+export const OBJECT_ATTRIBUTES_TEMPLATE_URL = `${import.meta.env.BASE_URL}schemas/Example.xlsx`
 
 /** Fallback when fetch/parse fails — mirrors Example.xlsx row 0 exactly. */
 export const FALLBACK_OBJECT_ATTRIBUTES_SCHEMA: ObjectAttributesSchema = {

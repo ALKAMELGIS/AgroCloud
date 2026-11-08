@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEscapeKey } from '@/core/hooks/useEscapeKey'
 import { getBasemapThumbnail, listEsriBasemapEntries, resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
 import type { CropAlertEngineSettings, CropAlertIndexId, CropAlertTypeId } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import { applyCropAlertEngineDefaultOperatingState } from '@/modules/remote-sensing/indices/siCropAlertEngine'
@@ -313,6 +314,8 @@ export function AcpSettingsCenter() {
       return { ...prev, kpiCards: next }
     })
   }, [])
+
+  useEscapeKey(acp.settingsOpen, () => acp.setSettingsOpen(false))
 
   if (!acp.settingsOpen) return null
 

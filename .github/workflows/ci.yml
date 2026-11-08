@@ -1,0 +1,45 @@
+name: CI
+
+# Quality gates for every push and pull request. Deploy workflows ship code; this one checks it.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Lint, types, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck (+ strict-mode ratchet)
+        run: npm run typecheck
+
+      - name: Unresolved imports
+        run: npm run check:imports -w frontend
+
+      - name: Unit and backend tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build -w frontend

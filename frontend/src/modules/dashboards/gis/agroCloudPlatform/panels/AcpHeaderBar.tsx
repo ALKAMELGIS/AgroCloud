@@ -1,3 +1,4 @@
+import { fetchPriorityAttr } from '@/core/utils/fetchPriority'
 import { useMemo, useState } from 'react'
 import { DashboardRefreshButton } from '@/modules/dashboards/components/DashboardRefreshButton'
 import { useAcpPlatform } from '../acpPlatformContext'
@@ -80,7 +81,7 @@ export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useA
               width={272}
               height={42}
               decoding="async"
-              fetchPriority="high"
+              {...fetchPriorityAttr('high')}
               draggable={false}
             />
           </span>

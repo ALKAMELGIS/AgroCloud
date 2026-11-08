@@ -14,7 +14,7 @@ export type GeoExplorerGeminiChatBodyProps = {
   onDraftChange: (next: string) => void
   pendingImage: { mime: string; base64: string } | null
   onClearPendingImage: () => void
-  fileInputRef: RefObject<HTMLInputElement | null>
+  fileInputRef: RefObject<HTMLInputElement>
   onAttachChange: (e: ChangeEvent<HTMLInputElement>) => void
   onSend: (voiceOverrideText?: string) => void
   textareaAriaLabel: string

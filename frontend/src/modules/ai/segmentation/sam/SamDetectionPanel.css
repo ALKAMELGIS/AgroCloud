@@ -166,7 +166,7 @@
   border-radius: 999px;
   padding: 5px 11px;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease, transform 0.12s ease;
 }
 .si-sam__pill .si-sam__dot {
   width: 9px;
@@ -226,7 +226,7 @@
   border-radius: 7px;
   padding: 4px 8px;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease, transform 0.12s ease;
 }
 .si-sam__mode.is-selected {
   color: #1d4ed8;
@@ -282,7 +282,7 @@
   border-radius: 8px;
   padding: 7px 10px;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease, transform 0.12s ease;
 }
 .si-sam__btn:hover:not(:disabled) {
   background: rgba(15, 23, 42, 0.1);

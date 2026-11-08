@@ -186,6 +186,8 @@ export function arcgisPointSymbolPreviewFromDrawingInfo(
 ): ArcgisPointSymbolPreview | null {
   try {
     const ren = (drawingInfo as any)?.renderer;
+    // No renderer yet (layer metadata still loading) is a normal state, not a warning.
+    if (!ren) return null;
     const symbol = extractRepresentativePointSymbol(ren);
     if (!symbol) {
       console.warn('[si-point-symbol] No point symbol found in drawingInfo.renderer', ren?.type);

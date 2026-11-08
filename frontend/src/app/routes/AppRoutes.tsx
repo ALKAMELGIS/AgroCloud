@@ -9,7 +9,7 @@ import AgroCloudDashboard from '@/modules/dashboards/management/AgroCloudDashboa
 import { lazyWithRetry } from '@/core/routing/lazyWithRetry'
 /** Eager-loaded: avoid full-route Suspense spinner on first paint / dashboard navigation */
 import Home from '../layouts/Home'
-import Login from '@/core/auth/Login'
+import Login from '@/modules/account/pages/Login'
 const DashboardOverview = lazyWithRetry(() => import('@/modules/dashboards/operational/Overview'), 'DashboardOverview')
 const DevelopDashboard = lazyWithRetry(() => import('@/modules/dashboards/management/DevelopDashboard'), 'DevelopDashboard')
 const AgroCloudPlatformDashboard = lazyWithRetry(
@@ -19,33 +19,31 @@ const AgroCloudPlatformDashboard = lazyWithRetry(
 const SatelliteIntelligence = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/SatelliteIntelligence'), 'SatelliteIntelligence')
 const SatelliteMultidimensional = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/Multidimensional'), 'SatelliteMultidimensional')
 const GisMap = lazyWithRetry(() => import('@/modules/gis/map/GisMap'), 'GisMap')
-const DataEntryFertigationRecords = lazyWithRetry(() => import('@/modules/operations/fertigation/FertigationRecords'), 'DataEntryFertigationRecords')
-const DataEntryIrrigation = lazyWithRetry(() => import('@/modules/operations/irrigation/Irrigation'), 'DataEntryIrrigation')
-const DataEntryHarvest = lazyWithRetry(() => import('@/modules/operations/harvest/Harvest'), 'DataEntryHarvest')
+const OperationsFormsApp = lazyWithRetry(() => import('@/modules/operations-forms/OperationsFormsApp'), 'OperationsFormsApp')
 const DataEntryQHIS = lazyWithRetry(() => import('@/modules/operations/other/QHIS'), 'DataEntryQHIS')
-const DataEntryECPH = lazyWithRetry(() => import('@/modules/operations/fertigation/EC'), 'DataEntryECPH')
 const DataEntryRecipes = lazyWithRetry(() => import('@/modules/operations/fertigation/Recipes'), 'DataEntryRecipes')
-const AccountProfile = lazyWithRetry(() => import('@/core/auth/account/Profile'), 'AccountProfile')
-const AccountSettings = lazyWithRetry(() => import('@/core/auth/account/Settings'), 'AccountSettings')
+const AccountProfile = lazyWithRetry(() => import('@/modules/account/pages/Profile'), 'AccountProfile')
+const AccountSettings = lazyWithRetry(() => import('@/modules/account/pages/Settings'), 'AccountSettings')
 const MasterGisContent = lazyWithRetry(() => import('@/modules/gis/layers/content-portal/GisContent'), 'MasterGisContent')
 const MasterGisContentItem = lazyWithRetry(() => import('@/modules/gis/layers/content-portal/GisContentItemPane'), 'MasterGisContentItem')
 const DashboardSettings = lazyWithRetry(() => import('@/modules/dashboards/management/DashboardSettings'), 'DashboardSettings')
-const AdminUsers = lazyWithRetry(() => import('@/core/authorization/Users'), 'AdminUsers')
+const AdminUsers = lazyWithRetry(() => import('@/modules/identity/pages/Users'), 'AdminUsers')
 const AdminManpower = lazyWithRetry(() => import('@/modules/manpower/pages/ManpowerDashboard'), 'AdminManpower')
+const AdminCredits = lazyWithRetry(() => import('@/modules/identity/pages/CreditsPage'), 'AdminCredits')
 const AdminRoles = lazyWithRetry(() => import('@/modules/identity/pages/RolesPermissionsPage'), 'AdminRoles')
 const AdminHierarchy = lazyWithRetry(() => import('@/modules/identity/pages/HierarchyPage'), 'AdminHierarchy')
-const AdminGitHub = lazyWithRetry(() => import('@/core/config/GitHubIntegration'), 'AdminGitHub')
+const AdminGitHub = lazyWithRetry(() => import('@/modules/admin/pages/GitHubIntegration'), 'AdminGitHub')
 const DashboardAiChatbot = lazyWithRetry(() => import('@/modules/dashboards/ai/AiChatbot'), 'DashboardAiChatbot')
 const DashboardModel = lazyWithRetry(() => import('@/modules/dashboards/ai/Model'), 'DashboardModel')
 const AiAgroCloud = lazyWithRetry(() => import('@/modules/dashboards/ai/AiAgroCloud'), 'AiAgroCloud')
 const AiAgroChat = lazyWithRetry(() => import('@/modules/dashboards/ai/AiAgroChat'), 'AiAgroChat')
 const StyleGuide = lazyWithRetry(() => import('./StyleGuide'), 'StyleGuide')
 const UsabilityTest = lazyWithRetry(() => import('./UsabilityTest'), 'UsabilityTest')
-const SystemSettings = lazyWithRetry(() => import('@/core/config/SystemSettings'), 'SystemSettings')
+const SystemSettings = lazyWithRetry(() => import('@/modules/admin/system-settings/SystemSettings'), 'SystemSettings')
 const SensorIntegrationPage = lazyWithRetry(() => import('@/modules/operations/other/sensors/SensorIntegrationPage'), 'SensorIntegrationPage')
 const GpsVehicleTracking = lazyWithRetry(() => import('@/modules/operations/other/sensors/GpsVehicleTracking'), 'GpsVehicleTracking')
-const AgroCloudManagement = lazyWithRetry(() => import('@/core/config/AgroCloudManagement'), 'AgroCloudManagement')
-const IrrigationSensorsEmbed = lazyWithRetry(() => import('@/core/config/IrrigationSensorsEmbed'), 'IrrigationSensorsEmbed')
+const AgroCloudManagement = lazyWithRetry(() => import('@/modules/admin/pages/AgroCloudManagement'), 'AgroCloudManagement')
+const IrrigationSensorsEmbed = lazyWithRetry(() => import('@/modules/operations/other/sensors/IrrigationSensorsEmbed'), 'IrrigationSensorsEmbed')
 const WeatherIntelligenceDashboard = lazyWithRetry(
   () => import('@/modules/weather/WeatherIntelligenceDashboard'),
   'WeatherIntelligenceDashboard',
@@ -75,13 +73,22 @@ export default function AppRoutes() {
           }
         />
         <Route path="/satellite" element={<Navigate to="/satellite/indices" replace />} />
-        <Route path="/data/fertigation" element={<Navigate to="/data/fertigation-records" replace />} />
-        <Route path="/data/fertigation-records" element={<DataEntryFertigationRecords />} />
-        <Route path="/data/irrigation" element={<DataEntryIrrigation />} />
-        <Route path="/data/harvest" element={<DataEntryHarvest />} />
+        {/* Operations forms (one SQL database, import / export / reports). Old addresses redirect. */}
+        <Route
+          path="/ops/*"
+          element={
+            <Suspense fallback={<RouteLoadingFallback label="Loading operations forms…" />}>
+              <OperationsFormsApp />
+            </Suspense>
+          }
+        />
+        <Route path="/data/fertigation" element={<Navigate to="/ops/fertigation" replace />} />
+        <Route path="/data/fertigation-records" element={<Navigate to="/ops/fertigation" replace />} />
+        <Route path="/data/irrigation" element={<Navigate to="/ops/irrigation" replace />} />
+        <Route path="/data/harvest" element={<Navigate to="/ops/harvest" replace />} />
+        <Route path="/data/production" element={<Navigate to="/ops/harvest" replace />} />
+        <Route path="/data/ec-ph" element={<Navigate to="/ops/ec_ph" replace />} />
         <Route path="/data/qhis" element={<DataEntryQHIS />} />
-        <Route path="/data/production" element={<DataEntryHarvest />} />
-        <Route path="/data/ec-ph" element={<DataEntryECPH />} />
         <Route path="/data/recipes/:formSlug" element={<DataEntryRecipes />} />
         <Route
           path="/satellite/indices"
@@ -148,6 +155,7 @@ export default function AppRoutes() {
         <Route path="/sensors/:sensorKind" element={<SensorIntegrationPage />} />
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/manpower" element={<AdminManpower />} />
+        <Route path="/admin/credits" element={<AdminCredits />} />
         <Route path="/admin/roles" element={<AdminRoles />} />
         <Route path="/admin/hierarchy" element={<AdminHierarchy />} />
         <Route path="/admin/github" element={<AdminGitHub />} />

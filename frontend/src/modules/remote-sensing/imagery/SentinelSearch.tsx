@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { appAlert } from '@/shared/dialogs/appDialog';
+import { appAlert } from '@/components/overlays/appDialog';
 import './SentinelSearch.css';
 
 interface StacItem {

@@ -7,7 +7,7 @@ export type SiCropAiFloatingPanelProps = {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
-  containerRef?: RefObject<HTMLElement | null>;
+  containerRef?: RefObject<HTMLElement>;
 };
 
 /**

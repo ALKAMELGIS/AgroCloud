@@ -1,3 +1,0 @@
-# irrigation
-
-Irrigation entry.

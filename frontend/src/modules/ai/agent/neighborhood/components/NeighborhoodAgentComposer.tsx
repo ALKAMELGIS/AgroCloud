@@ -21,7 +21,7 @@ export type NeighborhoodAgentComposerProps = {
   showAttach?: boolean
   enableVoice?: boolean
   pendingImage?: { mime: string; base64: string; name?: string } | null
-  fileInputRef?: RefObject<HTMLInputElement | null>
+  fileInputRef?: RefObject<HTMLInputElement>
   onAttachChange?: (e: ChangeEvent<HTMLInputElement>) => void
   onClearPendingImage?: () => void
   footerNote?: string

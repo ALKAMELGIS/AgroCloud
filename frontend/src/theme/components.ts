@@ -18,7 +18,8 @@ export function agroComponents(theme: Theme): Components<Omit<Theme, 'components
   const c = agroColors[mode]
   const shadow = agroElevation(mode)
   const transition = `background-color ${agroMotion.fast} ${agroMotion.ease}, border-color ${agroMotion.fast} ${agroMotion.ease}, box-shadow ${agroMotion.fast} ${agroMotion.ease}, color ${agroMotion.fast} ${agroMotion.ease}`
-  const focusRing = { outline: 'none', boxShadow: `0 0 0 3px ${c.focusRing}` }
+  // Outline (not box-shadow): legacy page CSS resets box-shadow on buttons, which hid the ring.
+  const focusRing = { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 }
   const primary = theme.palette.primary.main
 
   return {

@@ -137,14 +137,14 @@ export type NeighborhoodAgentChatProps = {
   showAttach?: boolean;
   enableVoice?: boolean;
   pendingImage?: { mime: string; base64: string; name?: string } | null;
-  fileInputRef?: RefObject<HTMLInputElement | null>;
+  fileInputRef?: RefObject<HTMLInputElement>;
   onAttachChange?: (e: ChangeEvent<HTMLInputElement>) => void;
   onClearPendingImage?: () => void;
   /** Transcript (replaces GeoExplorerGeminiMessageParts / si-geo-explorer-bubble-text). */
   messages: GeoExplorerMessage[];
   busyLabel?: string;
   chatError?: string | null;
-  messagesRef?: RefObject<HTMLDivElement | null>;
+  messagesRef?: RefObject<HTMLDivElement>;
   onMessagesScroll?: () => void;
   hasOlderMessages?: boolean;
   onLoadOlder?: () => void;

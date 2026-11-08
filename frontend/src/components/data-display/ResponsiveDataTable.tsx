@@ -32,13 +32,14 @@ export function ResponsiveDataTable<T extends { id: string | number }>({
         {rows.map((row) => (
           <Card key={row.id} variant="outlined">
             <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Typography variant="subtitle2">{primaryCol.render(row)}</Typography>
+              {/* div, not p: cells may render chips, buttons or layout */}
+              <Typography variant="subtitle2" component="div">{primaryCol.render(row)}</Typography>
               {columns
                 .filter((c) => c.id !== primaryCol.id)
                 .map((c) => (
                   <Stack key={c.id} direction="row" justifyContent="space-between" sx={{ mt: 0.5 }}>
                     <Typography variant="caption" color="text.secondary">{c.header}</Typography>
-                    <Typography variant="body2">{c.render(row)}</Typography>
+                    <Typography variant="body2" component="div">{c.render(row)}</Typography>
                   </Stack>
                 ))}
             </CardContent>

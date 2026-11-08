@@ -22,7 +22,7 @@ import {
 import { gisContentPortalLayerUrl } from '../gisContentPortalTableUtils'
 import { readGisHostedFeatureLayerSnapshot } from '../gisHostedFeatureLayerPortal'
 import { CreateThumbnailModal } from './CreateThumbnailModal'
-import { GisContentMapLayerPanel } from '@/shared/maps/gisContent/GisContentMapLayerPanel'
+import { GisContentMapLayerPanel } from '@/components/map/gisContent/GisContentMapLayerPanel'
 
 export const GIS_CONTENT_ITEM_PATH = '/master/gis-content/item'
 

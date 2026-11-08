@@ -19,7 +19,7 @@ import {
 import {
   DEVELOP_ELITE_BASEMAP_MAX_ZOOM,
   DEVELOP_ELITE_BASEMAP_TILE_PROPS,
-} from '@/modules/dashboard/develop-elite/developEliteMapInteraction'
+} from '@/modules/dashboards/develop-elite/developEliteMapInteraction'
 
 export type BasemapType = string
 
@@ -59,7 +59,7 @@ export const BasemapGallery: React.FC<BasemapGalleryProps> = ({ selectedBasemap,
                   border: activeBasemapId === entry.id ? '2px solid #2196f3' : '1px solid #eee',
                   borderRadius: '8px',
                   overflow: 'hidden',
-                  transition: 'all 0.2s',
+                  transition: 'border-color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s',
                   background: 'white',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                 }}

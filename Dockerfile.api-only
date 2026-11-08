@@ -1,5 +1,5 @@
 # API-only image — no SPA build (GitHub Pages serves www).
-FROM node:20-alpine
+FROM node:22-alpine
 
 ARG CACHE_BUST=2026-09-01-api-only
 RUN echo "api-only build ${CACHE_BUST}"
@@ -9,7 +9,11 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY backend/package.json ./backend/
 
-RUN npm ci --workspace=backend --include-workspace-root --omit=dev
+# better-sqlite3 (the SQLite driver) is a native module: prebuilt binaries are used when available,
+# the toolchain is only a fallback for compiling it and is removed again after install.
+RUN apk add --no-cache --virtual .native-build python3 make g++ \
+ && npm ci --workspace=backend --include-workspace-root --omit=dev \
+ && apk del .native-build
 
 COPY backend ./backend
 
@@ -17,6 +21,9 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3001
 ENV FIELD_BOUNDARY_URL=http://agri-field-boundary:8092/detect
+# SQLite database + imported JSON stores. Mount a volume here so data survives rebuilds.
+ENV AGROCLOUD_DATA_DIR=/var/lib/agrocloud
+VOLUME /var/lib/agrocloud
 
 EXPOSE 3001
 

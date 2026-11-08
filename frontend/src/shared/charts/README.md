@@ -1,3 +1,0 @@
-# charts
-
-Shared chart helpers.

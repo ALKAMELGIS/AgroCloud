@@ -5,8 +5,8 @@ on:
     branches: [main]
     paths:
       - 'backend/services/agri-field-boundary/**'
-      - 'backend/server/agriFieldBoundaryProxy.js'
-      - 'backend/server/fieldBoundaryBuiltin.js'
+      - 'backend/server/proxies/agriFieldBoundaryProxy.js'
+      - 'backend/server/engines/fieldBoundaryBuiltin.js'
       - '.github/workflows/deploy-agri-field-boundary-vps.yml'
   workflow_dispatch:
 
@@ -15,8 +15,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # `secrets` cannot be used in a job-level `if` (GitHub rejects the whole workflow file), so check
+  # for the SSH secrets in a step and gate the deploy job on the result.
+  ssh-configured:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - id: check
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          if [ -n "$VPS_HOST" ] && [ -n "$VPS_SSH_KEY" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else
+            echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice::VPS_HOST / VPS_SSH_KEY not set — SSH deploy skipped."; fi
+
   deploy:
-    if: ${{ secrets.VPS_HOST != '' && secrets.VPS_SSH_KEY != '' }}
+    needs: ssh-configured
+    if: needs.ssh-configured.outputs.ok == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

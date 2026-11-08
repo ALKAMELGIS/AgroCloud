@@ -10,7 +10,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { appConfig } from './config/app'
-import { API_PORT, VITE_PORT, WS_PORT } from '../scripts/devPorts.mjs'
+import { API_PORT, VITE_PORT } from '../scripts/devPorts.mjs'
 
 /** Root `/` for custom domains; default `/AgroCloud/` for GitHub Pages. */
 function resolveBuildBasePath(): string {
@@ -254,7 +254,15 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // Vite/Rollup virtual helpers (module-preload, CommonJS interop) are needed by every lazy
+          // route; unassigned, they were captured by vendor-pdf (jspdf uses dynamic import()).
+          if (id.includes('vite/preload-helper') || id.includes('commonjsHelpers') || id.includes('vite/modulepreload-polyfill')) return 'vendor-runtime'
           if (!id.includes('node_modules')) return
+          // Core runtime first. Rollup folds an unassigned dependency into the first manual chunk
+          // that uses it, so if `react` / `scheduler` / `@babel/runtime` were left out here they were
+          // captured by vendor-charts / vendor-pdf, and every page preloaded both (~190 KB gzip).
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run)[\\/]/.test(id)) return 'vendor-react'
+          if (/[\\/]node_modules[\\/]@babel[\\/]runtime[\\/]/.test(id)) return 'vendor-runtime'
           if (id.includes('mapbox-gl')) return 'mapbox-gl'
           if (id.includes('maplibre-gl')) return 'maplibre-gl'
           if (id.includes('leaflet')) return 'leaflet'
@@ -265,7 +273,6 @@ export default defineConfig({
           if (id.includes('/xlsx/') || id.includes('\\xlsx\\')) return 'vendor-xlsx'
           if (id.includes('jspdf')) return 'vendor-pdf'
           if (id.includes('geotiff')) return 'vendor-geotiff'
-          if (id.includes('react-dom') || id.includes('react-router')) return 'vendor-react'
         },
       },
     },
@@ -285,7 +292,10 @@ export default defineConfig({
             injectRegister: null,
             devOptions: { enabled: pwaDevMode },
             workbox: {
-              globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,webmanifest,json}'],
+              // Fonts and export-only vendors are runtime-cached (below) instead of precached:
+              // @fontsource ships every script subset in woff2 + legacy woff (~300 files / 11 MB),
+              // while a browser only ever fetches the subsets a page actually renders.
+              globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,json}'],
               globIgnores: [
                 '**/*.{br,gz}',
                 '**/mapbox-gl-*.js',
@@ -296,6 +306,9 @@ export default defineConfig({
                 '**/html2canvas*.js',
                 '**/geotiff-*.js',
                 '**/decoder-*.js',
+                '**/vendor-excel-*.js',
+                '**/vendor-xlsx-*.js',
+                '**/vendor-pdf-*.js',
               ],
               maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
               navigateFallback: 'index.html',
@@ -304,6 +317,28 @@ export default defineConfig({
               clientsClaim: true,
               skipWaiting: true,
               runtimeCaching: [
+                {
+                  // Self-hosted font subsets: cached the first time a page renders with them.
+                  urlPattern: ({ request, url }) =>
+                    request.destination === 'font' || /\.woff2?$/i.test(url.pathname),
+                  handler: 'CacheFirst',
+                  options: {
+                    cacheName: 'agro-fonts',
+                    expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                    cacheableResponse: { statuses: [0, 200] },
+                  },
+                },
+                {
+                  // Content-hashed build chunks not in the precache (map workspaces, export vendors):
+                  // immutable, so cache-first keeps visited workspaces available offline.
+                  urlPattern: ({ url, sameOrigin }) => sameOrigin && /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.js$/.test(url.pathname),
+                  handler: 'CacheFirst',
+                  options: {
+                    cacheName: 'agro-lazy-chunks',
+                    expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 60 },
+                    cacheableResponse: { statuses: [200] },
+                  },
+                },
                 {
                   urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
                   handler: 'StaleWhileRevalidate',
@@ -334,9 +369,9 @@ export default defineConfig({
               ],
             },
             includeAssets: [
-              'agrocloud-pwa-logo.png',
               'agrocloud-logo.png',
               'agrocloud-logo-core.png',
+              'agrocloud-logo-leaf.png',
               'agrocloud-mark-leaves.png',
               'elite-agro-logo-white.png',
               'favicon.png',
@@ -467,8 +502,9 @@ export default defineConfig({
         target: `http://127.0.0.1:${API_PORT}`,
         changeOrigin: true,
       },
+      // The API serves WebSockets on its own HTTP port (backend/server/index.js).
       '/ws': {
-        target: `ws://127.0.0.1:${WS_PORT}`,
+        target: `ws://127.0.0.1:${API_PORT}`,
         ws: true,
       },
       /** Analysis engine on host — reachable from other devices via same origin. */
@@ -492,8 +528,9 @@ export default defineConfig({
         target: `http://127.0.0.1:${API_PORT}`,
         changeOrigin: true,
       },
+      // The API serves WebSockets on its own HTTP port (backend/server/index.js).
       '/ws': {
-        target: `ws://127.0.0.1:${WS_PORT}`,
+        target: `ws://127.0.0.1:${API_PORT}`,
         ws: true,
       },
       '/analysis-api': {

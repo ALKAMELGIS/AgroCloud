@@ -1,6 +1,6 @@
 /**
  * Browser-side FTW training simulator — used when api.eliteagrocloud.com lacks /api/ftw-training
- * or returns 5xx. Mirrors backend/server/ftwTrainingBuiltin.js.
+ * or returns 5xx. Mirrors backend/server/engines/ftwTrainingBuiltin.js.
  */
 
 import type { FtwDatasetSampleResponse } from './ftwAoiTrainingTypes'

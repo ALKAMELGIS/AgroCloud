@@ -1,6 +1,10 @@
 import { expect, test } from 'playwright/test'
 
 test.describe('Home grid layout & performance', () => {
+  // LCP/CLS budgets are timing-sensitive: run these viewports one at a time so parallel
+  // workers rendering 4K pages in software do not skew the measurement.
+  test.describe.configure({ mode: 'serial' })
+
   const viewports = [
     { name: 'mobile-320', width: 320, height: 780 },
     { name: 'tablet-768', width: 768, height: 900 },
@@ -9,7 +13,7 @@ test.describe('Home grid layout & performance', () => {
   ] as const
 
   for (const vp of viewports) {
-    test(`${vp.name}: one-line grid without overlap`, async ({ page }) => {
+    test(`${vp.name}: responsive card grid without overlap`, async ({ page }) => {
       await page.addInitScript(() => {
         localStorage.setItem(
           'currentUser',
@@ -51,22 +55,32 @@ test.describe('Home grid layout & performance', () => {
         })
       )
 
-      const visible = boxes
-        .map((b, idx) => ({ ...b, idx }))
-        .filter((b) => b.x + b.w > -10 && b.x < vp.width + 10 && b.revealed)
-
+      // Home is a responsive card grid (auto-fill columns that wrap into rows; one column on phones).
+      const visible = boxes.filter((b) => b.w > 0 && b.h > 0)
       expect(visible.length).toBeGreaterThan(1)
-      const y0 = visible[0].y
+
+      // No card spills outside the viewport horizontally.
       for (const b of visible) {
-        expect(Math.abs(b.y - y0)).toBeLessThan(2.5)
+        expect(b.x).toBeGreaterThanOrEqual(-1)
+        expect(b.x + b.w).toBeLessThanOrEqual(vp.width + 1)
       }
 
-      const sorted = [...visible].sort((a, b) => a.x - b.x)
-      for (let i = 1; i < sorted.length; i += 1) {
-        const prev = sorted[i - 1]
-        const cur = sorted[i]
-        expect(cur.x).toBeGreaterThan(prev.x + prev.w - 2)
+      // No two cards overlap.
+      for (let i = 0; i < visible.length; i += 1) {
+        for (let j = i + 1; j < visible.length; j += 1) {
+          const a = visible[i]
+          const c = visible[j]
+          const overlapX = Math.min(a.x + a.w, c.x + c.w) - Math.max(a.x, c.x)
+          const overlapY = Math.min(a.y + a.h, c.y + c.h) - Math.max(a.y, c.y)
+          expect(overlapX > 1 && overlapY > 1, `cards ${i} and ${j} overlap`).toBe(false)
+        }
       }
+
+      // Cards form aligned rows: every card's top matches the top of some row (±2px).
+      const rowTops = [...new Set(visible.map((b) => Math.round(b.y)))].sort((a, b) => a - b)
+      const rows: number[] = []
+      for (const top of rowTops) if (!rows.some((r) => Math.abs(r - top) <= 2)) rows.push(top)
+      for (const b of visible) expect(rows.some((r) => Math.abs(r - b.y) <= 2)).toBe(true)
 
       const perf = await page.evaluate(() => (window as any).__perf || { cls: 0, lcp: 0 })
       expect(perf.cls).toBeLessThan(0.1)

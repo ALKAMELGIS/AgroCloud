@@ -1,0 +1,308 @@
+/**
+ * Operations forms — single source of truth for every form's fields, labels, lookups, computed
+ * columns, duplicate key, import aliases and report metrics. The API serves this to the web app,
+ * which renders tables, entry forms, import mapping and reports from it.
+ *
+ * Field types: date (YYYY-MM-DD) · time (HH:MM) · number · integer · text · textarea · select.
+ * `list` names an ops_master_items list; select fields accept new values (added to the list).
+ * `computed` names a function in operationsCompute.js; the server always recalculates it on save.
+ * `aliases` are lower-case fragments matched against spreadsheet headers during import.
+ */
+
+const L = (en, ar) => ({ en, ar })
+
+/** Bookkeeping columns present on every record table (not user-editable). */
+export const SYSTEM_COLUMNS = ['id', 'source', 'created_at', 'created_by', 'updated_at', 'updated_by', 'deleted_at']
+
+export const MASTER_LISTS = [
+  { key: 'farms', label: L('Farms', 'المزارع') },
+  { key: 'locations', label: L('Locations (NH / GH / BL / Open field)', 'المواقع') },
+  { key: 'crops', label: L('Crops / products', 'المحاصيل') },
+  { key: 'varieties', label: L('Varieties', 'الأصناف') },
+  { key: 'ppp_products', label: L('Plant protection products', 'مبيدات ووقاية النبات'), meta: ['active_ingredient', 'uom', 'phi_days', 'unit_price'] },
+  { key: 'fertilizers', label: L('Fertilizers', 'الأسمدة'), meta: ['uom'] },
+  { key: 'staff', label: L('Operators & supervisors', 'المشغلون والمشرفون') },
+  { key: 'packhouses', label: L('Packhouses', 'بيوت التعبئة') },
+  { key: 'stations', label: L('Pump rooms / stations', 'غرف المضخات') },
+  { key: 'systems', label: L('Dosing systems', 'أنظمة التسميد') },
+  { key: 'recipes', label: L('Fertigation recipes', 'وصفات التسميد') },
+  { key: 'methods', label: L('Application methods', 'طرق الري') },
+  { key: 'uom', label: L('Units of measure', 'وحدات القياس') },
+  { key: 'weather', label: L('Weather', 'الطقس') },
+  { key: 'justification', label: L('PPP justification', 'سبب المعالجة') },
+  { key: 'shifts', label: L('Shifts', 'الورديات') },
+]
+
+const farm = { key: 'farm', type: 'select', list: 'farms', label: L('Farm', 'المزرعة'), section: 'where', aliases: ['farm name', 'eag farm name', 'farm and country', 'farm'] }
+const notes = { key: 'notes', type: 'textarea', label: L('Notes', 'ملاحظات'), section: 'notes', aliases: ['notes', 'remarks'] }
+const operator = { key: 'operator', type: 'select', list: 'staff', label: L('Operator', 'المشغل'), section: 'people', aliases: ['operator(s) name', 'operator', 'equipment (eg: sprayer) operator'] }
+const authorizedBy = { key: 'authorized_by', type: 'select', list: 'staff', label: L('Authorized / verified by', 'المعتمد / المراجع'), section: 'people', aliases: ['authorized and', 'authorized by', 'verified by'] }
+
+export const FORMS = [
+  {
+    id: 'harvest',
+    table: 'ops_harvest',
+    group: 'harvest',
+    icon: 'fa-solid fa-basket-shopping',
+    title: L('Harvest record', 'سجل الحصاد'),
+    docCode: 'EAG/AFO/IMS/RC-111',
+    docTitle: 'HARVEST RECORD',
+    dateField: 'harvest_date',
+    titleField: 'product',
+    uniqueKey: ['harvest_date', 'location', 'product', 'segment', 'batch_no', 'start_time', 'quantity_kg'],
+    fields: [
+      { key: 'harvest_date', type: 'date', required: true, label: L('Harvest date', 'تاريخ الحصاد'), section: 'when', aliases: ['date of harvest', 'harvest date'] },
+      { key: 'start_time', type: 'time', label: L('Start time', 'وقت البدء'), section: 'when', aliases: ['start time'] },
+      { key: 'end_time', type: 'time', label: L('End time', 'وقت الانتهاء'), section: 'when', aliases: ['end  time', 'end time'] },
+      { key: 'shift', type: 'select', list: 'shifts', label: L('Shift', 'الوردية'), section: 'when', aliases: ['shift number', 'shift'] },
+      farm,
+      { key: 'location', type: 'select', list: 'locations', required: true, label: L('Field / house', 'الحقل / البيت'), section: 'where', aliases: ['field name/id', 'field name', 'location'] },
+      { key: 'segment', type: 'text', label: L('Segment (valve / side / section)', 'القطاع'), section: 'where', aliases: ['segment id', 'segment'] },
+      { key: 'harvested_area', type: 'text', label: L('Harvested area', 'المساحة المحصودة'), unit: 'ha', section: 'where', aliases: ['total harvested area', 'harvested area'] },
+      { key: 'product', type: 'select', list: 'crops', required: true, label: L('Product', 'المنتج'), section: 'what', aliases: ['product name', 'product', 'crop'] },
+      { key: 'variety', type: 'select', list: 'varieties', label: L('Variety', 'الصنف'), section: 'what', aliases: ['variety'] },
+      { key: 'batch_no', type: 'text', label: L('Receipt / batch no.', 'رقم الدفعة'), section: 'what', aliases: ['receipt no/batch number', 'batch number', 'batch'] },
+      { key: 'quantity_kg', type: 'number', required: true, min: 0, unit: 'kg', label: L('Harvested quantity', 'الكمية المحصودة'), section: 'what', aliases: ['total harvested quantity', 'harvest qty', 'quantity'] },
+      { key: 'packhouse', type: 'select', list: 'packhouses', label: L('Transported to (packhouse)', 'نقل إلى (بيت التعبئة)'), section: 'what', aliases: ['tranposrted into', 'transported into', 'packhouse'] },
+      authorizedBy,
+      notes,
+    ],
+    metrics: [
+      { key: 'quantity_kg', agg: 'sum', label: L('Quantity (kg)', 'الكمية (كغ)'), unit: 'kg' },
+      { key: 'id', agg: 'count', label: L('Harvests', 'عدد عمليات الحصاد') },
+    ],
+    dimensions: ['product', 'location', 'variety', 'packhouse', 'farm'],
+    filters: ['location', 'product', 'variety', 'farm'],
+  },
+  {
+    id: 'ec_ph',
+    table: 'ops_ec_ph',
+    group: 'ec_ph',
+    icon: 'fa-solid fa-flask',
+    title: L('EC / pH record', 'سجل الملوحة والحموضة'),
+    docCode: 'EAG/AFO/IMS/EC-PH',
+    docTitle: 'EC / pH RECORD',
+    dateField: 'record_date',
+    titleField: 'location',
+    uniqueKey: ['record_date', 'location', 'valve', 'record_time'],
+    fields: [
+      { key: 'record_date', type: 'date', required: true, label: L('Date', 'التاريخ'), section: 'when', aliases: ['date'] },
+      { key: 'record_time', type: 'time', label: L('Time', 'الوقت'), section: 'when', aliases: ['time'] },
+      farm,
+      { key: 'location', type: 'select', list: 'locations', required: true, label: L('Location', 'الموقع'), section: 'where', aliases: ['nh location', 'location'] },
+      { key: 'valve', type: 'text', label: L('Valve', 'المحبس'), section: 'where', aliases: ['valve'] },
+      { key: 'ec_in', type: 'number', min: 0, max: 20, unit: 'mS/cm', label: L('EC in', 'EC داخل'), section: 'readings', aliases: ['ec in'] },
+      { key: 'ec_out', type: 'number', min: 0, max: 20, unit: 'mS/cm', label: L('EC out', 'EC خارج'), section: 'readings', aliases: ['ec out'] },
+      { key: 'ph_in', type: 'number', min: 0, max: 14, label: L('pH in', 'pH داخل'), section: 'readings', aliases: ['ph in'] },
+      { key: 'ph_out', type: 'number', min: 0, max: 14, label: L('pH out', 'pH خارج'), section: 'readings', aliases: ['ph out'] },
+      { key: 'drip_volume_ml', type: 'number', min: 0, unit: 'ml', label: L('Drip volume (1 dripper)', 'حجم التنقيط'), section: 'volumes', aliases: ['drip volume'] },
+      { key: 'drip_total_ml', type: 'number', computed: 'ecDripTotal', unit: 'ml', label: L('Drip volume × 12', 'حجم التنقيط × 12'), section: 'volumes', aliases: ['12 drip volume'] },
+      { key: 'drain_volume_ml', type: 'number', min: 0, unit: 'ml', label: L('Drain volume', 'حجم الصرف'), section: 'volumes', aliases: ['drain volume'] },
+      { key: 'drain_pct', type: 'number', computed: 'ecDrainPct', unit: '%', label: L('Drain %', 'نسبة الصرف %'), section: 'volumes', aliases: ['%drain'] },
+      { key: 'water_qty_m3', type: 'number', min: 0, unit: 'm³', label: L('Water qty per cycle', 'كمية الماء للدورة'), section: 'volumes', aliases: ['qty of water'] },
+      { key: 'cycles', type: 'number', min: 0, label: L('Cycles', 'عدد الدورات'), section: 'volumes', aliases: ['cycle'] },
+      { key: 'total_water_m3', type: 'number', computed: 'ecTotalWater', unit: 'm³', label: L('Total water', 'إجمالي الماء'), section: 'volumes', aliases: ['total water qty'] },
+      operator,
+      notes,
+    ],
+    metrics: [
+      { key: 'ec_in', agg: 'avg', label: L('Avg EC in', 'متوسط EC داخل') },
+      { key: 'ec_out', agg: 'avg', label: L('Avg EC out', 'متوسط EC خارج') },
+      { key: 'ph_in', agg: 'avg', label: L('Avg pH in', 'متوسط pH داخل') },
+      { key: 'ph_out', agg: 'avg', label: L('Avg pH out', 'متوسط pH خارج') },
+      { key: 'drain_pct', agg: 'avg', label: L('Avg drain %', 'متوسط الصرف %'), unit: '%' },
+      { key: 'total_water_m3', agg: 'sum', label: L('Water (m³)', 'الماء (م³)'), unit: 'm³' },
+      { key: 'id', agg: 'count', label: L('Readings', 'عدد القراءات') },
+    ],
+    dimensions: ['location', 'valve', 'farm'],
+    filters: ['location', 'valve', 'farm'],
+  },
+  {
+    id: 'ppp',
+    table: 'ops_ppp',
+    group: 'ppp',
+    icon: 'fa-solid fa-spray-can-sparkles',
+    title: L('Plant protection (PPP) application', 'سجل تطبيق المبيدات'),
+    docCode: 'EAG/AFO/IMS/RC-109',
+    docTitle: 'PLANT PROTECTION PRODUCT (PPP) - APPLICATION RECORD',
+    dateField: 'application_date',
+    titleField: 'ppp_name',
+    uniqueKey: ['application_date', 'location', 'segment', 'ppp_name', 'start_time'],
+    fields: [
+      { key: 'application_date', type: 'date', required: true, label: L('Application date', 'تاريخ التطبيق'), section: 'when', aliases: ['ppp application date', 'application date'] },
+      { key: 'start_time', type: 'time', label: L('Start time', 'وقت البدء'), section: 'when', aliases: ['application start time', 'start time'] },
+      { key: 'end_time', type: 'time', label: L('End time', 'وقت الانتهاء'), section: 'when', aliases: ['application end time', 'end time'] },
+      { key: 'scouting_date', type: 'date', label: L('Scouting date', 'تاريخ الاستكشاف'), section: 'when', aliases: ['scouting date'] },
+      farm,
+      { key: 'location', type: 'select', list: 'locations', required: true, label: L('Field (pivot / NH / GH)', 'الحقل'), section: 'where', aliases: ['field id', 'field'] },
+      { key: 'segment', type: 'text', label: L('Segment (bay / section / valve)', 'القطاع'), section: 'where', aliases: ['segment id', 'segment'] },
+      { key: 'crop', type: 'select', list: 'crops', required: true, label: L('Crop', 'المحصول'), section: 'where', aliases: ['crop'] },
+      { key: 'variety', type: 'select', list: 'varieties', label: L('Variety', 'الصنف'), section: 'where', aliases: ['variety', 'varriety'] },
+      { key: 'justification', type: 'select', list: 'justification', label: L('Justification (pest / disease / preventive)', 'سبب المعالجة'), section: 'why', aliases: ['justification'] },
+      { key: 'seen_pct', type: 'text', label: L('% seen / expected problem', 'نسبة الإصابة / المشكلة المتوقعة'), section: 'why', aliases: ['%seen', 'expected problem'] },
+      { key: 'ppp_name', type: 'select', list: 'ppp_products', required: true, label: L('Product (PPP)', 'المبيد'), section: 'product', aliases: ['name of ppp', 'ppp name'] },
+      { key: 'active_ingredient', type: 'text', label: L('Active ingredient', 'المادة الفعالة'), section: 'product', aliases: ['active ingredient'] },
+      { key: 'dose_per_l', type: 'number', min: 0, unit: 'ml or g / L', label: L('Dose per litre of water', 'الجرعة لكل لتر'), section: 'product', aliases: ['dose of ppp'] },
+      { key: 'rate_per_ha', type: 'number', min: 0, label: L('Rate per ha', 'المعدل للهكتار'), section: 'product', aliases: ['rate of application'] },
+      { key: 'uom', type: 'select', list: 'uom', label: L('Unit', 'الوحدة'), section: 'product', aliases: ['uom'] },
+      { key: 'unit_price', type: 'number', min: 0, label: L('Unit price', 'سعر الوحدة'), section: 'product', aliases: ['unit price'] },
+      { key: 'cost', type: 'number', computed: 'pppCost', label: L('Cost', 'التكلفة'), section: 'product', aliases: ['cost'] },
+      { key: 'total_qty_applied', type: 'number', min: 0, unit: 'L', label: L('Total spray applied', 'إجمالي المحلول'), section: 'product', aliases: ['total quatity applied', 'total quantity applied'] },
+      { key: 'machinery', type: 'text', label: L('Machinery used', 'المعدات'), section: 'product', aliases: ['machinery used'] },
+      { key: 'phi_days', type: 'number', min: 0, unit: 'days', label: L('Pre-harvest interval (PHI)', 'فترة ما قبل الحصاد'), section: 'safety', aliases: ['pre-harvest interval', 'phi'] },
+      { key: 'clear_to_harvest_date', type: 'date', computed: 'pppClearDate', label: L('Clear to harvest', 'مسموح بالحصاد من'), section: 'safety', aliases: ['clear to harvest date'] },
+      { key: 'weather', type: 'select', list: 'weather', label: L('Weather', 'الطقس'), section: 'safety', aliases: ['weather during application', 'weather'] },
+      operator,
+      authorizedBy,
+      notes,
+    ],
+    metrics: [
+      { key: 'id', agg: 'count', label: L('Applications', 'عدد التطبيقات') },
+      { key: 'cost', agg: 'sum', label: L('Cost', 'التكلفة') },
+      { key: 'total_qty_applied', agg: 'sum', label: L('Spray applied (L)', 'المحلول (لتر)'), unit: 'L' },
+    ],
+    dimensions: ['ppp_name', 'location', 'crop', 'justification', 'operator', 'farm'],
+    filters: ['location', 'crop', 'ppp_name', 'justification', 'farm'],
+  },
+  {
+    id: 'irrigation',
+    table: 'ops_irrigation',
+    group: 'irrigation',
+    icon: 'fa-solid fa-faucet-drip',
+    title: L('Irrigation & fertigation record', 'سجل الري والتسميد'),
+    docCode: 'EAG/AFO/IMS/RC-108',
+    docTitle: 'IRRIGATION AND FERTIGATION RECORD - DRIP',
+    dateField: 'record_date',
+    titleField: 'location',
+    uniqueKey: ['record_date', 'location'],
+    importLayout: 'irrigation-wide',
+    fields: [
+      { key: 'record_date', type: 'date', required: true, label: L('Date', 'التاريخ'), section: 'when', aliases: ['date'] },
+      { key: 'week_no', type: 'integer', computed: 'weekNo', label: L('Week', 'الأسبوع'), section: 'when', aliases: ['week no'] },
+      farm,
+      { key: 'location', type: 'select', list: 'locations', required: true, label: L('Location', 'الموقع'), section: 'where', aliases: ['location id', 'location'] },
+      { key: 'method', type: 'select', list: 'methods', label: L('Method', 'طريقة الري'), section: 'water', aliases: ['method of application', 'method'] },
+      { key: 'flow_rate_m3', type: 'number', min: 0, unit: 'm³/h', label: L('Flow rate', 'معدل التدفق'), section: 'water', aliases: ['flow rate'] },
+      { key: 'water_qty_m3', type: 'number', min: 0, unit: 'm³', label: L('Water qty', 'كمية الماء'), section: 'water', aliases: ['water qty'] },
+      { key: 'frequency', type: 'number', min: 0, label: L('Frequency', 'التكرار'), section: 'water', aliases: ['frequency'] },
+      { key: 'daily_total_m3', type: 'number', computed: 'irrigationDailyTotal', unit: 'm³', label: L('Daily total', 'الإجمالي اليومي'), section: 'water', aliases: ['daily total'] },
+      { key: 'fertilizer_type', type: 'select', list: 'fertilizers', label: L('Fertilizer type', 'نوع السماد'), section: 'fertilizer', aliases: ['fertilizer type'] },
+      { key: 'fertilizer_qty', type: 'number', min: 0, label: L('Fertilizer qty', 'كمية السماد'), section: 'fertilizer', aliases: ['fertilizer qty'] },
+      operator,
+      authorizedBy,
+      notes,
+    ],
+    metrics: [
+      { key: 'daily_total_m3', agg: 'sum', label: L('Water (m³)', 'الماء (م³)'), unit: 'm³' },
+      { key: 'fertilizer_qty', agg: 'sum', label: L('Fertilizer qty', 'كمية السماد') },
+      { key: 'id', agg: 'count', label: L('Irrigation days', 'أيام الري') },
+    ],
+    dimensions: ['location', 'method', 'fertilizer_type', 'farm'],
+    filters: ['location', 'method', 'farm'],
+  },
+  {
+    id: 'fertigation',
+    table: 'ops_fertigation',
+    group: 'fertigation',
+    icon: 'fa-solid fa-vial',
+    title: L('Fertigation worksheet', 'ورقة عمل التسميد'),
+    docCode: 'EAG/AFO/IMS/RC-250',
+    docTitle: 'FERTIGATION WORKSHEET',
+    dateField: 'record_date',
+    titleField: 'location',
+    uniqueKey: ['record_date', 'station', 'system', 'location', 'recipe'],
+    fields: [
+      { key: 'record_date', type: 'date', required: true, label: L('Date', 'التاريخ'), section: 'when', aliases: ['date (dd/mm/yyyy)', 'date'] },
+      { key: 'week_no', type: 'integer', computed: 'weekNo', label: L('Week', 'الأسبوع'), section: 'when', aliases: ['week no'] },
+      farm,
+      { key: 'station', type: 'select', list: 'stations', label: L('Station (pump room)', 'المحطة'), section: 'where', aliases: ['station name', 'pump room'] },
+      { key: 'system', type: 'select', list: 'systems', label: L('System', 'النظام'), section: 'where', aliases: ['system'] },
+      { key: 'location', type: 'select', list: 'locations', required: true, label: L('Field', 'الحقل'), section: 'where', aliases: ['field id', 'field name'] },
+      { key: 'valves', type: 'number', min: 0, label: L('Number of valves', 'عدد المحابس'), section: 'where', aliases: ['number of valves'] },
+      { key: 'crop', type: 'select', list: 'crops', label: L('Crop', 'المحصول'), section: 'crop', aliases: ['crop'] },
+      { key: 'crop_stage', type: 'text', label: L('Crop stage', 'مرحلة النمو'), section: 'crop', aliases: ['crop stage'] },
+      { key: 'recipe', type: 'select', list: 'recipes', label: L('Recipe', 'الوصفة'), section: 'crop', aliases: ['recipe'] },
+      { key: 'method', type: 'select', list: 'methods', label: L('Method', 'الطريقة'), section: 'water', aliases: ['method of application'] },
+      { key: 'flow_rate_m3', type: 'number', min: 0, unit: 'm³/h', label: L('Flow rate', 'معدل التدفق'), section: 'water', aliases: ['flow rate'] },
+      { key: 'water_per_valve_m3', type: 'number', min: 0, unit: 'm³', label: L('Water per valve', 'الماء لكل محبس'), section: 'water', aliases: ['water qty'] },
+      { key: 'frequency', type: 'number', min: 0, label: L('Frequency', 'التكرار'), section: 'water', aliases: ['frequency'] },
+      { key: 'daily_total_m3', type: 'number', computed: 'fertigationDailyTotal', unit: 'm³', label: L('Daily total', 'الإجمالي اليومي'), section: 'water', aliases: ['daily total'] },
+      operator,
+      authorizedBy,
+      notes,
+    ],
+    metrics: [
+      { key: 'daily_total_m3', agg: 'sum', label: L('Water (m³)', 'الماء (م³)'), unit: 'm³' },
+      { key: 'valves', agg: 'sum', label: L('Valves irrigated', 'المحابس المروية') },
+      { key: 'id', agg: 'count', label: L('Entries', 'عدد الإدخالات') },
+    ],
+    dimensions: ['location', 'crop', 'recipe', 'station', 'system', 'farm'],
+    filters: ['location', 'crop', 'recipe', 'station', 'farm'],
+  },
+  {
+    id: 'fertilizer_issue',
+    table: 'ops_fertilizer_issue',
+    group: 'fertigation',
+    icon: 'fa-solid fa-box-open',
+    title: L('Fertilizer issue', 'صرف الأسمدة'),
+    docCode: 'EAG/AFO/IMS/RC-250',
+    docTitle: 'FERTILIZER ISSUE',
+    dateField: 'issue_date',
+    titleField: 'fertilizer',
+    uniqueKey: ['issue_date', 'pump_room', 'fertilizer'],
+    importLayout: 'fertilizer-issue-wide',
+    fields: [
+      { key: 'issue_date', type: 'date', required: true, label: L('Date', 'التاريخ'), section: 'when', aliases: ['date'] },
+      farm,
+      { key: 'pump_room', type: 'select', list: 'stations', label: L('Pump room', 'غرفة المضخات'), section: 'where', aliases: ['pump room'] },
+      { key: 'fertilizer', type: 'select', list: 'fertilizers', required: true, label: L('Fertilizer', 'السماد'), section: 'what', aliases: ['fertilizer'] },
+      { key: 'quantity', type: 'number', required: true, min: 0, label: L('Quantity', 'الكمية'), section: 'what', aliases: ['quantity', 'qty'] },
+      { key: 'uom', type: 'select', list: 'uom', label: L('Unit', 'الوحدة'), section: 'what', aliases: ['uom', 'unit'] },
+      notes,
+    ],
+    metrics: [
+      { key: 'quantity', agg: 'sum', label: L('Quantity', 'الكمية') },
+      { key: 'id', agg: 'count', label: L('Issues', 'عدد عمليات الصرف') },
+    ],
+    dimensions: ['fertilizer', 'pump_room', 'farm'],
+    filters: ['fertilizer', 'pump_room', 'farm'],
+  },
+]
+
+export const SECTIONS = {
+  when: L('When', 'التوقيت'),
+  where: L('Where', 'الموقع'),
+  what: L('What', 'التفاصيل'),
+  readings: L('Readings', 'القراءات'),
+  volumes: L('Volumes', 'الأحجام'),
+  why: L('Reason', 'السبب'),
+  product: L('Product & dose', 'المنتج والجرعة'),
+  safety: L('Safety', 'السلامة'),
+  water: L('Water', 'المياه'),
+  fertilizer: L('Fertilizer', 'السماد'),
+  crop: L('Crop', 'المحصول'),
+  people: L('People', 'المسؤولون'),
+  notes: L('Notes', 'ملاحظات'),
+}
+
+export const FORM_GROUPS = [
+  { id: 'harvest', label: L('Harvest', 'الحصاد'), forms: ['harvest'] },
+  { id: 'ec_ph', label: L('EC / pH', 'الملوحة والحموضة'), forms: ['ec_ph'] },
+  { id: 'ppp', label: L('Plant protection', 'وقاية النبات'), forms: ['ppp'] },
+  { id: 'irrigation', label: L('Irrigation & fertigation', 'الري والتسميد'), forms: ['irrigation'] },
+  { id: 'fertigation', label: L('Fertigation worksheet', 'ورقة عمل التسميد'), forms: ['fertigation', 'fertilizer_issue'] },
+]
+
+export function getForm(id) {
+  return FORMS.find((f) => f.id === id) ?? null
+}
+
+export function formColumns(form) {
+  return form.fields.map((f) => f.key)
+}
+
+export const DEFAULT_SETTINGS = {
+  company: { name: 'ELITE AGRO UAE LLC', issue: 'Issue 03, 17-Sept-2020, Rev00' },
+  ecPhLimits: { ecMin: 0.5, ecMax: 3.5, phMin: 5.5, phMax: 7.5, drainMin: 20, drainMax: 40 },
+  autoAddListValues: true,
+}

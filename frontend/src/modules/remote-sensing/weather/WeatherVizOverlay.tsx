@@ -55,7 +55,7 @@ function rand(min: number, max: number): number {
 export const WeatherVizOverlay: React.FC<{
   sim: WeatherSimState;
   /** Map viewport that contains the Mapbox/MapLibre canvas container. */
-  mapRootRef?: React.RefObject<HTMLElement | null>;
+  mapRootRef?: React.RefObject<HTMLElement>;
   /** When false, the map viewport may not exist yet — host resolution retries when this flips true. */
   mapReady?: boolean;
 }> = ({ sim, mapRootRef, mapReady = true }) => {
