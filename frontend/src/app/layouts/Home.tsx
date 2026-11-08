@@ -34,20 +34,35 @@ function openExternalApp(url: string): void {
 }
 
 const menuItems: MenuItem[] = [
+  // Main apps open directly from the home page (they used to sit inside "Dashboard" and
+  // "Satellite Imagery" groups, one extra click away).
   {
-    id: 'dashboard',
-    label: { en: 'Dashboard', ar: 'لوحة التحكم' },
-    icon: 'fa-solid fa-chart-line',
+    id: 'develop-dashboard',
+    label: { en: 'Develop Dashboard', ar: 'تطوير لوحة التحكم' },
+    icon: 'fa-solid fa-grip',
     color: '#F97316',
-    items: [
-      { label: { en: 'Develop Dashboard', ar: 'تطوير لوحة التحكم' }, icon: 'fa-solid fa-grip', to: '/dashboard/develop' },
-      { label: { en: 'Agro Cloud Dashboard', ar: 'لوحة Agro Cloud' }, icon: 'fa-solid fa-chart-pie', to: '/dashboards/agro-cloud' },
-      {
-        label: { en: 'AgroCloud Platform', ar: 'منصة AgroCloud' },
-        icon: 'fa-solid fa-seedling',
-        to: '/dashboards/agro-cloud-platform',
-      },
-    ]
+    to: '/dashboard/develop',
+  },
+  {
+    id: 'agro-cloud-dashboard',
+    label: { en: 'Agro Cloud Dashboard', ar: 'لوحة Agro Cloud' },
+    icon: 'fa-solid fa-chart-pie',
+    color: '#F97316',
+    to: '/dashboards/agro-cloud',
+  },
+  {
+    id: 'agro-cloud-platform',
+    label: { en: 'AgroCloud Platform', ar: 'منصة AgroCloud' },
+    icon: 'fa-solid fa-seedling',
+    color: '#F97316',
+    to: '/dashboards/agro-cloud-platform',
+  },
+  {
+    id: 'satellite-intelligence',
+    label: { en: 'Satellite Intelligence', ar: 'التحليل الفضائي الذكي' },
+    icon: 'fa-solid fa-layer-group',
+    color: '#8B5CF6', // Violet
+    to: '/satellite/indices',
   },
   {
     id: 'application',
@@ -66,15 +81,6 @@ const menuItems: MenuItem[] = [
         to: '/dashboards/agro-cloud-platform',
       },
     ],
-  },
-  {
-    id: 'satellite',
-    label: { en: 'Satellite Imagery', ar: 'صور الأقمار الصناعية' },
-    icon: 'fa-solid fa-satellite-dish',
-    color: '#8B5CF6', // Violet
-    items: [
-      { label: { en: 'Satellite Intelligence', ar: 'التحليل الفضائي الذكي' }, icon: 'fa-solid fa-layer-group', to: '/satellite/indices' },
-    ]
   },
   {
     id: 'data',
@@ -175,6 +181,7 @@ const menuItems: MenuItem[] = [
     items: [
       { label: { en: 'User Management', ar: 'إدارة المستخدمين' }, icon: 'fa-solid fa-users', to: '/admin/users' },
       { label: { en: 'Manpower', ar: 'القوى العاملة' }, icon: 'fa-solid fa-people-group', to: '/admin/manpower' },
+      { label: { en: 'Credits', ar: 'الرصيد' }, icon: 'fa-solid fa-coins', to: '/admin/credits' },
       { label: { en: 'Roles & Permissions', ar: 'الأدوار والصلاحيات' }, icon: 'fa-solid fa-shield-halved', to: '/admin/roles' },
       { label: { en: 'Hierarchy', ar: 'التسلسل الهرمي' }, icon: 'fa-solid fa-sitemap', to: '/admin/hierarchy' },
       { label: { en: 'GitHub Integration', ar: 'تكامل GitHub' }, icon: 'fa-brands fa-github', to: '/admin/github' },
