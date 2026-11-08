@@ -33,6 +33,19 @@ import {
 
 type DashboardData = ReturnType<typeof useDevelopEliteDashboardData>
 
+function useMediaQueryMatch(query: string): boolean {
+  const [matches, setMatches] = useState(() => typeof window !== 'undefined' && window.matchMedia?.(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia?.(query)
+    if (!mq) return
+    const onChange = () => setMatches(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [query])
+  return Boolean(matches)
+}
+
 function DevelopEliteAgroGridMapWidget({ data }: { data: DashboardData }) {
   return (
     <DevelopEliteGridWidget className="develop-elite-grid-widget--map">
@@ -156,6 +169,11 @@ export function DevelopEliteAgroGridSection({
     })
     return () => cancelAnimationFrame(raf)
   }, [scrollToId, layout.gridLayouts])
+  // Narrow screens show one builder panel at a time: selecting an element closes the library.
+  const narrowBuilder = useMediaQueryMatch('(max-width: 1100px)')
+  useEffect(() => {
+    if (narrowBuilder && selectedWidgetId) setLibraryOpen(false)
+  }, [narrowBuilder, selectedWidgetId])
   const builder = useDashboardBuilder({
     gridLayouts,
     nudgeLayout,
@@ -545,8 +563,16 @@ export function DevelopEliteAgroGridSection({
             onRestoreBuiltIn={builder.restoreBuiltIn}
             onClose={() => setLibraryOpen(false)}
           />
-        ) : (
-          <button type="button" className="deb-library-tab" onClick={() => setLibraryOpen(true)} aria-label="Show element library">
+        ) : narrowBuilder && selectedWidgetId ? null : (
+          <button
+            type="button"
+            className="deb-library-tab"
+            onClick={() => {
+              if (narrowBuilder) setSelectedWidgetId(null)
+              setLibraryOpen(true)
+            }}
+            aria-label="Show element library"
+          >
             <i className="fa-solid fa-plus" aria-hidden />
             <span>Add element</span>
           </button>

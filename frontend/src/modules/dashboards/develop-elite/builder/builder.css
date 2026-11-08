@@ -927,13 +927,16 @@ select.deb-input option {
   pointer-events: none;
 }
 
-/* Narrow screens: panels become overlays so the grid keeps its width. */
+/* Narrow screens (tablet portrait, phone): panels float above the dashboard, pinned below the
+ * app bar so they stay in view however far the dashboard is scrolled; one panel at a time. */
 @media (max-width: 1100px) {
   .deb-panel {
-    position: absolute;
-    top: 0;
+    position: fixed;
+    top: var(--app-header-block, 56px);
     bottom: 0;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+    width: min(320px, 88vw);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    z-index: 1200;
   }
 
   .deb-panel--library {
@@ -942,6 +945,25 @@ select.deb-input option {
 
   .deb-panel--props {
     inset-inline-end: 0;
+  }
+
+  .deb-library-tab {
+    position: fixed;
+    inset-inline-start: 0;
+    bottom: 16px;
+    z-index: 1150;
+    width: auto;
+    flex-direction: row;
+    padding: 10px 14px;
+    border: 1px solid var(--de-accent, #5cdb5c);
+    border-inline-start: 0;
+    border-radius: 0 999px 999px 0;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  }
+
+  .deb-library-tab span {
+    writing-mode: horizontal-tb;
+    transform: none;
   }
 }
 

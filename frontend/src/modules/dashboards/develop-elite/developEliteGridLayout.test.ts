@@ -28,9 +28,31 @@ describe('developEliteGridLayout', () => {
       xs: defaults.lg?.map(item => (item.i.startsWith('kpi-') ? { ...item, y: 0, w: 4 } : item)),
     }
     const merged = normalizeDevelopEliteGridLayouts(saved, kpiIds)
-    const xsKpis = merged.xs?.filter(i => i.i.startsWith('kpi-')) ?? []
-    expect(new Set(xsKpis.map(i => i.y)).size).toBeGreaterThan(1)
-    expect(xsKpis.every(i => i.w === (defaults.xs?.[0]?.w ?? 8))).toBe(true)
+    // Saved desktop positions are ignored: the phone layout is the default stacked preset.
+    expect(merged.xs).toEqual(defaults.xs)
+  })
+
+  it('tiles KPI cards 2 / 3 / 4 per row on phone / large phone / tablet, filling each row', () => {
+    const kpiIds = ['total-cef', 'pivot', 'wildfelid', 'vip-farm', 'tree']
+    const layouts = buildDefaultDevelopEliteGridLayouts(kpiIds)
+    for (const [bp, perRow, cols] of [['xxs', 2, 4], ['xs', 3, 8], ['sm', 4, 12]] as const) {
+      const kpis = (layouts[bp] ?? []).filter(i => i.i.startsWith('kpi-'))
+      expect(kpis).toHaveLength(kpiIds.length + 2)
+      const rows = new Map<number, number[]>()
+      for (const k of kpis) rows.set(k.y, [...(rows.get(k.y) ?? []), k.w])
+      expect(Math.max(...[...rows.values()].map(r => r.length))).toBe(perRow)
+      for (const widths of rows.values()) expect(widths.reduce((a, b) => a + b, 0)).toBe(cols)
+    }
+  })
+
+  it('puts pie and bar charts side by side on tablets only', () => {
+    const layouts = buildDefaultDevelopEliteGridLayouts(['total-cef'])
+    const pieSm = layouts.sm?.find(i => i.i === 'chart-pie')
+    const barSm = layouts.sm?.find(i => i.i === 'chart-bar')
+    expect(pieSm?.y).toBe(barSm?.y)
+    const pieXs = layouts.xs?.find(i => i.i === 'chart-pie')
+    const barXs = layouts.xs?.find(i => i.i === 'chart-bar')
+    expect(barXs!.y).toBeGreaterThan(pieXs!.y)
   })
 
   it('merges saved positions with defaults without dropping widgets', () => {

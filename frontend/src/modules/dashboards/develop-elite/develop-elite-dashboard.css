@@ -7410,3 +7410,69 @@ html[data-theme='dark'] .develop-elite.page {
     text-overflow: ellipsis;
   }
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * Phone & tablet KPI tiles (2-4 per row). One authoritative block: earlier compact rules mixed a
+ * left-aligned grid with a centred column, so icon, value and title did not line up.
+ * ------------------------------------------------------------------------------------------- */
+.develop-elite.develop-elite--compact-viewport .develop-elite-grid-widget--kpi .develop-elite__kpi-card.develop-elite__kpi-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 0;
+  height: 100%;
+  padding: 6px 8px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.develop-elite.develop-elite--compact-viewport .develop-elite-grid-widget--kpi .develop-elite__kpi-title.develop-elite__kpi-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  width: 100%;
+  margin: 0;
+  padding: 0 2px;
+  white-space: normal;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.develop-elite.develop-elite--compact-viewport .develop-elite-grid-widget--kpi .develop-elite__kpi-metric,
+.develop-elite.develop-elite--compact-viewport .develop-elite-grid-widget--kpi .develop-elite__kpi-metric--hero {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.develop-elite.develop-elite--compact-viewport .develop-elite-grid-widget--kpi .develop-elite__kpi-icon {
+  font-size: 16px;
+  width: auto;
+  flex: none;
+}
+
+.develop-elite.develop-elite--compact-viewport .develop-elite-grid-widget--kpi .develop-elite__kpi-value {
+  font-size: clamp(18px, 5vw, 24px);
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* The subtitle ("Controlled environment farm") does not fit a tile — the title says it. */
+.develop-elite.develop-elite--compact-viewport .develop-elite-grid-widget--kpi .develop-elite__kpi-sub--below {
+  display: none;
+}

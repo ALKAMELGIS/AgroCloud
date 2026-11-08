@@ -253,45 +253,39 @@ function buildDefaultLayoutForCols(kpiCardIds: string[], cols: number): DevelopE
   return [...kpiItems, ...buildBodyLayoutItems(cols, bodyY)]
 }
 
-/** Stacked layout for narrow breakpoints (lists live in the slide drawer when `includeListPanels` is false). */
+/** KPI tiles per row on phone / large phone / tablet. */
+export function developEliteNarrowKpiPerRow(cols: number): number {
+  if (cols >= 12) return 4
+  if (cols >= 8) return 3
+  return 2
+}
+
+/**
+ * Phone / tablet layout (lists live in the slide drawer when `includeListPanels` is false):
+ * KPI tiles in a 2-4 column grid instead of one full-width card each, then the map, then charts
+ * (pie + bar side by side on tablets) and the crops table.
+ */
 function buildStackedLayoutForCols(
   kpiCardIds: string[],
   cols: number,
   includeListPanels = true,
 ): DevelopEliteGridLayoutItem[] {
   const items: DevelopEliteGridLayoutItem[] = []
+  const perRow = developEliteNarrowKpiPerRow(cols)
+  const kpiH = cols <= 4 ? 3 : 2
+  const kpiIds = ['kpi-hero-zone', 'kpi-hero', ...kpiCardIds.map(id => `kpi-${id}`)]
   let y = 0
-  items.push({
-    i: 'kpi-hero-zone',
-    x: 0,
-    y,
-    w: cols,
-    h: 3,
-    minW: Math.min(2, cols),
-    minH: 2,
-  })
-  y += 3
-  items.push({
-    i: 'kpi-hero',
-    x: 0,
-    y,
-    w: cols,
-    h: 3,
-    minW: Math.min(2, cols),
-    minH: 2,
-  })
-  y += 3
-  for (const id of kpiCardIds) {
-    items.push({
-      i: `kpi-${id}`,
-      x: 0,
-      y,
-      w: cols,
-      h: 3,
-      minW: Math.min(2, cols),
-      minH: 2,
+  for (let start = 0; start < kpiIds.length; start += perRow) {
+    const row = kpiIds.slice(start, start + perRow)
+    // A short last row still fills the width.
+    const widths = distributeGridWidths(cols, row.length)
+    let x = 0
+    row.forEach((id, i) => {
+      const w = widths[i] ?? 1
+      items.push({ i: id, x, y, w, h: kpiH, minW: 1, minH: 2 })
+      x += w
     })
-    y += 3
+    y += kpiH
   }
   const stack = (id: string, h: number) => {
     items.push({ i: id, x: 0, y, w: cols, h, minW: Math.min(2, cols), minH: 2 })
@@ -302,10 +296,18 @@ function buildStackedLayoutForCols(
     stack('sidebar-countries', 4)
     stack('structures', 6)
   }
-  stack('map', 12)
-  stack('chart-pie', 7)
-  stack('chart-bar', 7)
-  stack('chart-table', 8)
+  stack('map', cols >= 12 ? 14 : 12)
+  if (cols >= 12) {
+    const half = Math.floor(cols / 2)
+    items.push({ i: 'chart-pie', x: 0, y, w: half, h: 8, minW: 2, minH: 2 })
+    items.push({ i: 'chart-bar', x: half, y, w: cols - half, h: 8, minW: 2, minH: 2 })
+    y += 8
+    stack('chart-table', 10)
+  } else {
+    stack('chart-pie', 8)
+    stack('chart-bar', 8)
+    stack('chart-table', 9)
+  }
   return items
 }
 
