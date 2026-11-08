@@ -17,10 +17,6 @@ cd /d "%~dp0"
 set "AGRO_PORT=3011"
 if not "%AGROCLOUD_PORT%"=="" set "AGRO_PORT=%AGROCLOUD_PORT%"
 
-echo.
-echo   AgroCloud  ^|  http://localhost:%AGRO_PORT%/
-echo   ------------------------------------------------------------
-echo.
 
 rem --- 1. Node.js 22 or newer -------------------------------------------------
 where node >nul 2>nul
@@ -36,6 +32,16 @@ if %NODE_MAJOR% LSS 22 (
   start "" "https://nodejs.org/en/download"
   goto :fail
 )
+
+rem --- Port: use the first free one from %AGRO_PORT% - another program may already use it.
+for /f "delims=" %%p in ('node "%~dp0core\scripts\windows\find-free-port.mjs" %AGRO_PORT%') do set "FREE_PORT=%%p"
+if not defined FREE_PORT goto :fail
+if not "%FREE_PORT%"=="%AGRO_PORT%" echo   Port %AGRO_PORT% is used by another program - using %FREE_PORT% instead.
+set "AGRO_PORT=%FREE_PORT%"
+echo.
+echo   AgroCloud  ^|  http://localhost:%AGRO_PORT%/
+echo   ------------------------------------------------------------
+echo.
 
 rem --- 2. Dependencies (first run, or after package-lock.json changed) ---------
 set "NEED_INSTALL="
