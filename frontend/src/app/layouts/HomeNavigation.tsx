@@ -106,6 +106,12 @@ function iconFor(faClass: string): ElementType {
   return (key && ICONS[key]) || Hash
 }
 
+/** The lucide icon for a home-menu Font Awesome class (home cards, sidebar and palette share one set). */
+export function HomeMenuIcon({ faClass, className, strokeWidth = 1.75 }: { faClass: string; className?: string; strokeWidth?: number }) {
+  const Icon = iconFor(faClass)
+  return <Icon className={className} strokeWidth={strokeWidth} aria-hidden="true" />
+}
+
 /** What selecting a sidebar/palette entry does. */
 export type HomeNavAction =
   | { kind: 'route'; to: string }

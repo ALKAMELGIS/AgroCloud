@@ -5,6 +5,8 @@ import './Home.css'
 import { useLanguage } from '@/core/localization/i18n'
 import { useSystemSettingsOptional } from '@/core/state/SystemSettingsContext'
 import { startSession } from '@/core/auth/auth'
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
+import { HomeMenuIcon } from './HomeNavigation'
 import { menuItems } from './homeMenu'
 import type { HomeMenuItem, HomeSubMenuItem } from './HomeNavigation'
 
@@ -174,7 +176,7 @@ export default function Home() {
           <div className="home-header">
             <div className="home-header-row">
               <button className="back-btn" onClick={handleBack} aria-label="Back">
-                <i className="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                <ChevronLeft className="home-lucide home-back-icon" strokeWidth={2} aria-hidden="true" />
               </button>
               <div className="header-title">
                 <span
@@ -186,7 +188,7 @@ export default function Home() {
                     } as CSSProperties
                   }
                 >
-                  <i className={activeGroup.icon} aria-hidden="true"></i>
+                  <HomeMenuIcon faClass={activeGroup.icon} className="home-lucide" />
                 </span>
                 <h2>{activeGroup.label[language]}</h2>
               </div>
@@ -197,7 +199,7 @@ export default function Home() {
                 aria-controls={`home-sublist-${activeGroup.id}`}
                 onClick={() => setSublistOpen(v => !v)}
               >
-                <i className={`fa-solid ${sublistOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`} aria-hidden="true"></i>
+                {sublistOpen ? <ChevronUp className="home-lucide" strokeWidth={2} aria-hidden="true" /> : <ChevronDown className="home-lucide" strokeWidth={2} aria-hidden="true" />}
               </button>
             </div>
 
@@ -221,7 +223,7 @@ export default function Home() {
                         style={homeCardAccentStyle(activeGroup.color, darkHomeCanvas)}
                       >
                         <span className="app-icon-tile" aria-hidden="true">
-                          <i className={`app-icon ${subItem.icon} fa-fw`}></i>
+                          <HomeMenuIcon faClass={subItem.icon} className="app-icon app-icon--lucide" />
                         </span>
                         <span className="app-label">{subItem.label[language]}</span>
                         {homePageSettings.showItemCounts ? (
@@ -236,7 +238,7 @@ export default function Home() {
                           </span>
                         ) : null}
                         {homePageSettings.showCardChevron ? (
-                          <i className="fa-solid fa-chevron-right mini-chev" aria-hidden="true"></i>
+                          <ChevronRight className="mini-chev home-lucide" strokeWidth={2} aria-hidden="true" />
                         ) : null}
                       </button>
                     ))}
@@ -269,7 +271,7 @@ export default function Home() {
                   style={homeCardAccentStyle(item.color, darkHomeCanvas)}
                 >
                   <span className="app-icon-tile" aria-hidden="true">
-                    <i className={`app-icon ${item.icon} fa-fw`}></i>
+                    <HomeMenuIcon faClass={item.icon} className="app-icon app-icon--lucide" />
                   </span>
                   <span className="app-label">{item.label[language]}</span>
                   {homePageSettings.showItemCounts ? (
@@ -283,7 +285,7 @@ export default function Home() {
                           : 'Open'}
                     </span>
                   ) : null}
-                  {homePageSettings.showCardChevron && item.items ? <i className="fa-solid fa-chevron-right mini-chev" aria-hidden="true"></i> : null}
+                  {homePageSettings.showCardChevron && item.items ? <ChevronRight className="mini-chev home-lucide" strokeWidth={2} aria-hidden="true" /> : null}
                 </button>
               ))}
                 </div>

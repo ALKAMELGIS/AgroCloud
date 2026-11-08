@@ -1022,3 +1022,37 @@ html[data-theme] .home-page .home-apps-list .app-icon-card:hover {
     grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
   }
 }
+
+/* Lucide icons (same set as the sidebar) — sized explicitly since SVGs ignore font-size. */
+.home-page .home-lucide {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.home-page .app-icon-tile .app-icon.app-icon--lucide,
+.home-page .app-icon-card:hover .app-icon-tile .app-icon.app-icon--lucide {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  display: block;
+}
+
+.home-page .app-icon-card--compact .app-icon-tile .app-icon.app-icon--lucide {
+  width: 19px;
+  height: 19px;
+}
+
+.home-page .app-icon-card .mini-chev.home-lucide {
+  width: 16px;
+  height: 16px;
+}
+
+.home-page .header-icon .home-lucide {
+  width: 20px;
+  height: 20px;
+}
+
+:root[dir='rtl'] .home-page .home-back-icon {
+  transform: scaleX(-1);
+}

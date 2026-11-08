@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { Bell, Info, Languages, LogOut, Moon, Sun, Trash2, UserCog } from 'lucide-react'
 import './navmenu.css'
 import '@/assets/styles/lux-theme.css'
 import { hasPermission, normalizeRole, readCurrentUser } from '@/core/auth/auth'
@@ -244,7 +245,13 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
   }
 
   const languageSwitchHint = language === 'en' ? t.switchToArabic : t.switchToEnglish
-  const languageMark = language === 'en' ? 'A' : 'E'
+  const accountInitials = useMemo(() => {
+    const user = readCurrentUser()
+    const source = String(user?.name || user?.email || '').trim()
+    const words = source.split(/[\s@._-]+/).filter(Boolean)
+    const letters = words.length > 1 ? `${words[0]![0]}${words[1]![0]}` : (words[0] ?? '').slice(0, 2)
+    return letters.toUpperCase() || '?'
+  }, [])
 
   const navTranslationText = (key: keyof typeof navTranslations.en): string => {
     const value = t[key]
@@ -606,7 +613,7 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
           >
             <span className="nav-notifications-chrome">
               <span className="icon" aria-hidden="true">
-                <i className="fa-solid fa-bell"></i>
+                <Bell className="navmenu-lucide" strokeWidth={1.75} />
               </span>
               {unreadCount > 0 ? (
                 <span className="nav-notifications-count" aria-hidden="true">
@@ -640,7 +647,7 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
                     }}
                   >
                     <span className="icon">
-                      <i className="fa-solid fa-circle-info"></i>
+                      <Info className="navmenu-lucide" strokeWidth={1.75} aria-hidden />
                     </span>
                     <span className="label">
                       <span className="navmenu-subitem-title">{n.title}</span>
@@ -654,7 +661,7 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
                   onClick={() => setNotifications([])}
                 >
                   <span className="icon">
-                    <i className="fa-solid fa-trash"></i>
+                    <Trash2 className="navmenu-lucide" strokeWidth={1.75} aria-hidden />
                   </span>
                   <span className="label">{t.clearAll}</span>
                 </button>
@@ -677,10 +684,11 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
             onClick={toggleThemeMode}
           >
             <span className="icon" aria-hidden="true">
-              <i
-                className={`nav-theme-toggle__icon fa-solid ${themeIsDark ? 'fa-sun' : 'fa-moon'}`}
-                aria-hidden="true"
-              />
+              {themeIsDark ? (
+                <Sun className="navmenu-lucide nav-theme-toggle__icon" strokeWidth={1.75} />
+              ) : (
+                <Moon className="navmenu-lucide nav-theme-toggle__icon" strokeWidth={1.75} />
+              )}
             </span>
           </button>
         </li>
@@ -693,11 +701,9 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
             title={languageSwitchHint}
             onClick={toggleLanguage}
           >
-            <span className="icon nav-lang-icon">
-              <i className="fa-solid fa-globe" aria-hidden />
-              <span className="nav-lang-icon__mark" aria-hidden>
-                {languageMark}
-              </span>
+            <span className="icon nav-lang-icon" aria-hidden>
+              <Languages className="navmenu-lucide" strokeWidth={1.75} />
+              <span className="nav-lang-icon__code">{language === 'en' ? 'EN' : 'ع'}</span>
             </span>
           </button>
         </li>
@@ -732,8 +738,8 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
               groupHeaderRefs.current.account = el
             }}
           >
-            <span className="icon">
-              <i className="fa-solid fa-user-astronaut"></i>
+            <span className="icon nav-account-avatar" aria-hidden="true">
+              {accountInitials}
             </span>
           </button>
           <div
@@ -753,7 +759,7 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
               }}
             >
               <span className="icon">
-                <i className="fa-solid fa-user-gear"></i>
+                <UserCog className="navmenu-lucide" strokeWidth={1.75} aria-hidden />
               </span>
               <span className="label">{t.profile}</span>
             </NavLink>
@@ -770,7 +776,7 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
               }}
             >
               <span className="icon">
-                <i className="fa-solid fa-arrow-right-from-bracket"></i>
+                <LogOut className="navmenu-lucide" strokeWidth={1.75} aria-hidden />
               </span>
               <span className="label">{t.logout}</span>
             </button>
