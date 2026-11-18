@@ -4,8 +4,6 @@ import './GisContentItemPane.css'
 import {
   defaultGisContentItemDescription,
   defaultGisContentItemTags,
-  agroCloudDashboardEditPath,
-  agroCloudDashboardWorkspacePath,
   gisContentLayerSubtypeLabel,
   gisContentTypeIcon,
   gisContentTypeTone,
@@ -233,22 +231,6 @@ export default function GisContentItemPane() {
 
   const isAppDashboard = isAgroCloudDashboardApp(row)
 
-  const openDashboard = () => {
-    if (inRecycle) {
-      showToast('Restore this item from Recycle bin first.')
-      return
-    }
-    navigate(agroCloudDashboardWorkspacePath(row.id))
-  }
-
-  const openEditDashboard = () => {
-    if (inRecycle) {
-      showToast('Restore this item from Recycle bin first.')
-      return
-    }
-    navigate(agroCloudDashboardEditPath(row.id))
-  }
-
   const viewMetadata = () => {
     document.getElementById('item-pane-metadata')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }
@@ -315,10 +297,10 @@ export default function GisContentItemPane() {
             <button
               type="button"
               className="item-pane-hero__thumb thumbnail-open-action"
-              title={isAppDashboard ? 'Open dashboard' : 'Open in Map Viewer'}
-              aria-label={isAppDashboard ? 'Open dashboard' : 'Open in Map Viewer'}
-              disabled={inRecycle}
-              onClick={isAppDashboard ? openDashboard : openMapViewer}
+              title={isAppDashboard ? row.title : 'Open in Map Viewer'}
+              aria-label={isAppDashboard ? row.title : 'Open in Map Viewer'}
+              disabled={inRecycle || isAppDashboard}
+              onClick={openMapViewer}
             >
               {thumbnailUrl ? (
                 <img src={thumbnailUrl} alt="" className="item-pane-hero__thumb-img" />
@@ -661,22 +643,6 @@ export default function GisContentItemPane() {
                 <button
                   type="button"
                   className="item-pane-sidebar__action item-pane-sidebar__action--primary"
-                  onClick={openDashboard}
-                  disabled={inRecycle}
-                >
-                  Open dashboard
-                </button>
-                <button
-                  type="button"
-                  className="item-pane-sidebar__action"
-                  onClick={openEditDashboard}
-                  disabled={inRecycle}
-                >
-                  Edit dashboard
-                </button>
-                <button
-                  type="button"
-                  className="item-pane-sidebar__action"
                   onClick={() => copyText(sharePageUrl, 'Share link')}
                 >
                   Share

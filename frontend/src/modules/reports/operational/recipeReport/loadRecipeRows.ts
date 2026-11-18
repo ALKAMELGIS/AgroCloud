@@ -25,7 +25,6 @@ const STORAGE_BY_FORM: Record<string, string> = {
   Irrigation: 'irrigation_scheduling_records_v1',
   Harvest: 'harvest_logging_records_v1',
   Production: 'production_tracking_records_v1',
-  QHIS: 'qhis_records_v1',
   Fertigation: 'fertigation_records_v1',
 }
 

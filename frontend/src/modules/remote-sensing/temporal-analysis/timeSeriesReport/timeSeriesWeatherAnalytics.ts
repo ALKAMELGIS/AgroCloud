@@ -6,7 +6,7 @@ import {
   formatImageryTimePeriodLabel,
   imageryTimePeriodKey,
   type ImageryTimeSeriesLayerSeries,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import type { OpenMeteoHourlyPoint } from '../../weather/openMeteoWeather'
 import { kmhToMs } from './timeSeriesWeatherTimeline'
 

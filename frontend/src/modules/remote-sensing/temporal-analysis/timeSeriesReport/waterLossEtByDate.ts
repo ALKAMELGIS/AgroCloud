@@ -8,7 +8,7 @@ import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatis
 import {
   evaluateImageryLayerDailyValue,
   type ImageryTimeSeriesLayerSeries,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { calculateETc } from './waterRequirementService'
 import { fetchEt0MmDayByDateForSceneDates, resolvePlotCentroidLonLat } from './waterRequirementEt0'
 import { estimateNdwiFromNdmi } from './timeSeriesReportExecutive'

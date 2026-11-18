@@ -43,7 +43,7 @@ import {
   type DeviceGeoReading,
 } from '@/core/utils/deviceGeolocation';
 import '@/assets/styles/gisModalSystem.css';
-import '@/modules/dashboards/management/develop-dashboard.css';
+import '@/modules/remote-sensing/imagery/si-dashboard-shell.css';
 import { parseFile, parseRemoteUrlAsFile } from '@/modules/data-management/import/FileLoader';
 import type { RasterMapCoordinates } from '@/modules/data-management/import/FileLoader';
 import type { CircleCardinal, DrawStyleConfig, VertexRef } from '@/modules/gis/editing/drawingUtils';
@@ -244,7 +244,6 @@ import {
 import {
   buildGeoAiDataContext,
   claudeGeoAiComplete,
-  DEVELOP_DATA_CONTEXT_LS_KEY,
   GEO_AI_CHAT_SYSTEM_BASE,
   type GeoAiChatTurn,
 } from '@/modules/ai/agent/geoAiChatClaude';
@@ -7035,18 +7034,6 @@ export default function SatelliteIntelligence() {
             return;
           }
         }
-        let developAppend = '';
-        if (!siScope.isolateRouting) {
-          try {
-            const raw =
-              typeof localStorage !== 'undefined' ? localStorage.getItem(DEVELOP_DATA_CONTEXT_LS_KEY) : null;
-            if (raw?.trim()) {
-              developAppend = `### Develop Dashboard â€” Data pane snapshot (JSON)\n${raw.slice(0, 14000)}`;
-            }
-          } catch {
-            /* ignore */
-          }
-        }
         const result = await runGeoExplorerGeminiTurn({
           apiKey,
           historyWithUser,
@@ -7065,7 +7052,6 @@ export default function SatelliteIntelligence() {
             [
               geoAiFloatingOpen ? NEIGHBORHOOD_AGENT_MAP_REPLY_ADDENDUM : '',
               geoAiLiveMapStateBlockRef.current,
-              developAppend,
             ]
               .filter(Boolean)
               .join('\n\n') || undefined,

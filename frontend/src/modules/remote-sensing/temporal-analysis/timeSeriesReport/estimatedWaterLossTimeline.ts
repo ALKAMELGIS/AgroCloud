@@ -3,7 +3,7 @@ import { geodesicAreaM2 } from '../../classification/siLayerClassAreaEngine'
 import {
   evaluateImageryLayerDailyValue,
   type ImageryTimeSeriesLayerSeries,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { estimateNdwiFromNdmi } from './timeSeriesReportExecutive'
 import type { TimeSeriesTrendLabel } from './timeSeriesReportTypes'
 import type { VegetationCoveragePoint } from './vegetationCoverageTimeline'

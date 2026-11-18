@@ -1,6 +1,6 @@
 import type { CropAlertFieldInput } from '../../indices/siCropAlertEngine'
 import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'
-import type { ImageryTimeAggregation } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { resolveBatchPlotExcelFilename, uniqueBatchPlotExcelFilename } from './aoiExcelExportShared'
 import type { SiImageryObjectSourceFeature } from '../siImageryTimeSeriesFields'
 import {

@@ -62,7 +62,6 @@ import {
   type GeoExplorerPart,
 } from '@/modules/ai/agent/geoExplorerGemini'
 import { appAlert, appConfirm, appPrompt } from '@/components/overlays/appDialog'
-import { DEVELOP_DATA_CONTEXT_LS_KEY } from '@/modules/ai/agent/geoAiChatClaude'
 import {
   arcLegendLabelForFieldValue,
   buildArcFieldsByLower,
@@ -106,7 +105,7 @@ import { GisGeoExplorerChartConfig } from '@/modules/ai/agent/GisGeoExplorerChar
 import { GeoExplorerGeminiMessageParts } from '@/modules/ai/agent/GeoExplorerGeminiMessageParts'
 import { GisMapBrowseLayersPane } from '../layers/GisMapBrowseLayersPane'
 import { GisMapSaveOpenFlyout } from './GisMapSaveOpenPanel'
-import { SelectMapFromGisContentModal } from '@/modules/dashboards/management/agrocloud/SelectMapFromGisContentModal'
+import { SelectMapFromGisContentModal } from '@/modules/gis/map/web-map/SelectMapFromGisContentModal'
 import type { GisContentRow } from '../layers/content-portal/gisContentPortalData'
 import { gisContentPortalDisplayTypeLabel } from '../layers/content-portal/gisContentPortalData'
 import { siDefaultNewVectorLayerFields, SI_DEFAULT_VECTOR_OUTLINE_COLOR, SI_DEFAULT_VECTOR_POLYGON_FILL_ALPHA, SI_DEFAULT_VECTOR_LINE_WEIGHT } from '../layers/symbology/siSymbolStyleStudio'
@@ -2787,16 +2786,6 @@ export default function GisMap() {
             return
           }
         }
-        let developAppend = ''
-        try {
-          const raw =
-            typeof localStorage !== 'undefined' ? localStorage.getItem(DEVELOP_DATA_CONTEXT_LS_KEY) : null
-          if (raw?.trim()) {
-            developAppend = `### Develop Dashboard — Data pane snapshot (JSON)\n${raw.slice(0, 14000)}`
-          }
-        } catch {
-          /* ignore */
-        }
         const result = await runGeoExplorerGeminiTurn({
           apiKey,
           historyWithUser,
@@ -2813,7 +2802,6 @@ export default function GisMap() {
           mapPopup: null,
           addedLayersHeading: '### GIS Map — Active vector layers (this session)',
           attachGisSavedLayers: true,
-          extraSystemAppend: developAppend || undefined,
           questionEditInPlace,
         })
         setGeoExplorerMessages(h => [...h, result.modelMsg])

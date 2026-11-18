@@ -17,7 +17,7 @@ type CurrentUser = {
   role: Role | string
 }
 
-const FORM_KEYS = ['EC', 'Fertigation', 'Irrigation', 'Harvest', 'Production', 'QHIS'] as const
+const FORM_KEYS = ['EC', 'Fertigation', 'Irrigation', 'Harvest', 'Production'] as const
 type FormKey = (typeof FORM_KEYS)[number]
 
 const readCurrentUser = (): CurrentUser | null => {

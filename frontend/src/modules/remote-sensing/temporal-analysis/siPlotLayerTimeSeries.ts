@@ -5,7 +5,7 @@ import {
   evaluateImageryLayerDailyValue,
   formatImageryTimePeriodLabel,
   type ImageryTimeAggregation,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { aggregateObservations } from './timeSeriesReport/buildPlotTimeSeriesAnalyticsModel'
 import { fetchPlotTimeSeriesDailyByField } from './timeSeriesReport/fetchPlotTimeSeriesAnalytics'
 import { resolveFieldAreaHa } from './siMultiLayerAoiTrendAnalysis'

@@ -1,9 +1,3 @@
-/**
- * AgroCloud canonical theme system — semantic text/surface tokens + global typography.
- * Light: primary #222, secondary #555, muted #777, soft backgrounds.
- * Dark:  primary #E6E6E6, secondary #B8B8B8, muted #8F8F8F, no harsh #000/#fff text.
- */
-
 /* ========== Light palette ========== */
 :root,
 html[data-theme='light'],
@@ -98,8 +92,7 @@ html[data-theme='dark'],
    Skip map glass overlays so light-theme --ds-color-text is not forced onto dark chrome. */
 .app-layout,
 .page:not(.develop-elite),
-.gis-page-padding,
-.content:not(.content--develop-dashboard) {
+.gis-page-padding {
   color: var(--ds-color-text);
 }
 

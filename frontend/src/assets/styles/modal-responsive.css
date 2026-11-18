@@ -42,20 +42,6 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.develop-dashboard-root .ddb-calc-modal-backdrop {
-  box-sizing: border-box;
-  padding:
-    max(var(--modal-overlay-pad), var(--modal-safe-top))
-    max(var(--modal-overlay-pad), var(--modal-safe-right))
-    max(var(--modal-overlay-pad), var(--modal-safe-bottom))
-    max(var(--modal-overlay-pad), var(--modal-safe-left));
-  place-items: center;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
 /* ── Modal panels: flex column, bounded height ── */
 
 .ds-modal,
@@ -82,8 +68,7 @@
 }
 
 .gis-modal.gis-modal-compact,
-.gis-modal.gis-modal-compact.gis-modal-docs-wide,
-.ddb-add-source-modal.gis-modal-compact {
+.gis-modal.gis-modal-compact.gis-modal-docs-wide {
   width: min(560px, calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right)));
   max-width: 100%;
   max-height: var(--modal-max-height);
@@ -96,20 +81,12 @@
 }
 
 .sensor-modal,
-.develop-dashboard-root .ddb-calc-modal,
 .report-modal-container {
   width: min(680px, calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right)));
   max-width: 100%;
   max-height: var(--modal-max-height);
   margin: auto;
   box-sizing: border-box;
-}
-
-.develop-dashboard-root .ddb-calc-modal {
-  width: min(560px, calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right)));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 
 /* ── Scrollable body regions ── */
@@ -120,7 +97,6 @@
 .gis-modal-compact .gis-modal-body,
 .gis-modal.gis-modal-styles .gis-modal-body,
 .gis-modal-docs .gis-modal-body--docs,
-.develop-dashboard-root .ddb-calc-modal__body,
 .report-modal-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -140,8 +116,6 @@
 .gis-modal-tabs,
 .gis-modal-actions,
 .gis-style-footer,
-.develop-dashboard-root .ddb-calc-modal__head,
-.develop-dashboard-root .ddb-calc-modal__foot,
 .report-modal-header,
 .report-modal-footer {
   flex-shrink: 0;
@@ -157,8 +131,6 @@
 .gis-modal-actions .gis-btn,
 .gis-compact-tab,
 .app-dialog-btn,
-.develop-dashboard-root .ddb-calc-modal__close,
-.develop-dashboard-root .ddb-calc-modal__apply,
 .sensor-modal-footer button,
 .report-modal-close-btn {
   min-height: var(--modal-touch-min);
@@ -167,7 +139,6 @@
 .ds-modal-header .ds-btn,
 .gis-modal-close-btn,
 .gis-icon-btn,
-.develop-dashboard-root .ddb-calc-modal__close,
 .report-modal-close-btn {
   min-width: var(--modal-touch-min);
   display: inline-flex;
@@ -181,7 +152,6 @@
 .gis-modal-compact .gis-input,
 .gis-modal-compact .gis-select,
 .app-dialog-input,
-.develop-dashboard-root .ddb-calc-modal__expr,
 .sensor-modal-body input,
 .sensor-modal-body select,
 .sensor-modal-body textarea {
@@ -205,8 +175,7 @@
   .app-dialog-input,
   .sensor-modal-body input,
   .sensor-modal-body select,
-  .sensor-modal-body textarea,
-  .develop-dashboard-root .ddb-calc-modal__expr {
+  .sensor-modal-body textarea {
     font-size: var(--modal-input-font);
   }
 }

@@ -18,8 +18,6 @@ import {
   type GisContentSharing,
   type GisPortalTopTab,
   type GisRowMenuAction,
-  agroCloudDashboardEditPath,
-  agroCloudDashboardWorkspacePath,
   isAgroCloudDashboardApp,
   isGisPortalRowMapAddable,
 } from './gisContentPortalData'
@@ -441,19 +439,7 @@ export default function GisContent() {
           navigate(`/satellite/indices?content=${encodeURIComponent(row.id)}&mode=field-maps`)
           break
         case 'open-dashboard':
-          if (isAgroCloudDashboardApp(row)) {
-            navigate(agroCloudDashboardWorkspacePath(row.id))
-          } else {
-            navigate(`/satellite/indices?content=${encodeURIComponent(row.id)}`)
-          }
-          break
-        case 'edit-dashboard':
-          if (isAgroCloudDashboardApp(row)) {
-            navigate(agroCloudDashboardEditPath(row.id))
-          } else {
-            navigate(gisContentItemPath(row.id))
-            showToast(`"${row.title}" — ${action.label}`)
-          }
+          navigate(`/satellite/indices?content=${encodeURIComponent(row.id)}`)
           break
         case 'share': {
           const shareUrl =

@@ -9,8 +9,8 @@ import {
   type LayerClassAreaResult,
 } from '../../classification/siLayerClassAreaEngine'
 import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'
-import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
-import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import type { TimeSeriesTrendLabel } from './timeSeriesReportTypes'
 
 const VEG_TIERS = new Set<IndexHealthTier>(['healthy', 'moderate', 'stress'])

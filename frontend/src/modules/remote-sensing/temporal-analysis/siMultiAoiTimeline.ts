@@ -12,7 +12,7 @@ import {
   formatImageryTimePeriodLabel,
   type ImageryTimeAggregation,
   type ImageryTimeSeriesLayerSeries,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { aggregateObservations } from './timeSeriesReport/buildPlotTimeSeriesAnalyticsModel'
 import { resolveFieldAreaHa } from './siMultiLayerAoiTrendAnalysis'
 

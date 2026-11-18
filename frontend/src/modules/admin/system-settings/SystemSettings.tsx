@@ -634,7 +634,7 @@ export default function SystemSettings() {
                   </h3>
                   <p className="sys-nav-data__p">
                     Sidebar flyout DOM id <code style={{ fontSize: '0.85em' }}>nav-group-data</code> — irrigation, EC/pH,
-                    harvest, QHIS, production routes under{' '}
+                    harvest, production routes under{' '}
                     <code>/data/…</code>.
                   </p>
                 </div>
@@ -1416,8 +1416,8 @@ export default function SystemSettings() {
               />
               <p className="sys-settings-panel__desc sys-settings-api-hint">
                 {language === 'ar'
-                  ? 'يُفعّل Geo AI Chat في استخبارات الأقمار: يفسّر الطبقات والحقول بناءً على ما هو محفوظ في GIS Map (GIS Content) ولقطة بيانات لوحة التطوير → Data فقط، دون اختلاق قيم.'
-                  : 'Powers Geo AI Chat in Satellite Intelligence: answers use only GIS Map saved layers (GIS Content) plus the Develop Dashboard → Data snapshot—no invented field values. Save the key here or use VITE_CLAUDE_API_KEY at build time.'}
+                  ? 'يُفعّل Geo AI Chat في استخبارات الأقمار: يفسّر الطبقات والحقول بناءً على ما هو محفوظ في GIS Map (GIS Content) فقط، دون اختلاق قيم.'
+                  : 'Powers Geo AI Chat in Satellite Intelligence: answers use only GIS Map saved layers (GIS Content)—no invented field values. Save the key here or use VITE_CLAUDE_API_KEY at build time.'}
               </p>
             </div>
 

@@ -204,14 +204,6 @@ export const GIS_CREATE_APP_OPTIONS: GisCreateAppOption[] = [
     href: 'https://storymaps.arcgis.com/',
     external: true,
   },
-  {
-    id: 'dashboards',
-    title: 'Dashboards',
-    description: 'Create a dashboard with data visualizations that provide key insights.',
-    icon: 'fa-solid fa-chart-column',
-    iconTone: 'orange',
-    href: '/dashboard/develop',
-  },
 ]
 
 export function gisContentTypeIcon(type: GisContentItemType): string {
@@ -484,28 +476,11 @@ export function gisContentPortalDisplayIconType(
 }
 
 /** @deprecated Use isAgroCloudDashboardApp */
-/** @deprecated Use isAgroCloudDashboardApp */
 export const isGeoSyntraDashboardApp = isAgroCloudDashboardApp
-
-export function agroCloudDashboardWorkspacePath(dashboardId: string): string {
-  return `/dashboard/develop/workspace/${encodeURIComponent(dashboardId)}`
-}
-
-/** @deprecated Use agroCloudDashboardWorkspacePath */
-export const geosyntraDashboardWorkspacePath = agroCloudDashboardWorkspacePath
-
-export function agroCloudDashboardEditPath(dashboardId: string): string {
-  return `/dashboard/develop/edit/${encodeURIComponent(dashboardId)}`
-}
-
-/** @deprecated Use agroCloudDashboardEditPath */
-export const geosyntraDashboardEditPath = agroCloudDashboardEditPath
 
 function agroCloudDashboardAppRowMenu(ctx: GisRowMenuContext): GisRowMenuAction[] {
   const items: GisRowMenuAction[] = [
     { id: 'view-details', label: 'View details' },
-    { id: 'open-dashboard', label: 'Open dashboard' },
-    { id: 'edit-dashboard', label: 'Edit dashboard' },
     { id: 'share', label: 'Share' },
     { id: 'view-metadata', label: 'View metadata' },
   ]

@@ -53,7 +53,6 @@ agrocloud.sqlite
    ├─ agri_user_profiles            extended profile fields by email
    ├─ ecph_entries                  EC/pH data-entry records
    ├─ esri_dashboards               registered Esri dashboards
-   └─ acp_weather_layer_config      weather-alert layer visibility
 ```
 
 Conventions:

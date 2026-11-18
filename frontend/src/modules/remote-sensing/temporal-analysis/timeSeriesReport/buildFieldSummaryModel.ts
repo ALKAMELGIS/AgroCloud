@@ -8,7 +8,7 @@ import type { CropAlertFieldInput } from '../../indices/siCropAlertEngine'
 import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'
 import { geodesicAreaM2 } from '../../classification/siLayerClassAreaEngine'
 import { classifyWapiHarvestStage } from '../../indices/siWapiAlertEngine'
-import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { cleanAoiPlotDisplayId, resolveBatchPlotDisplayName } from './aoiExcelExportShared'
 import { buildDayChartFromDailyRows } from './buildTimeSeriesReportPayload'
 import {

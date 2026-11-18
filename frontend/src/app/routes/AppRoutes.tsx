@@ -5,28 +5,20 @@ import { SiInstanceScopeProvider } from '../providers/siInstanceScope'
 import DynamicBindPage from '@/core/routing/DynamicBindPage'
 import ExternalEmbeddedPage from '@/core/routing/ExternalEmbeddedPage'
 import { isExternalPageLink } from '@/core/routing/defaultPageLinks'
-import AgroCloudDashboard from '@/modules/dashboards/management/AgroCloudDashboard'
 import { lazyWithRetry } from '@/core/routing/lazyWithRetry'
 /** Eager-loaded: avoid full-route Suspense spinner on first paint / dashboard navigation */
 import Home from '../layouts/Home'
 import Login from '@/modules/account/pages/Login'
 const DashboardOverview = lazyWithRetry(() => import('@/modules/dashboards/operational/Overview'), 'DashboardOverview')
-const DevelopDashboard = lazyWithRetry(() => import('@/modules/dashboards/management/DevelopDashboard'), 'DevelopDashboard')
-const AgroCloudPlatformDashboard = lazyWithRetry(
-  () => import('@/modules/dashboards/gis/agroCloudPlatform/AgroCloudPlatformDashboard'),
-  'AgroCloudPlatformDashboard',
-)
 const SatelliteIntelligence = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/SatelliteIntelligence'), 'SatelliteIntelligence')
 const SatelliteMultidimensional = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/Multidimensional'), 'SatelliteMultidimensional')
 const GisMap = lazyWithRetry(() => import('@/modules/gis/map/GisMap'), 'GisMap')
 const OperationsFormsApp = lazyWithRetry(() => import('@/modules/operations-forms/OperationsFormsApp'), 'OperationsFormsApp')
-const DataEntryQHIS = lazyWithRetry(() => import('@/modules/operations/other/QHIS'), 'DataEntryQHIS')
 const DataEntryRecipes = lazyWithRetry(() => import('@/modules/operations/fertigation/Recipes'), 'DataEntryRecipes')
 const AccountProfile = lazyWithRetry(() => import('@/modules/account/pages/Profile'), 'AccountProfile')
 const AccountSettings = lazyWithRetry(() => import('@/modules/account/pages/Settings'), 'AccountSettings')
 const MasterGisContent = lazyWithRetry(() => import('@/modules/gis/layers/content-portal/GisContent'), 'MasterGisContent')
 const MasterGisContentItem = lazyWithRetry(() => import('@/modules/gis/layers/content-portal/GisContentItemPane'), 'MasterGisContentItem')
-const DashboardSettings = lazyWithRetry(() => import('@/modules/dashboards/management/DashboardSettings'), 'DashboardSettings')
 const AdminUsers = lazyWithRetry(() => import('@/modules/identity/pages/Users'), 'AdminUsers')
 const AdminManpower = lazyWithRetry(() => import('@/modules/manpower/pages/ManpowerDashboard'), 'AdminManpower')
 const AdminCredits = lazyWithRetry(() => import('@/modules/identity/pages/CreditsPage'), 'AdminCredits')
@@ -88,7 +80,7 @@ export default function AppRoutes() {
         <Route path="/data/harvest" element={<Navigate to="/ops/harvest" replace />} />
         <Route path="/data/production" element={<Navigate to="/ops/harvest" replace />} />
         <Route path="/data/ec-ph" element={<Navigate to="/ops/ec_ph" replace />} />
-        <Route path="/data/qhis" element={<DataEntryQHIS />} />
+        {/* Removed pages: old links land on Home. */}
         <Route path="/data/recipes/:formSlug" element={<DataEntryRecipes />} />
         <Route
           path="/satellite/indices"
@@ -108,16 +100,6 @@ export default function AppRoutes() {
         <Route path="/dashboards/plant-ai" element={<Navigate to="/dashboards/overview" replace />} />
         <Route path="/dashboards/ai-chatbot" element={<DashboardAiChatbot />} />
         <Route path="/dashboards/model" element={<DashboardModel />} />
-        <Route path="/dashboards/agro-cloud" element={<AgroCloudDashboard />} />
-        <Route
-          path="/dashboards/agro-cloud-platform"
-          element={
-            <Suspense fallback={<RouteLoadingFallback label="Loading AgroCloud Platform…" />}>
-              <AgroCloudPlatformDashboard />
-            </Suspense>
-          }
-        />
-        <Route path="/dashboards/agro-dashboard" element={<Navigate to="/dashboards/agro-cloud" replace />} />
         <Route path="/dashboards/ai-agro-cloud" element={<AiAgroCloud />} />
         <Route path="/dashboards/ai-agro-chat" element={<AiAgroChat />} />
         <Route
@@ -131,7 +113,6 @@ export default function AppRoutes() {
         <Route path="/dashboards/esri-app" element={<Navigate to="/" replace />} />
         <Route path="/master/gis-content" element={<MasterGisContent />} />
         <Route path="/master/gis-content/item/:itemId" element={<MasterGisContentItem />} />
-        <Route path="/master/dashboard-settings" element={<DashboardSettings />} />
         <Route path="/master/workflow-settings" element={<AccountSettings />} />
         <Route path="/account/profile" element={<AccountProfile />} />
         <Route path="/account/profile-user-management" element={<Navigate to="/account/profile" replace />} />
@@ -162,15 +143,6 @@ export default function AppRoutes() {
         <Route path="/admin/system-settings" element={<SystemSettings />} />
         <Route path="/style-guide" element={<StyleGuide />} />
         <Route path="/usability-test" element={<UsabilityTest />} />
-        <Route
-          path="/dashboard/develop/*"
-          element={
-            <Suspense fallback={<RouteLoadingFallback label="Loading Develop Dashboard…" />}>
-              <DevelopDashboard />
-            </Suspense>
-          }
-        />
-        <Route path="/dashboards/geodash" element={<Navigate to="/dashboards/agro-cloud" replace />} />
         <Route path="/dashboard/design" element={<Navigate to="/dashboards/overview" replace />} />
         {settings.customPages
           .filter(p => p.visible && p.path.trim())

@@ -17,7 +17,6 @@ backend/data/
 # Legacy JSON stores (imported into SQLite on first start; kept on disk as backups) — never commit.
 backend/server/ecph_entries.json
 backend/server/esri_dashboards.json
-backend/server/acp_weather_layer_config.json
 backend/server/agri_api_secrets.json
 backend/server/data/agri_api_secrets.json
 backend/server/agri_user_profiles.json

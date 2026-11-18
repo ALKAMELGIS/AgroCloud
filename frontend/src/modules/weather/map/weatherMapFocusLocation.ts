@@ -1,5 +1,5 @@
 import L from 'leaflet'
-import { flyToGeoJsonExtent, flyToLatLng } from '@/modules/dashboards/develop-elite/developEliteMapFly'
+import { flyToGeoJsonExtent, flyToLatLng } from '@/modules/gis/portfolio/developEliteMapFly'
 import type { WeatherLocationId } from '../config/weatherFarmIds'
 import {
   WEATHER_MAP_PORTFOLIO_MAX_ZOOM,

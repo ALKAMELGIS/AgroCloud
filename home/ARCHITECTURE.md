@@ -93,7 +93,7 @@ Dependencies point downward only: `app → modules → components / core / theme
 | `admin` | System Settings (+ sections), GitHub integration, AgroCloud management. |
 | `identity` | Users, roles, hierarchy (server RBAC UI) and their API hooks. |
 | `manpower` | Seat allocation. |
-| `operations` | Daily data entry: fertigation, irrigation, harvest, QHIS, EC/pH, sensors, GPS. |
+| `operations` | Daily data entry: fertigation, irrigation, harvest, EC/pH, sensors, GPS. |
 | `forms` | Data-source field engine behind the data-entry pages. |
 | `dashboards` | Overview, AI pages, Agro Cloud Platform, Develop Elite dashboard, dashboard management. |
 | `gis` | GIS map workspace, layers, content portal, editing, measurement, spatial analysis. |

@@ -9,20 +9,6 @@ export const menuItems: HomeMenuItem[] = [
   // Main apps open directly from the home page (they used to sit inside "Dashboard" and
   // "Satellite Imagery" groups, one extra click away).
   {
-    id: 'develop-dashboard',
-    label: { en: 'Develop Dashboard', ar: 'تطوير لوحة التحكم' },
-    icon: 'fa-solid fa-grip',
-    color: '#F97316',
-    to: '/dashboard/develop',
-  },
-  {
-    id: 'agro-cloud-dashboard',
-    label: { en: 'Agro Cloud Dashboard', ar: 'لوحة Agro Cloud' },
-    icon: 'fa-solid fa-chart-pie',
-    color: '#F97316',
-    to: '/dashboards/agro-cloud',
-  },
-  {
     id: 'satellite-intelligence',
     label: { en: 'Satellite Intelligence', ar: 'التحليل الفضائي الذكي' },
     icon: 'fa-solid fa-layer-group',
@@ -40,11 +26,6 @@ export const menuItems: HomeMenuItem[] = [
         icon: 'fa-solid fa-building-user',
         to: '/applications/agrocloud-management',
       },
-      {
-        label: { en: 'AgroCloud Platform', ar: 'منصة AgroCloud' },
-        icon: 'fa-solid fa-seedling',
-        to: '/dashboards/agro-cloud-platform',
-      },
     ],
   },
   {
@@ -61,11 +42,6 @@ export const menuItems: HomeMenuItem[] = [
       { label: { en: 'Fertigation', ar: 'التسميد' }, icon: 'fa-solid fa-flask', to: '/ops/fertigation' },
       { label: { en: 'Fertilizer issue', ar: 'صرف الأسمدة' }, icon: 'fa-solid fa-boxes-stacked', to: '/ops/fertilizer_issue' },
       { label: { en: 'Settings', ar: 'الإعدادات' }, icon: 'fa-solid fa-gear', to: '/ops/settings' },
-      {
-        label: { en: 'QHIS', ar: 'الجودة والسلامة' },
-        icon: 'fa-solid fa-shield-halved',
-        to: '/data/qhis',
-      },
     ],
   },
   {
@@ -115,7 +91,6 @@ export const menuItems: HomeMenuItem[] = [
     color: '#64748B',
     items: [
       { label: { en: 'Data Management', ar: 'إدارة البيانات' }, icon: 'fa-solid fa-database', to: '/master/workflow-settings' },
-      { label: { en: 'Dashboard Settings', ar: 'إعدادات لوحة التحكم' }, icon: 'fa-solid fa-link', to: '/master/dashboard-settings' },
       { label: { en: 'GIS Content', ar: 'محتوى GIS' }, icon: 'fa-solid fa-map-location-dot', to: '/master/gis-content' },
     ]
   },

@@ -217,10 +217,6 @@
   color: #ca8a04;
 }
 
-.nav-item-qhis .icon {
-  color: #dc2626;
-}
-
 .nav-item-production .icon {
   color: var(--c-data);
 }
@@ -229,8 +225,7 @@
   color: var(--c-dash);
 }
 
-.nav-item-dashboard-platform .icon,
-.nav-item-agrocloud-platform .icon {
+.nav-item-dashboard-platform .icon {
   color: #16a34a;
 }
 

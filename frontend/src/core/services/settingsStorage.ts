@@ -379,7 +379,14 @@ function sanitizeCustomPage(raw: unknown): CustomPageRecord | null {
   const navGroupId = sanitizeNavGroupId(r.navGroupId)
   const subRaw = r.subitemClass != null ? String(r.subitemClass).trim().slice(0, 160) : ''
   const externalUrl = bindTarget === 'external' ? sanitizeExternalUrl(r.externalUrl) : ''
-  if (path === '/dashboards/agro-dashboard' || path === '/dashboards/esri-app') return null
+  // Pages of removed features (also drops copies saved in older settings).
+  if (
+    path === '/dashboards/agro-dashboard' ||
+    path === '/dashboards/esri-app' ||
+    path === '/dashboards/eap-arcgis' ||
+    id === 'eap-arcgis-dashboard-link'
+  )
+    return null
   if (bindTarget === 'external' && !externalUrl) return null
   return {
     id,

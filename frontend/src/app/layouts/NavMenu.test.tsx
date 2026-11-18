@@ -64,12 +64,12 @@ describe('NavMenu vertical responsive', () => {
         </SystemSettingsProvider>
       </MemoryRouter>,
     )
-    const dashboard = screen.getByRole('button', { name: /^dashboard$/i })
-    expect(dashboard).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.keyDown(dashboard, { key: 'Enter' })
-    expect(dashboard).toHaveAttribute('aria-expanded', 'true')
-    fireEvent.keyDown(dashboard, { key: 'Escape' })
-    expect(dashboard).toHaveAttribute('aria-expanded', 'false')
+    const appGroup = screen.getByRole('button', { name: /^application$/i })
+    expect(appGroup).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.keyDown(appGroup, { key: 'Enter' })
+    expect(appGroup).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.keyDown(appGroup, { key: 'Escape' })
+    expect(appGroup).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('on the home page keeps only the utility controls (the sidebar has the links)', () => {
@@ -83,7 +83,7 @@ describe('NavMenu vertical responsive', () => {
     )
     const nav = screen.getByRole('navigation', { name: /primary/i })
     expect(nav).toHaveClass('navmenu--utilities-only')
-    expect(screen.queryByRole('button', { name: /^dashboard$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^application$/i })).toBeNull()
     expect(nav.querySelector('.navmenu-account')).not.toBeNull()
     unmount()
 
@@ -94,7 +94,7 @@ describe('NavMenu vertical responsive', () => {
         </SystemSettingsProvider>
       </MemoryRouter>,
     )
-    expect(screen.getByRole('button', { name: /^dashboard$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^application$/i })).toBeInTheDocument()
   })
 
   it('keeps primary navigation expanded on mobile (no hamburger toggle)', () => {
@@ -124,11 +124,11 @@ describe('NavMenu vertical responsive', () => {
         </SystemSettingsProvider>
       </MemoryRouter>,
     )
-    const dashboard = screen.getByRole('button', { name: /^dashboard$/i })
-    fireEvent.click(dashboard)
-    expect(dashboard).toHaveAttribute('aria-expanded', 'true')
+    const appGroup = screen.getByRole('button', { name: /^application$/i })
+    fireEvent.click(appGroup)
+    expect(appGroup).toHaveAttribute('aria-expanded', 'true')
     fireEvent.touchStart(document.body)
-    expect(dashboard).toHaveAttribute('aria-expanded', 'false')
+    expect(appGroup).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('toggles theme from ghost icon switch', () => {
@@ -151,7 +151,7 @@ describe('NavMenu vertical responsive', () => {
   it('renders AI AgroCloud group with chat link only', () => {
     setViewport(1280)
     render(
-      <MemoryRouter future={routerFuture} initialEntries={['/dashboard/develop']}>
+      <MemoryRouter future={routerFuture} initialEntries={['/satellite/indices']}>
         <SystemSettingsProvider>
           <NavMenu />
         </SystemSettingsProvider>

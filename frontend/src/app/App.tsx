@@ -4,7 +4,6 @@ import { HashRouter, Navigate, useLocation } from 'react-router-dom'
 import { AppDialogProvider } from './providers/AppDialogProvider'
 import AppChrome from '@/app/layouts/AppChrome'
 import AppRoutes from './routes/AppRoutes'
-import PersistentAgroCloudEmbed from './layouts/PersistentAgroCloudEmbed'
 import PwaInstallPrompt from './startup/PwaInstallPrompt'
 import PwaInstallFab from './startup/PwaInstallFab'
 import {
@@ -459,10 +458,7 @@ function AppShell() {
 
   const isOnLogin = location.pathname === '/login'
   const showChrome = !!user && !isOnLogin
-  const isAgroCloudDashboard = location.pathname === '/dashboards/agro-cloud'
-  const isAgroCloudPlatform = location.pathname === '/dashboards/agro-cloud-platform'
-  const isDevelopDashboard = location.pathname.startsWith('/dashboard/develop')
-  /** Operations nav group: irrigation, EC/pH, harvest, QHIS, production, fertigation records */
+  /** Legacy /data/* pages (fertigation recipes) */
   const isOperationsDataPage = location.pathname.startsWith('/data/')
   /** Soil / weather / irrigation / camera API integration pages */
   const isSensorsPage = location.pathname.startsWith('/sensors/')
@@ -476,9 +472,6 @@ function AppShell() {
     'content',
     isGisContentPortal && 'content--gis-content-portal',
     isHomeLanding && 'content--home-landing',
-    isAgroCloudDashboard && 'content--agro-cloud-dashboard',
-    isAgroCloudPlatform && 'content--agro-cloud-platform',
-    isDevelopDashboard && 'content--develop-dashboard',
     isOperationsDataPage && 'content--operations-fit',
     isSensorsPage && 'content--sensors-fit',
     isExternalEmbed && 'content--external-embed',
@@ -497,7 +490,6 @@ function AppShell() {
       <div className="app-main-routes">
         <AppRoutes />
       </div>
-      <PersistentAgroCloudEmbed />
     </>
   )
 

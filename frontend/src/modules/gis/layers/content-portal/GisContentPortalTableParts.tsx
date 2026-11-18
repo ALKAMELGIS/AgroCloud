@@ -241,7 +241,7 @@ function ItemMoreMenu({
 
 function resolvePrimaryAction(row: GisContentRow): GisRowMenuAction {
   if (isAgroCloudDashboardApp(row)) {
-    return { id: 'open-dashboard', label: 'Open dashboard' }
+    return { id: 'view-details', label: 'View details' }
   }
   if (isGisPortalRowMapAddable(row.type)) {
     return { id: 'add-to-map', label: 'Add to map' }

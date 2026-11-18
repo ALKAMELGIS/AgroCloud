@@ -88,18 +88,7 @@ export default function Home() {
   }
 
   // Main view: apps that open directly first, then the groups (each opens its own list).
-  const homeSections = [
-    {
-      id: 'apps',
-      title: language === 'ar' ? 'وصول سريع' : 'Quick access',
-      items: menuItems.filter((i) => !i.items?.length),
-    },
-    {
-      id: 'workspaces',
-      title: language === 'ar' ? 'مساحات العمل' : 'Workspaces',
-      items: menuItems.filter((i) => i.items?.length),
-    },
-  ].filter((section) => section.items.length)
+  const homeItems = [...menuItems.filter((i) => !i.items?.length), ...menuItems.filter((i) => i.items?.length)]
 
   const handleBack = () => {
     setActiveGroup(null)
@@ -252,17 +241,10 @@ export default function Home() {
         </div>
       ) : (
         <div className="home-modern">
-          {homeSections.map((section) => (
-            <section key={section.id} className="home-section" aria-labelledby={`home-section-${section.id}`}>
-              <div className="home-section-head">
-                <h2 id={`home-section-${section.id}`} className="home-section-title">
-                  {section.title}
-                </h2>
-                <span className="home-section-count">{section.items.length}</span>
-              </div>
+          <section className="home-section">
               <div className="home-apps-strip">
                 <div className="home-apps-list">
-                  {section.items.map((item) => (
+                  {homeItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -293,7 +275,6 @@ export default function Home() {
                 </div>
               </div>
             </section>
-          ))}
         </div>
       )}
     </div>

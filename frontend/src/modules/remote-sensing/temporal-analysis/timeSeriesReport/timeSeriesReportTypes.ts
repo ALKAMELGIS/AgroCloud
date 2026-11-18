@@ -2,7 +2,7 @@ import type { ImageryIndexInterpretation } from '../../indices/imageryIndexInter
 import type {
   ImageryTimeAggregation,
   ImageryTimeSeriesLayerSeries,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import type { EstimatedWaterLossPoint } from './estimatedWaterLossTimeline'
 import type { EstimatedYieldPoint } from './estimatedYieldTimeline'
 import type { TimeSeriesExecutiveSummary } from './timeSeriesReportExecutive'

@@ -8,7 +8,7 @@ import { geodesicAreaM2 } from '../../classification/siLayerClassAreaEngine'
 import {
   evaluateImageryLayerDailyValue,
   type ImageryTimeSeriesLayerSeries,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import type { TimeSeriesTrendLabel } from './timeSeriesReportTypes'
 
 export type YieldClassLabel = 'Low' | 'Moderate' | 'Good' | 'High'

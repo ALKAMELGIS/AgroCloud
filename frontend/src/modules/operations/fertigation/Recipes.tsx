@@ -17,7 +17,6 @@ const SLUG_TO_FORM_KEY: Record<string, string> = {
   irrigation: 'Irrigation',
   harvest: 'Harvest',
   production: 'Production',
-  qhis: 'QHIS',
   fertigation: 'Fertigation',
 }
 
@@ -26,7 +25,6 @@ const SLUG_TO_ENTRY_PATH: Record<string, string> = {
   irrigation: '/data/irrigation',
   harvest: '/data/harvest',
   production: '/data/production',
-  qhis: '/data/qhis',
   fertigation: '/data/irrigation',
 }
 

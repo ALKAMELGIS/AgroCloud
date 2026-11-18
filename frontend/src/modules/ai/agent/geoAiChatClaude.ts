@@ -1,5 +1,5 @@
 /**
- * Geo AI Chat: Claude + data context from GIS Content (saved layers) and Develop Dashboard Data pane snapshot.
+ * Geo AI Chat: Claude + data context from GIS Content (saved layers).
  */
 
 import { formatFeaturePropertiesForGeoAi, type ArcgisLayerDefLite } from '@/modules/gis/layers/arcgisAttributeDisplay'
@@ -8,17 +8,14 @@ import type { LayerData } from '@/modules/gis/layers/LayerManager'
 import { buildLayerIdValueCatalogSnippet, summarizeGeoAiMapLayers } from './geoExplorerLayerContext'
 import type { GeoAiMapLayer } from './geoExplorerLayerContext'
 
-/** Develop Dashboard writes this when layers / CSV tables change. */
-export const DEVELOP_DATA_CONTEXT_LS_KEY = 'agri_develop_data_context_v1'
-
 export const GEO_AI_CHAT_SYSTEM_BASE = `You are **Geo AI Copilot** / Geo AI Chat: an advanced geospatial assistant integrated with GIS layer summaries, map hints (MAP_QUERY when justified), and optional appended weather/session blocks from the app.
 
-Your job is to analyze and explain tabular or layer-related information using ONLY the data summaries provided in the context blocks (Satellite Added layers when present, GIS Content layers saved from GIS Map, Develop Dashboard snapshot), plus any "### SESSION MAP ANCHOR" / OPENWEATHER / OPEN-METEO / WEATHER COORDINATE SOURCE sections when appended below.
+Your job is to analyze and explain tabular or layer-related information using ONLY the data summaries provided in the context blocks (Satellite Added layers when present, GIS Content layers saved from GIS Map), plus any "### SESSION MAP ANCHOR" / OPENWEATHER / OPEN-METEO / WEATHER COORDINATE SOURCE sections when appended below.
 
 Users write in free natural language (e.g. “show me”, “describe”, “find”, “on the map”) — infer intent and map their wording to the closest fields, features, and layer names in the context. Do not ask them to use fixed commands.
 
 Rules:
-- If the answer is not supported by the context, say clearly that the data is not in the snapshot and suggest what the user could add (e.g. add layers on this Satellite map, save layers in GIS Map / GIS Content, or open Develop Dashboard → Data).
+- If the answer is not supported by the context, say clearly that the data is not in the snapshot and suggest what the user could add (e.g. add layers on this Satellite map, save layers in GIS Map / GIS Content).
 - When context lines include "domain/subtype descriptions" or attribute values like "Label (stored code: …)", treat the text before the parenthesis as the authoritative meaning; do not answer with bare database codes alone unless the user explicitly asks for raw codes.
 - For feature/place lookups or layer queries: answer like a GIS or data analyst — use a short **Interpretation** (2–4 sentences), then **Key attributes** as bullets (concise), then location or caveats. Avoid dumping large JSON; reserve raw attribute lists for explicit "show raw" requests.
 - For counts, distributions, or comparisons implied by the context: add one brief quantitative read (e.g. dominant category, approximate share) only when the numbers are directly supported by the provided summaries.
@@ -118,22 +115,6 @@ export async function buildGeoAiDataContext(
     )
   }
 
-  try {
-    if (typeof localStorage === 'undefined') {
-      chunks.push('### Develop Dashboard — Data\n(localStorage unavailable).')
-    } else {
-      const raw = localStorage.getItem(DEVELOP_DATA_CONTEXT_LS_KEY)
-      if (raw) {
-        chunks.push('### Develop Dashboard — Data pane snapshot (JSON)\n' + raw.slice(0, maxChars))
-      } else {
-        chunks.push(
-          '### Develop Dashboard — Data\n(no snapshot yet). Open Develop Dashboard and use the Data panel (layers / CSV) so the app can record a summary here.',
-        )
-      }
-    }
-  } catch {
-    chunks.push('### Develop Dashboard\n(could not read snapshot).')
-  }
 
   let out = chunks.join('\n\n')
   if (out.length > maxChars) out = `${out.slice(0, maxChars)}\n\n[…context truncated…]`
