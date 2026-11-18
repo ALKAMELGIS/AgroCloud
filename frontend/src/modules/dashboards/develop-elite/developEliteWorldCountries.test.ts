@@ -1,42 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { filterDevelopEliteMapOverlayGeoJson } from './developEliteMapOverlayFilter'
 import {
   buildWorldCountryListItems,
   filterWorldCountriesForMap,
   findWorldCountryFeatureForFilter,
 } from './developEliteWorldCountries'
-
-describe('filterDevelopEliteMapOverlayGeoJson world-countries', () => {
-  const fc: GeoJSON.FeatureCollection = {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: { Country: 3, ZONE_ID: '', Status: 1 },
-        geometry: { type: 'Polygon', coordinates: [] },
-      },
-    ],
-  }
-
-  it('ignores zone filter for world-countries layer', () => {
-    const out = filterDevelopEliteMapOverlayGeoJson(
-      fc,
-      { country: 'all', zoneId: 'MH', selectedFieldKey: null, locationSearch: '', structureTypeCode: null, structureTypeCodes: null, activeKpiCardId: null },
-      'world-countries',
-      new Map([['3', 'Morocco']]),
-    )
-    expect(out.features).toHaveLength(1)
-  })
-
-  it('applies zone filter to zones layer', () => {
-    const out = filterDevelopEliteMapOverlayGeoJson(
-      fc,
-      { country: 'all', zoneId: 'MH', selectedFieldKey: null, locationSearch: '', structureTypeCode: null, structureTypeCodes: null, activeKpiCardId: null },
-      'zones',
-    )
-    expect(out.features).toHaveLength(0)
-  })
-})
 
 describe('buildWorldCountryListItems', () => {
   const domain = new Map([

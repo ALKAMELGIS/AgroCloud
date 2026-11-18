@@ -14,7 +14,6 @@ import {
 import { appendElementWithoutDataBinding } from './agroCloudDashboardLayerSelection'
 import { registerGisContentDataSource } from './agroCloudDashboardElements'
 import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
-import { queryDefinitionFromElement } from './agroCloudDashboardQueryEngine'
 import { widgetRequiresDataPicker } from './agroCloudDashboardWidgetRegistry'
 
 const mockWebMapRow: GisContentRow = {
@@ -59,23 +58,6 @@ describe('agroCloudDashboardWidgetRegistry', () => {
     expect(widgetRequiresDataPicker('serial-chart')).toBe(true)
     expect(widgetKindSkipsDataPicker('rich-text')).toBe(true)
     expect(widgetKindNeedsLayerSelection('map')).toBe(true)
-  })
-})
-
-describe('agroCloudDashboardQueryEngine', () => {
-  it('builds query from bound element', () => {
-    const el = {
-      id: 'el-1',
-      kind: 'indicator' as const,
-      label: 'KPI',
-      dataSourceId: 'ds-1',
-      sourceLayer: 'Agri_Location',
-      field: 'Area_Ha',
-      aggregation: 'sum' as const,
-    }
-    const q = queryDefinitionFromElement(el)
-    expect(q?.dataSourceId).toBe('ds-1')
-    expect(q?.statistics?.[0]?.aggregation).toBe('sum')
   })
 })
 

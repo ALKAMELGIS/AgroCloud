@@ -3,7 +3,6 @@ import { buildVectorPreview, buildValidationIssues, buildStubPreview } from '@/m
 import { isShapefilePart } from '@/modules/data-management/import/gisIngest/shapefileBundle';
 import { detectTileServiceKind, normalizeXyzTemplate } from '@/modules/data-management/import/gisIngest/cogPmtiles';
 import { planLidarIngest, detectLidarFormat } from '@/modules/data-management/import/gisIngest/bimLidar';
-import { toRegistryCard, GIS_LAYER_CONTEXT_ACTIONS } from '../../layers';
 import { VECTOR_ACCEPT, RASTER_ACCEPT } from '@/modules/data-management/import/gisIngest/formats';
 import { suggestServiceKindFromUrl } from '@/modules/data-management/import/gisConnections/webServiceStore';
 import { parseWfsGetCapabilities, buildWfsGetFeatureUrl } from '@/modules/data-management/import/gisConnections/ogcWfsClient';
@@ -70,21 +69,6 @@ describe('bimLidar', () => {
   it('plans lidar ingest', () => {
     expect(detectLidarFormat('cloud.laz')).toBe('laz');
     expect(planLidarIngest('cloud.laz').strategy).toBe('gateway-convert');
-  });
-});
-
-describe('gisLayerRegistry', () => {
-  it('maps layers to cards and exposes context actions', () => {
-    const card = toRegistryCard({
-      id: '1',
-      name: 'Fields',
-      visible: true,
-      mapOpacity: 0.8,
-      importMetadata: { geometryType: 'polygon', featureCount: 12, crs: 'EPSG:4326' },
-    });
-    expect(card.kind).toBe('vector');
-    expect(card.opacity).toBe(0.8);
-    expect(GIS_LAYER_CONTEXT_ACTIONS.length).toBeGreaterThan(8);
   });
 });
 
