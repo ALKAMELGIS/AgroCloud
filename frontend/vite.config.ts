@@ -10,7 +10,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { appConfig } from './config/app'
-import { API_PORT, VITE_PORT } from '../scripts/devPorts.mjs'
+import { API_PORT, VITE_PORT } from '../deploy/devPorts.mjs'
 
 /** Root `/` for custom domains; default `/AgroCloud/` for GitHub Pages. */
 function resolveBuildBasePath(): string {

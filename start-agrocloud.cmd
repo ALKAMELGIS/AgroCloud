@@ -8,7 +8,7 @@ rem    start-agrocloud.cmd           start (builds only if needed)
 rem    start-agrocloud.cmd rebuild   rebuild the app first (after updating the code)
 rem
 rem  Data (users, settings, API keys, entries) is kept in .\data\agrocloud.sqlite
-rem  Developer mode with hot reload: core\scripts\windows\start_system.bat
+rem  Developer mode with hot reload: deploy\windows\start_system.bat
 rem ===========================================================================
 setlocal EnableExtensions
 title AgroCloud
@@ -34,7 +34,7 @@ if %NODE_MAJOR% LSS 22 (
 )
 
 rem --- Port: use the first free one from %AGRO_PORT% - another program may already use it.
-for /f "delims=" %%p in ('node "%~dp0core\scripts\windows\find-free-port.mjs" %AGRO_PORT%') do set "FREE_PORT=%%p"
+for /f "delims=" %%p in ('node "%~dp0deploy\windows\find-free-port.mjs" %AGRO_PORT%') do set "FREE_PORT=%%p"
 if not defined FREE_PORT goto :fail
 if not "%FREE_PORT%"=="%AGRO_PORT%" echo   Port %AGRO_PORT% is used by another program - using %FREE_PORT% instead.
 set "AGRO_PORT=%FREE_PORT%"

@@ -78,11 +78,11 @@ jobs:
         env:
           # Allow the intentionally-public, URL-restricted Mapbox token through the embedded-secret scanner.
           PAGES_SECRET_SCAN_ALLOW: ${{ vars.VITE_MAPBOX_TOKEN }}
-        run: node scripts/pages-dist-check.mjs
+        run: node deploy/pages-dist-check.mjs
       - name: Publish build to docs/ and push main
         run: |
           set -euo pipefail
-          node scripts/publish-pages-docs.mjs --git-add
+          node deploy/publish-pages-docs.mjs --git-add
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if git diff --cached --quiet; then
@@ -97,11 +97,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PAGES_ADMIN_TOKEN: ${{ secrets.PAGES_ADMIN_TOKEN }}
           PAGES_SOURCE_PATH: /docs
-        run: node scripts/ensure-pages-branch-source.mjs
+        run: node deploy/ensure-pages-branch-source.mjs
       - name: Remove legacy root build (one-time migration)
         run: |
           set -euo pipefail
-          node scripts/remove-legacy-pages-root.mjs --git
+          node deploy/remove-legacy-pages-root.mjs --git
           if git diff --cached --quiet; then
             echo "Repository root already clean."
             exit 0
@@ -126,5 +126,5 @@ jobs:
             echo ""
             echo "**Next:** [Production health check](https://github.com/${{ github.repository }}/actions/workflows/production-health.yml) runs after this workflow."
             echo ""
-            echo "See [core/docs/DEPLOYMENT.md](https://github.com/${{ github.repository }}/blob/main/core/docs/DEPLOYMENT.md) for full-stack API hosting."
+            echo "See [home/DEPLOYMENT.md](https://github.com/${{ github.repository }}/blob/main/home/DEPLOYMENT.md) for full-stack API hosting."
           } >> "$GITHUB_STEP_SUMMARY"

@@ -101,5 +101,5 @@ pytest tests -q
 
 ## Relation to AgroCloud
 
-Complements the existing `analysis_engine` STAC/MPC stack and the Satellite Intelligence UI.
+Complements the existing `services/analysis_engine` STAC/MPC stack and the Satellite Intelligence UI.
 Wire this CLI into a backend job or Processing toolbox to enrich layers before loading them in the map dock.

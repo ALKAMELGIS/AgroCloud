@@ -226,7 +226,7 @@ router.get('/manpower/transactions', async (req, res) => {
   }
 })
 
-/* ---------- credits (see core/docs/CREDITS.md) ---------- */
+/* ---------- credits (see home/CREDITS.md) ---------- */
 
 function walletForClient(w) {
   return { id: w.id, balance: Number(w.balance), updatedAt: w.updated_at }

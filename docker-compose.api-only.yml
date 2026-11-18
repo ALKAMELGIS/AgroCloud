@@ -1,5 +1,5 @@
 # API-only stack — www stays on GitHub Pages; Caddy serves api.eliteagrocloud.com only.
-# Prefer systemd: scripts/deploy-vps-api-only.sh (lighter, survives reboots).
+# Prefer systemd: deploy/deploy-vps-api-only.sh (lighter, survives reboots).
 #
 # Deploy via Hostinger MCP:
 #   VPS_createNewProjectV1

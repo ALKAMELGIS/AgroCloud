@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { defineConfig, devices } from 'playwright/test'
 
-import { API_PORT } from '../scripts/devPorts.mjs'
+import { API_PORT } from '../deploy/devPorts.mjs'
 
 const E2E_DATA_DIR = process.env.E2E_DATA_DIR || mkdtempSync(join(tmpdir(), 'agrocloud-e2e-'))
 process.env.E2E_DATA_DIR = E2E_DATA_DIR // workers re-evaluate this file; keep one directory

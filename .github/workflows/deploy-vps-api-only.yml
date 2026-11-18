@@ -8,8 +8,8 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
-      - 'scripts/deploy-vps-api-only.sh'
-      - 'scripts/nginx-api-only.conf.example'
+      - 'deploy/deploy-vps-api-only.sh'
+      - 'deploy/nginx-api-only.conf.example'
       - '.github/workflows/deploy-vps-api-only.yml'
   workflow_dispatch:
 
@@ -59,7 +59,7 @@ jobs:
               mkdir -p "$DEPLOY_PATH"
               git clone --depth 1 -b main "https://github.com/${{ github.repository }}.git" "$DEPLOY_PATH" 2>/dev/null || true
               cd "$DEPLOY_PATH" && git pull --ff-only origin main
-              chmod +x scripts/deploy-vps-api-only.sh
+              chmod +x deploy/deploy-vps-api-only.sh
               ./scripts/deploy-vps-api-only.sh
             fi
 

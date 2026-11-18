@@ -3,7 +3,7 @@
  *
  * Mirrors `src/theme/tokens.ts` (the MUI theme reads the same values) so legacy CSS pages and
  * MUI pages share one palette, radius scale, elevation and focus treatment in light + dark.
- * Built from the UI UX Pro Max recommendation (design-system/agrocloud/MASTER.md).
+ * Built from the UI UX Pro Max recommendation (home/design-system/MASTER.md).
  *
  * Rules for this file:
  *  - Only tokens + shared primitives (.ds-*, .gis-btn/.gis-input, .ec-*, tables, forms, scrollbars).

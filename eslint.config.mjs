@@ -27,7 +27,7 @@ export default tseslint.config(
 
   // Backend: Node ESM, no type checker — let ESLint catch what tsc would.
   {
-    files: ['backend/**/*.js', 'scripts/**/*.mjs', 'core/tools/**/*.mjs', 'server.js'],
+    files: ['backend/**/*.js', 'deploy/**/*.mjs', 'deploy/tools/**/*.mjs', 'server.js'],
     ...js.configs.recommended,
     languageOptions: {
       ecmaVersion: 2023,

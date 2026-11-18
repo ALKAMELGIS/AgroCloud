@@ -9,8 +9,8 @@ on:
     paths:
       - 'frontend/**'
       - 'backend/**'
-      - 'scripts/deploy-vps-fullstack.sh'
-      - 'scripts/nginx-eliteagrocloud-vps.conf.example'
+      - 'deploy/deploy-vps-fullstack.sh'
+      - 'deploy/nginx-eliteagrocloud-vps.conf.example'
       - '.github/workflows/deploy-vps-fullstack.yml'
   workflow_dispatch:
 
@@ -59,7 +59,7 @@ jobs:
               mkdir -p "$DEPLOY_PATH"
               git clone --depth 1 -b main "https://github.com/${{ github.repository }}.git" "$DEPLOY_PATH" 2>/dev/null || true
               cd "$DEPLOY_PATH" && git pull --ff-only origin main
-              chmod +x scripts/deploy-vps-fullstack.sh
+              chmod +x deploy/deploy-vps-fullstack.sh
               ./scripts/deploy-vps-fullstack.sh
             fi
 
