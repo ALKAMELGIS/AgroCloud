@@ -100,6 +100,16 @@ test.describe('operations forms', () => {
     await page.getByRole('menuitem', { name: /excel/i }).click()
     expect((await exported).suggestedFilename()).toMatch(/\.xlsx$/)
 
+    // Overview dashboard on the hub reflects the import (window ends at the latest record)
+    await page.goto('/AgroCloud/#/ops')
+    await expect(page.getByRole('heading', { name: /^overview$/i })).toBeVisible()
+    await expect(page.locator('.ops-kpi', { hasText: /harvested/i })).toBeVisible()
+    const chart = page.locator('.ops-chart', { hasText: /harvest per week/i })
+    await chart.getByRole('button', { name: /show as table/i }).click()
+    await expect(chart.locator('table tbody tr').first()).toBeVisible()
+    await page.getByRole('button', { name: '4 wk' }).click()
+    await expect(page.getByRole('button', { name: '4 wk' })).toHaveAttribute('aria-pressed', 'true')
+
     // Settings page lists the values the import added
     await page.goto('/AgroCloud/#/ops/settings')
     await expect(page.getByRole('heading', { level: 1, name: /settings/i })).toBeVisible()

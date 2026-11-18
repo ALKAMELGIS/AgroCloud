@@ -259,3 +259,52 @@ test('audit log lists every change with filters, including settings and lists', 
   const future = await call('GET', '/audit?from=2999-01-01')
   assert.equal(future.body.total, 0)
 })
+
+test('dashboard: weekly series, comparisons, EC/pH limits and role filtering', async () => {
+  const { isoWeekLabel } = await import('../server/operations/opsDashboard.js')
+  assert.equal(isoWeekLabel('2026-01-01'), '2026-W01')
+  assert.equal(isoWeekLabel('2024-12-30'), '2025-W01')
+  assert.equal(isoWeekLabel('2027-01-03'), '2026-W53')
+
+  // Isolated year so earlier tests' rows don't interfere.
+  const rows = [
+    { harvest_date: '2030-03-04', product: 'Tomato', location: 'D1', segment: 'a', quantity_kg: 100 },
+    { harvest_date: '2030-03-05', product: 'Cucumber', location: 'D1', segment: 'b', quantity_kg: 40 },
+    { harvest_date: '2030-03-12', product: 'Tomato', location: 'D1', segment: 'c', quantity_kg: 60 },
+    { harvest_date: '2030-02-20', product: 'Tomato', location: 'D1', segment: 'd', quantity_kg: 50 }, // previous window
+  ]
+  assert.equal((await call('POST', '/forms/harvest/import', { rows })).body.inserted, 4)
+  await call('POST', '/forms/ec_ph/import', {
+    rows: [
+      { record_date: '2030-03-04', location: 'D1', valve: '1', record_time: '08:00', ec_in: 1.2, ph_in: 6.2 },
+      { record_date: '2030-03-05', location: 'D2', valve: '1', record_time: '08:00', ec_in: 1.2, ph_in: 8.4 }, // pH out
+      { record_date: '2030-03-12', location: 'D2', valve: '2', record_time: '08:00', ec_in: 5, ph_in: 6.4 }, // EC out
+    ],
+  })
+
+  const d = (await call('GET', '/dashboard?from=2030-03-04&to=2030-03-17')).body
+  assert.deepEqual(d.weeks, ['2030-W10', '2030-W11'])
+  assert.equal(d.harvest.kg, 200)
+  assert.deepEqual(d.harvest.weekly.map((w) => w.kg), [140, 60])
+  assert.equal(d.harvest.prevKg, 50)
+  assert.deepEqual(d.harvest.byCrop[0], { key: 'Tomato', value: 160 })
+  assert.equal(d.ecPh.readings, 3)
+  assert.equal(d.ecPh.outOfLimit, 2)
+  assert.equal(d.ecPh.outPct, 66.67)
+  assert.deepEqual(d.ecPh.byLocation[0], { key: 'D2', value: 2, readings: 2 })
+  assert.ok(d.ppp && d.water)
+
+  // Viewer without PPP rights gets no PPP section
+  const matrix = (await call('GET', '/settings')).body.settings.permissions
+  matrix.Viewer.forms.ppp = []
+  await call('PUT', '/settings', { permissions: matrix })
+  const v = (await call('GET', '/dashboard?from=2030-03-04&to=2030-03-17', undefined, 'Viewer')).body
+  assert.equal(v.ppp, undefined)
+  assert.equal(v.harvest.kg, 200)
+  await call('PUT', '/settings', { permissions: {} })
+
+  // default window ends at the latest record
+  const def = (await call('GET', '/dashboard')).body
+  assert.equal(def.range.to, '2030-03-12')
+  assert.equal(def.weeks.length, 12)
+})

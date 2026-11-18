@@ -24,6 +24,7 @@ import { requireIdentitySession } from '../identity/authMiddleware.js'
 import { isIdentityReady } from '../identity/db.js'
 import { runMigrations } from '../database/migrate.js'
 import { FORM_GROUPS, FORMS, MASTER_LISTS, SECTIONS, getForm } from './formSchemas.js'
+import { buildDashboard } from './opsDashboard.js'
 import { ADMIN_ACTIONS, FORM_ACTIONS, OPS_ROLES, canAdmin, canForm, rightsFor, roleOfRequest } from './opsPermissions.js'
 import {
   OpsError,
@@ -185,6 +186,13 @@ export function createOperationsRouter() {
 
   router.get('/settings', wrap(() => ({ settings: getSettings() })))
   router.put('/settings', adminGuard('settings'), wrap((req) => ({ settings: saveSettings(req.body ?? {}, actorOf(req)) })))
+  router.get(
+    '/dashboard',
+    wrap((req) => {
+      const { rights } = accessOf(req)
+      return buildDashboard(req.query, { canView: (id) => canForm(rights, id, 'view'), limits: getSettings().ecPhLimits })
+    }),
+  )
   router.get('/audit', adminGuard('audit'), wrap((req) => listAudit(req.query)))
   return router
 }

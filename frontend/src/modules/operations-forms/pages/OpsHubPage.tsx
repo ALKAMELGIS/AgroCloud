@@ -1,6 +1,7 @@
 import { FileBarChart2, Plus, Settings2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import { OpsDashboard } from '../components/OpsDashboard'
 import { useOps, useOpsText } from '../opsContext'
 
 export default function OpsHubPage() {
@@ -25,6 +26,8 @@ export default function OpsHubPage() {
           ) : null}
         </div>
       </div>
+      <OpsDashboard />
+      <h2 className="ops-hub-subtitle">{tx('Forms', 'الاستمارات')}</h2>
       <div className="ops-hub-grid">
         {schema.forms.filter(form => can(form.id, 'view')).map(form => {
           const c = schema.counts[form.id]

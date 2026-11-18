@@ -55,6 +55,32 @@ export type OpsAdminAction = 'lists' | 'settings' | 'audit'
 export type OpsRights = { forms: Record<string, OpsFormAction[]>; admin: OpsAdminAction[] }
 export type OpsPermissionMatrix = Record<string, OpsRights>
 
+export type OpsDashboard = {
+  range: { from: string; to: string; prevFrom: string; prevTo: string }
+  weeks: string[]
+  farms: string[]
+  harvest?: { kg: number; harvests: number; prevKg: number; weekly: { week: string; kg: number }[]; byCrop: { key: string; value: number }[] }
+  ecPh?: {
+    readings: number
+    outOfLimit: number
+    outPct: number | null
+    prevOutPct: number | null
+    avgPh: number | null
+    avgEc: number | null
+    weekly: { week: string; readings: number; out: number; outPct: number | null }[]
+    byLocation: { key: string; value: number; readings: number }[]
+  }
+  ppp?: {
+    cost: number
+    applications: number
+    prevCost: number
+    prevApplications: number
+    weekly: { week: string; cost: number; applications: number }[]
+    byProduct: { key: string; value: number; applications: number }[]
+  }
+  water?: { series: ('irrigation' | 'fertigation')[]; m3: number; prevM3: number; bySource: Record<string, number>; weekly: ({ week: string } & Record<string, number>)[] }
+}
+
 export type OpsAuditRow = {
   id: number
   form: string
@@ -192,6 +218,12 @@ export const opsApi = {
     item.id ? request<{ id: number }>('PUT', `/lists/${list}/${item.id}`, item) : request<{ id: number }>('POST', `/lists/${list}`, item),
   deleteListItem: (list: string, id: number) => request<{ ok: true }>('DELETE', `/lists/${list}/${id}`),
   saveSettings: (patch: Partial<OpsSettings>) => request<{ settings: OpsSettings }>('PUT', '/settings', patch),
+  dashboard: (q: { weeks?: number; farm?: string }) => {
+    const p = new URLSearchParams()
+    if (q.weeks) p.set('weeks', String(q.weeks))
+    if (q.farm) p.set('farm', q.farm)
+    return request<OpsDashboard>('GET', `/dashboard?${p.toString()}`)
+  },
   audit: (q: { form?: string; actor?: string; action?: string; from?: string; to?: string; q?: string; page?: number; pageSize?: number }) => {
     const p = new URLSearchParams()
     for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') p.set(k, String(v))
