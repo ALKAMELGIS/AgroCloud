@@ -1016,10 +1016,40 @@ function siExtractRasterSpecs(style: unknown): SiRasterSpec[] {
 }
 
 /** Rebuild a style with stable ids so tile swaps are diff-friendly / in-place. */
+/**
+ * Local globe base drawn under the imagery: ocean colour + Natural Earth land outlines served from
+ * this app (public/si-globe-land.geojson). The globe is visible the moment the style loads, even
+ * while satellite tiles are still downloading or when the imagery host is slow / unreachable —
+ * previously the canvas stayed black until tiles arrived (often only after a page refresh).
+ * Ids use the basemap prefixes so overlay ordering treats them as basemap, never as overlays.
+ */
+const SI_GLOBE_BASE_OCEAN_LAYER_ID = `${SI_BASE_LAYER_PREFIX}globe-ocean`;
+const SI_GLOBE_BASE_LAND_SOURCE_ID = `${SI_BASE_SOURCE_PREFIX}globe-land`;
+const SI_GLOBE_BASE_LAND_LAYER_ID = `${SI_BASE_LAYER_PREFIX}globe-land`;
+
+function siGlobeBaseLandUrl(): string {
+  const path = `${import.meta.env.BASE_URL}si-globe-land.geojson`;
+  try {
+    return new URL(path, window.location.href).href;
+  } catch {
+    return path;
+  }
+}
+
 function siBuildStableRasterStyle(specs: SiRasterSpec[]): any {
   if (!specs.length) return EMPTY_MAP_STYLE;
-  const sources: Record<string, unknown> = {};
-  const layers: unknown[] = [];
+  const sources: Record<string, unknown> = {
+    [SI_GLOBE_BASE_LAND_SOURCE_ID]: { type: 'geojson', data: siGlobeBaseLandUrl() },
+  };
+  const layers: unknown[] = [
+    { id: SI_GLOBE_BASE_OCEAN_LAYER_ID, type: 'background', paint: { 'background-color': '#16324a' } },
+    {
+      id: SI_GLOBE_BASE_LAND_LAYER_ID,
+      type: 'fill',
+      source: SI_GLOBE_BASE_LAND_SOURCE_ID,
+      paint: { 'fill-color': '#2f4a35', 'fill-outline-color': '#46664c', 'fill-antialias': true },
+    },
+  ];
   specs.forEach((spec, i) => {
     const sid = `${SI_BASE_SOURCE_PREFIX}${i}`;
     sources[sid] = {
@@ -6460,7 +6490,51 @@ export default function SatelliteIntelligence() {
     if (!basemapTileErrorShouldFallback(url, status)) return;
     basemapRasterFallbackRef.current = true;
     setBasemapId(RASTER_BASEMAP_FALLBACK_ID);
-    setStacStatus('Basemap tiles unavailable â€” using Esri World Imagery.');
+    setStacStatus('Basemap tiles unavailable — using Esri World Imagery.');
+  }, []);
+  /** Failed basemap tile requests since the map loaded (network errors report status 0 / none). */
+  const siBasemapTileFailCountRef = useRef(0);
+  /** Set once any basemap imagery tile has rendered — the boot watchdog then stands down. */
+  const siBasemapTileSeenRef = useRef(false);
+  const siMapReadyDoneRef = useRef(false);
+  const siMapReadyHandlerRef = useRef<((map: any) => void) | null>(null);
+  // Start the page as soon as the map style is ready (see siMapReadyHandlerRef), not when the
+  // last imagery tile has arrived.
+  useEffect(() => {
+    let cancelled = false;
+    let poll: number | undefined;
+    let attachedMap: any = null;
+    const onStyleLoad = () => {
+      if (!cancelled) siMapReadyHandlerRef.current?.(attachedMap);
+    };
+    const attach = () => {
+      if (cancelled) return;
+      const map = mapRef.current?.getMap?.() ?? mapRef.current;
+      if (!map || typeof map.on !== 'function') {
+        poll = window.setTimeout(attach, 50);
+        return;
+      }
+      attachedMap = map;
+      if (map.isStyleLoaded?.()) siMapReadyHandlerRef.current?.(map);
+      else map.once('style.load', onStyleLoad);
+    };
+    attach();
+    return () => {
+      cancelled = true;
+      if (poll) window.clearTimeout(poll);
+      attachedMap?.off?.('style.load', onStyleLoad);
+    };
+  }, []);
+  // Boot watchdog: if no imagery tile has rendered 8 s after opening (slow, hung or blocked
+  // imagery host), switch to the fallback imagery instead of waiting indefinitely.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      if (siBasemapTileSeenRef.current) return;
+      const firstTile = activeBasemapRasterSpecsRef.current[0]?.tiles?.[0] ?? '';
+      tryFallbackBasemapFromTileError(firstTile, 0);
+    }, 8000);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const siTableFeatureKeyCacheRef = useRef<Map<object, string>>(new Map());
   const clearRemoteSensingAoiSketchOnlyRef = useRef<() => void>(() => {});
@@ -22324,6 +22398,8 @@ export default function SatelliteIntelligence() {
     () => (siIsPureRasterStyle(rawBasemapStyle) ? siExtractRasterSpecs(rawBasemapStyle) : []),
     [rawBasemapStyle],
   );
+  const activeBasemapRasterSpecsRef = useRef(activeBasemapRasterSpecs);
+  activeBasemapRasterSpecsRef.current = activeBasemapRasterSpecs;
   const effectiveMapStyle = useMemo(
     () =>
       ensureRasterStyleMaxNativeZoom(
@@ -25803,6 +25879,50 @@ export default function SatelliteIntelligence() {
     circleRefineDraft != null ||
     polylineStart != null;
 
+  /**
+   * One-time map start-up, run on the first of Mapbox `style.load` (style ready) or `load`. Mapbox
+   * only fires `load` after every tile has finished, so waiting for it let one slow or unreachable
+   * imagery host hold back the whole page (black canvas, no overlays) until a manual refresh.
+   */
+  siMapReadyHandlerRef.current = (target: any) => {
+    if (siMapReadyDoneRef.current) return;
+    siMapReadyDoneRef.current = true;
+    try {
+      applyAgroCloudMapboxBranding(target.getContainer());
+    } catch {
+      /* ignore */
+    }
+    setIsMapLoaded(true);
+    setIsMapStyleReady(true);
+    ensureAgroCloudMapScrollZoom(target);
+    applyAgroCloudMapPerformanceTuning(target);
+    applyAgroCloudMapGoogleEarthMouseHandlers(target);
+    applySiGlobeCockpitFog(target);
+    if (!siGlobeCockpitBootRef.current) {
+      siGlobeCockpitBootRef.current = true;
+      viewStateLiveRef.current = { ...SI_GLOBE_COCKPIT_2D_VIEW };
+      setViewState(SI_GLOBE_COCKPIT_2D_VIEW);
+      syncAgroCloudMapboxCamera(target, SI_GLOBE_COCKPIT_2D_VIEW);
+    } else {
+      syncAgroCloudMapboxCamera(target, viewStateLiveRef.current);
+    }
+    warmAgroCloudTerrainDemSource(target);
+    siEnsureGlobeProjection();
+    syncAgroCloudTerrain3d(target, activeBasemapId, viewStateLiveRef.current.pitch, {
+      terrainLayerEnabled: terrainLayerEnabledRef.current,
+    });
+    syncLiveViewport(true);
+    nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(target), siMapContainerRef.current);
+    requestAnimationFrame(() => {
+      nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(target), siMapContainerRef.current);
+    });
+    [80, 320, 900].forEach(ms =>
+      window.setTimeout(() => {
+        nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(target), siMapContainerRef.current);
+      }, ms),
+    );
+  };
+
   return (
     <div className="si-page">
       <div className="si-main-content">
@@ -26032,6 +26152,23 @@ export default function SatelliteIntelligence() {
               const status = e?.error?.status;
               const stack = String(e?.error?.stack || '');
 
+              // Basemap imagery that cannot be reached (DNS / TLS / offline report status 0 or none)
+              // switches to the fallback imagery after two failures. This used to be swallowed by the
+              // status-0 early return below, leaving a black globe until a manual refresh.
+              // Connection failures carry only a message ("Failed to fetch") — no url, no status —
+              // so recognise basemap imagery by its source id and test the active tile template.
+              const errSourceId = String(e?.sourceId || '');
+              const isBaseImagery =
+                errSourceId.startsWith(SI_BASE_SOURCE_PREFIX) && errSourceId !== SI_GLOBE_BASE_LAND_SOURCE_ID;
+              const tileUrl = url || (isBaseImagery ? activeBasemapRasterSpecsRef.current[0]?.tiles?.[0] ?? '' : '');
+              if (tileUrl && !/abort/i.test(message) && basemapTileErrorShouldFallback(tileUrl, status ?? 0)) {
+                siBasemapTileFailCountRef.current += 1;
+                if (!siBasemapTileSeenRef.current && siBasemapTileFailCountRef.current >= 2) {
+                  tryFallbackBasemapFromTileError(tileUrl, status ?? 0);
+                }
+                return;
+              }
+
               if (message.includes("reading 'get'")) {
                 const map = mapRef.current?.getMap?.() ?? mapRef.current;
                 cancelAgroCloudTerrainSync(map);
@@ -26079,41 +26216,13 @@ export default function SatelliteIntelligence() {
                 /* ignore */
               }
             }}
-            onLoad={evt => {
-              try {
-                applyAgroCloudMapboxBranding(evt.target.getContainer());
-              } catch {
-                /* ignore */
+            onLoad={evt => siMapReadyHandlerRef.current?.(evt.target)}
+            onSourceData={(ev: any) => {
+              // A basemap imagery tile rendered: the boot watchdog can stand down.
+              const sid = String(ev?.sourceId || '');
+              if (ev?.tile?.state === 'loaded' && sid.startsWith(SI_BASE_SOURCE_PREFIX) && sid !== SI_GLOBE_BASE_LAND_SOURCE_ID) {
+                siBasemapTileSeenRef.current = true;
               }
-              setIsMapLoaded(true);
-              setIsMapStyleReady(true);
-              ensureAgroCloudMapScrollZoom(evt.target);
-              applyAgroCloudMapPerformanceTuning(evt.target);
-              applyAgroCloudMapGoogleEarthMouseHandlers(evt.target);
-              applySiGlobeCockpitFog(evt.target);
-              if (!siGlobeCockpitBootRef.current) {
-                siGlobeCockpitBootRef.current = true;
-                viewStateLiveRef.current = { ...SI_GLOBE_COCKPIT_2D_VIEW };
-                setViewState(SI_GLOBE_COCKPIT_2D_VIEW);
-                syncAgroCloudMapboxCamera(evt.target, SI_GLOBE_COCKPIT_2D_VIEW);
-              } else {
-                syncAgroCloudMapboxCamera(evt.target, viewStateLiveRef.current);
-              }
-              warmAgroCloudTerrainDemSource(evt.target);
-              siEnsureGlobeProjection();
-              syncAgroCloudTerrain3d(evt.target, activeBasemapId, viewStateLiveRef.current.pitch, {
-                terrainLayerEnabled: terrainLayerEnabledRef.current,
-              });
-              syncLiveViewport(true);
-              nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(evt.target), siMapContainerRef.current);
-              requestAnimationFrame(() => {
-                nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(evt.target), siMapContainerRef.current);
-              });
-              [80, 320, 900].forEach(ms =>
-                window.setTimeout(() => {
-                  nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(evt.target), siMapContainerRef.current);
-                }, ms),
-              );
             }}
           >
             {isMapStyleReady ? (

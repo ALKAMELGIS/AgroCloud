@@ -1,5 +1,5 @@
 {
-  "total": 114,
+  "total": 112,
   "files": {
     "src/modules/ai/agent/geoAiMapLayerSources.ts": 2,
     "src/modules/ai/agent/geoAiResolveTableMapLink.ts": 1,
@@ -23,7 +23,7 @@
     "src/modules/gis/measurement/MeasurementPanel.tsx": 1,
     "src/modules/gis/selection/selectionStats.ts": 2,
     "src/modules/remote-sensing/imagery/agroStructuresWmsClipDiagnostic.test.ts": 1,
-    "src/modules/remote-sensing/imagery/SatelliteIntelligence.tsx": 33,
+    "src/modules/remote-sensing/imagery/SatelliteIntelligence.tsx": 31,
     "src/modules/remote-sensing/imagery/siAoiLayerModeClipCache.ts": 1,
     "src/modules/remote-sensing/imagery/siSentinelAoiWmsStack.ts": 1,
     "src/modules/remote-sensing/indices/imageryYieldEstimation.ts": 6,
