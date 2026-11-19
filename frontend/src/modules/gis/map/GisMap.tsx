@@ -5960,7 +5960,7 @@ export default function GisMap() {
                   <i className="fa-solid fa-satellite" />
                 </span>
                 <span className="gis-map-tool-surface-app-row__main">
-                  <strong>Satellite Intelligence</strong>
+                  <strong>Map</strong>
                   <small>Indices &amp; imagery workflows</small>
                 </span>
                 <i className="fa-solid fa-chevron-right gis-map-tool-surface-app-row__chev" aria-hidden="true" />
@@ -9608,7 +9608,7 @@ export default function GisMap() {
             setServiceUrl(url)
             if (token) setToken(token)
             if (name) setLayerName(name)
-            setDiscoverError('Paste confirmed. Use ArcGIS Connect from Satellite Intelligence Data Manager for full discovery, or save the URL for this session.')
+            setDiscoverError('Paste confirmed. Use ArcGIS Connect from the Map page Data Manager for full discovery, or save the URL for this session.')
           }}
         />
       ) : null}

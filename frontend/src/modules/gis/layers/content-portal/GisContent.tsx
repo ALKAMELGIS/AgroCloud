@@ -704,7 +704,7 @@ export default function GisContent() {
           <strong>Central GIS Repository</strong>
           <p>
             Save, organize, and control all geographic layers here. Changes sync instantly to Map Canvas,
-            Intelligence Dashboard, Satellite Intelligence, AOI tools, and remote sensing layers.
+            Intelligence Dashboard, Map, AOI tools, and remote sensing layers.
           </p>
         </div>
         <div className="gis-portal-hub-banner__stats">

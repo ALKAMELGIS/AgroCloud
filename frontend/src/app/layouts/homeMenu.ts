@@ -10,7 +10,7 @@ export const menuItems: HomeMenuItem[] = [
   // "Satellite Imagery" groups, one extra click away).
   {
     id: 'satellite-intelligence',
-    label: { en: 'Satellite Intelligence', ar: 'التحليل الفضائي الذكي' },
+    label: { en: 'Map', ar: 'الخريطة' },
     icon: 'fa-solid fa-layer-group',
     color: '#8B5CF6', // Violet
     to: '/satellite/indices',

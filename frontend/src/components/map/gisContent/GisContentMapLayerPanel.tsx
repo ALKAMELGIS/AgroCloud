@@ -144,7 +144,7 @@ export function GisContentMapLayerPanel({ itemId, title, mapAddable, onToast }: 
           </div>
 
           <p className="gis-map-layer-panel__hint">
-            Changes apply immediately on Map Canvas, Intelligence Dashboard, Satellite Intelligence, and AOI tools.
+            Changes apply immediately on Map Canvas, Intelligence Dashboard, Map, and AOI tools.
           </p>
         </>
       ) : null}

@@ -21,7 +21,7 @@ export default function UsabilityTest() {
   const tasks = useMemo(
     () => [
       { id: 't1', label: 'Login and navigate to a dashboard' },
-      { id: 't2', label: 'Open Satellite Intelligence and explore layers' },
+      { id: 't2', label: 'Open Map and explore layers' },
       { id: 't3', label: 'Create a relationship and preview the generated form' },
       { id: 't4', label: 'Edit a record in the generated form and save' },
       { id: 't5', label: 'Navigate to Data Entry and submit a record' },

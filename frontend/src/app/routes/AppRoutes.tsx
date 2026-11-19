@@ -85,7 +85,7 @@ export default function AppRoutes() {
         <Route
           path="/satellite/indices"
           element={
-            <Suspense fallback={<RouteLoadingFallback label="Loading Satellite Intelligence…" />}>
+            <Suspense fallback={<RouteLoadingFallback label="Loading Map…" />}>
               <SiInstanceScopeProvider scope="standalone">
                 <SatelliteIntelligence />
               </SiInstanceScopeProvider>

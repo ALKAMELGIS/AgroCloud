@@ -1160,7 +1160,7 @@ export default function SystemSettings() {
               <p className="sys-settings-panel__desc sys-settings-api-hint">
                 {language === 'ar'
                   ? 'معرّف مثيل Sentinel Hub لـ OGC WMS في خرائط الاستخبارات. اتركه فارغاً للقيمة الافتراضية.'
-                  : 'Sentinel Hub OGC WMS instance UUID for Sentinel-2 overlays in Satellite Intelligence. Leave empty for the app default.'}
+                  : 'Sentinel Hub OGC WMS instance UUID for Sentinel-2 overlays on the Map page. Leave empty for the app default.'}
               </p>
             </div>
 
@@ -1417,7 +1417,7 @@ export default function SystemSettings() {
               <p className="sys-settings-panel__desc sys-settings-api-hint">
                 {language === 'ar'
                   ? 'يُفعّل Geo AI Chat في استخبارات الأقمار: يفسّر الطبقات والحقول بناءً على ما هو محفوظ في GIS Map (GIS Content) فقط، دون اختلاق قيم.'
-                  : 'Powers Geo AI Chat in Satellite Intelligence: answers use only GIS Map saved layers (GIS Content)—no invented field values. Save the key here or use VITE_CLAUDE_API_KEY at build time.'}
+                  : 'Powers Geo AI Chat on the Map page: answers use only GIS Map saved layers (GIS Content)—no invented field values. Save the key here or use VITE_CLAUDE_API_KEY at build time.'}
               </p>
             </div>
 
