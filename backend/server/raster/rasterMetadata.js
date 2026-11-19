@@ -107,7 +107,6 @@ export async function readRasterMetadataWithGdal(filePath) {
   const { stdout } = await runCmd('gdalinfo', ['-json', filePath])
   const info = JSON.parse(stdout)
   const wkt = info.coordinateSystem?.wkt || ''
-  const auth = info.coordinateSystem?.dataAxisToSRSAxisMapping
   let crs =
     (info.stac?.proj?.epsg && `EPSG:${info.stac.proj.epsg}`) ||
     (info.coordinateSystem?.projjson?.id?.code

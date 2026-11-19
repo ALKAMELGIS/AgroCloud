@@ -1,4 +1,4 @@
-import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { geodesicAreaM2, resolveLayerClassBreakdown } from '../classification/siLayerClassAreaEngine'
 import type { LayerClassAreaResult } from '../classification/siLayerClassAreaEngine'
 import type { SentinelHubDailyIndexMeans, SentinelHubIndexZonalStats } from '../imagery/sentinelHubStatisticsApi'

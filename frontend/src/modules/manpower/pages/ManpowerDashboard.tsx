@@ -81,7 +81,7 @@ export default function ManpowerDashboard() {
         allowed={allowed}
         onRetry={recheckIdentity}
         offlineTitle="Manpower needs the identity service"
-        offlineDescription="Seat allocation is stored in the PostgreSQL identity database, which is not reachable. Start the API server with DATABASE_URL configured, then retry."
+        offlineDescription="Seat allocation is stored in the server identity database, which is not reachable. Start the API server with AGROCLOUD_IDENTITY=on, then retry."
       >
         {error ? (
           <Alert severity="error" onClose={() => setError(null)}>

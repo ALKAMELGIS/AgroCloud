@@ -2,8 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import type { CSSProperties, RefObject } from 'react'
 import type { Chart as ChartJS } from 'chart.js'
-import type { ImageryChartType, ImageryTimeAggregation } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
-import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryChartType, ImageryTimeAggregation } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import type { CropAlertFieldInput } from '../indices/siCropAlertEngine'
 import type { SentinelHubDailyIndexMeans } from '../imagery/sentinelHubStatisticsApi'
 import {
@@ -136,7 +136,7 @@ function formatEta(ms: number): string {
 
 function formatBusyLabel(progress: ExportProgressState | null, _tick: number): string {
   if (!progress || progress.total <= 0) {
-    return progress?.currentName || 'Exporting...'
+    return progress?.currentName || 'Exporting…'
   }
   if (progress.mode === 'agri-intel') {
     return progress.currentName || 'Generating Agricultural Intelligence Report...'
@@ -167,7 +167,7 @@ type ExportPopoverAnchor = {
 }
 
 function useExportPopoverAnchor(
-  rootRef: RefObject<HTMLDivElement | null>,
+  rootRef: RefObject<HTMLDivElement>,
   active: boolean,
 ): ExportPopoverAnchor | null {
   const [anchor, setAnchor] = useState<ExportPopoverAnchor | null>(null)

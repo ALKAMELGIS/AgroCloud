@@ -4,9 +4,25 @@
  * Mirrors GIS Content table behavior for Geo AI context strings.
  */
 
+/** ArcGIS REST field (subset we read). Extra keys from the service are kept. */
+export type ArcgisFieldLite = {
+  name?: string
+  alias?: string
+  type?: string
+  domain?: {
+    type?: string
+    codedValues?: Array<{ name?: string; code?: number | string; [key: string]: unknown }>
+    [key: string]: unknown
+  } | null
+  [key: string]: unknown
+}
+
+/** ArcGIS REST subtype entry (`types[]`). */
+export type ArcgisSubtypeLite = { id?: number | string; name?: string; [key: string]: unknown }
+
 export type ArcgisLayerDefLite = {
-  fields?: unknown[]
-  types?: unknown[]
+  fields?: ArcgisFieldLite[]
+  types?: ArcgisSubtypeLite[]
   typeIdField?: string
   geometryType?: string
   name?: string

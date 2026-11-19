@@ -2,7 +2,7 @@ import {
   formatImageryTimePeriodLabel,
   imageryTimePeriodKey,
   type ImageryTimeAggregation,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import {
   metricValueFromHourly,
   type OpenMeteoHourlyPoint,

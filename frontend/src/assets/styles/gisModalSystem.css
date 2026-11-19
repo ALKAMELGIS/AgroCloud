@@ -33,9 +33,7 @@
 .gis-modal-overlay .gis-modal-compact-title,
 .gis-modal-overlay .gis-modal-compact-hero,
 .gis-modal-overlay .gis-modal-compact-hero-title,
-.gis-modal-overlay .gis-modal-header,
-.gis-modal-overlay .ddb-add-source-modal__head,
-.gis-modal-overlay .ddb-add-source-modal--home .gis-modal-compact-hero {
+.gis-modal-overlay .gis-modal-header {
   background: var(--gis-modal-bg) !important;
   color: var(--gis-modal-text) !important;
   border-bottom-color: var(--gis-modal-border) !important;
@@ -283,10 +281,6 @@
   color: var(--gis-modal-green, #1b5e3c);
 }
 
-.gis-modal-overlay .si-add-source-modal.ddb-add-source-modal--home.gis-modal-compact::before {
-  display: none !important;
-}
-
 .gis-modal-overlay .si-add-source-option {
   border: 1px solid var(--gis-modal-border) !important;
   border-radius: 0 !important;
@@ -342,31 +336,10 @@
   box-shadow: none !important;
 }
 
-.gis-modal-overlay .ddb-add-source-back {
-  background: var(--gis-modal-bg) !important;
-  border: 1px solid var(--gis-modal-border) !important;
-  color: var(--gis-modal-green) !important;
-  border-radius: 0 !important;
-}
-
-.gis-modal-overlay .ddb-add-source-back:hover {
-  background: var(--gis-modal-green-soft) !important;
-  border-color: var(--gis-modal-green) !important;
-  color: var(--gis-modal-green-deep) !important;
-}
-
 .gis-modal-overlay .si-add-source-gis-banner {
   background: var(--gis-modal-green-soft) !important;
   border: 1px solid var(--gis-modal-green-border) !important;
   border-radius: 0 !important;
-}
-
-.gis-modal-overlay .si-add-source-gis-banner .ddb-add-source-gis-hint {
-  color: var(--gis-modal-text) !important;
-}
-
-.gis-modal-overlay .si-add-source-gis-banner .ddb-add-source-gis-hint strong {
-  color: var(--gis-modal-green) !important;
 }
 
 .gis-modal-overlay .si-upload-staged-card {
@@ -967,48 +940,6 @@
   background: rgba(51, 65, 85, 0.95);
   border-color: rgba(74, 222, 128, 0.4);
   color: #ecfdf5;
-}
-
-/* ---- Form view (after a source is chosen): themed head + back ---- */
-.gis-map-source-picker .ddb-add-source-modal__head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  background: linear-gradient(118deg, rgba(30, 27, 75, 0.5) 0%, rgba(15, 23, 42, 0.25) 100%);
-}
-
-.gis-map-source-picker .ddb-add-source-modal__head .gis-modal-compact-title {
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-  font-size: 1.15rem;
-  font-weight: 760;
-  color: #f8fafc;
-}
-
-.gis-map-source-picker .ddb-add-source-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(15, 23, 42, 0.65);
-  color: #a5b4fc;
-  font-size: 0.8rem;
-  font-weight: 650;
-  padding: 8px 14px;
-  border-radius: 10px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
-}
-
-.gis-map-source-picker .ddb-add-source-back:hover {
-  background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(74, 222, 128, 0.45);
-  color: #ecfdf5;
-  transform: translateY(-1px);
 }
 
 /* Dark theme the form surfaces so the flow stays cohesive with the picker */

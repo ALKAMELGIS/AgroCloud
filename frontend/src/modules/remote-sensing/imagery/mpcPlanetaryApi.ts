@@ -1,6 +1,6 @@
 /**
- * Microsoft Planetary Computer helpers — calls analysis_engine `/mpc/*` routes.
- * Run backend: `cd analysis_engine && uvicorn app.main:app --reload --port 8000`
+ * Microsoft Planetary Computer helpers — calls services/analysis_engine `/mpc/*` routes.
+ * Run backend: `cd services/analysis_engine && uvicorn app.main:app --reload --port 8000`
  * Set `VITE_ANALYSIS_ENGINE_URL` to override. In dev, defaults to same-origin `/analysis-api` (Vite proxy).
  */
 

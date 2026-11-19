@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { appAlert } from '@/shared/dialogs/appDialog'
+import { appAlert } from '@/components/overlays/appDialog'
 import type { RecipeColumn } from '@/modules/forms/components/formFieldColumns'
 import type { RecipeRow } from './recipeReport/loadRecipeRows'
 import '@/modules/operations/fertigation/recipe-report-modal.css'

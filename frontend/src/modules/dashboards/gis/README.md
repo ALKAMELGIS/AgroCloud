@@ -1,3 +1,0 @@
-# gis
-
-GIS platform dashboard.

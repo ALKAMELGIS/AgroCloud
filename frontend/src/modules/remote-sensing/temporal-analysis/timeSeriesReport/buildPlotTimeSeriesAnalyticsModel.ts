@@ -8,7 +8,7 @@ import {
   evaluateImageryLayerDailyValue,
   imageryTimePeriodKey,
   type ImageryTimeAggregation,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { resolveFieldAreaHa } from '../siMultiLayerAoiTrendAnalysis'
 import type { CropAlertFieldInput } from '../../indices/siCropAlertEngine'
 import type {

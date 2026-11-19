@@ -56,7 +56,7 @@ function writeState(key: string, s: GisPanelPersistedState) {
 export type UseGisFloatingPanelOptions = {
   open: boolean;
   storageKey: string;
-  containerRef: RefObject<HTMLElement | null>;
+  containerRef: RefObject<HTMLElement>;
   defaultWidth?: number;
   defaultHeight?: number;
   minWidth?: number;

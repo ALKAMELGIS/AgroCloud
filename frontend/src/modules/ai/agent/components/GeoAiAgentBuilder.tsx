@@ -141,7 +141,7 @@ export function GeoAiAgentBuilder({ prefs, onChange, onClose, onReset }: GeoAiAg
         {tab === 'layout' ? (
           <div className="geo-ai-agent-builder-section">
             <p className="geo-ai-agent-builder-hint">
-              Choose how the AI Agent sits on Satellite Intelligence.
+              Choose how the AI Agent sits on the Map page.
             </p>
             <div className="geo-ai-agent-builder-choice-grid" role="radiogroup" aria-label="Layout mode">
               {(
@@ -333,7 +333,7 @@ export function GeoAiAgentBuilder({ prefs, onChange, onClose, onReset }: GeoAiAg
         {tab === 'embed' ? (
           <div className="geo-ai-agent-builder-section">
             <p className="geo-ai-agent-builder-hint">
-              Read-only note for Satellite Intelligence. External iframe embed is not shipped yet.
+              Read-only note for the Map page. External iframe embed is not shipped yet.
             </p>
             <pre className="geo-ai-agent-builder-embed-snippet" tabIndex={0}>
               {embedSnippet}

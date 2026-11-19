@@ -117,7 +117,7 @@ type LayerLiveLegendFloatingPanelProps = {
   open: boolean
   onClose: () => void
   /** Map viewport for drag clamping (`.si-map-container`). */
-  containerRef: RefObject<HTMLElement | null>
+  containerRef: RefObject<HTMLElement>
   layerOptions: Array<{ id: string; label?: string }>
   layerGroups?: RemoteSensingLayerSelectGroup[]
   activeLayerId?: string

@@ -4,7 +4,7 @@
  */
 
 import type { SentinelHubDailyIndexMeans } from '@/modules/remote-sensing/imagery/sentinelHubStatisticsApi'
-import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 
 export const FIELD_DASH_TS_PROP = 'si_field_dash_ts'
 

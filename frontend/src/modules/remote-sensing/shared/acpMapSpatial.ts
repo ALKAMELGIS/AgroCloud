@@ -1,0 +1,782 @@
+import {
+  buildAgroStructuresLayerKpiTotals,
+  resolveAgroStructuresCountry,
+  resolveAgroStructuresCountryCode,
+  resolveAgroStructuresCountryDisplayName,
+  resolveAgroStructuresCountryLabel,
+  resolveAgroStructuresFeatureAreaHa,
+  resolveAgroStructuresFieldDisplayName,
+  resolveAgroStructuresStructureTypeLabel,
+} from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
+import { computeChasFromDaily } from '@/modules/remote-sensing/indices/chasIndex'
+import { bboxesIntersect, geometryBBox } from '@/modules/ai/agent/geoAiGeoJsonSpatial'
+import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
+import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
+import {
+  extractCropAlertFieldsFromMask,
+  type CropAlertFieldInput,
+  type CropAlertFieldResult,
+} from '@/modules/remote-sensing/indices/siCropAlertEngine'
+import { resolveDchasOrbPresentation } from '@/modules/remote-sensing/indices/siCropAlertDchasBeacon'
+import { resolveNdviForPopupSceneDate, resolveDeltaChasForSceneDate } from '@/modules/remote-sensing/indices/siCropAlertMapPopupModel'
+import type { SentinelHubDailyIndexMeans } from '@/modules/remote-sensing/imagery/sentinelHubStatisticsApi'
+
+export type AcpGeoFeature = {
+  type: 'Feature'
+  geometry: GeoJSON.Geometry
+  properties: Record<string, unknown>
+}
+
+export function filterGeoJsonFeaturesInBBox(
+  geojson: { features?: unknown[] } | null | undefined,
+  bbox: LngLatBBox | null,
+): AcpGeoFeature[] {
+  const features = Array.isArray(geojson?.features) ? geojson!.features! : []
+  if (!bbox) {
+    return features.filter(f => (f as AcpGeoFeature).geometry) as AcpGeoFeature[]
+  }
+  return features.filter(raw => {
+    const f = raw as AcpGeoFeature
+    if (!f?.geometry) return false
+    const fb = geometryBBox(f.geometry)
+    return Boolean(fb && bboxesIntersect(fb, bbox))
+  }) as AcpGeoFeature[]
+}
+
+export function buildKpiTotalsFromFeatures(features: AcpGeoFeature[]) {
+  return buildAgroStructuresLayerKpiTotals({ features })
+}
+
+export type AcpStructureFieldOption = {
+  fieldKey: string
+  displayName: string
+  objectId: string
+}
+
+/** All Agro_Structures fields for WMS / time-series pickers (sorted by Field Name). */
+export function buildAgroStructureFieldOptions(
+  mask: GeoJSON.FeatureCollection | null | undefined,
+): AcpStructureFieldOption[] {
+  const fields = extractCropAlertFieldsFromMask(mask as { features?: unknown[] })
+  return fields
+    .map(f => ({
+      fieldKey: f.fieldKey,
+      displayName: resolveAgroStructuresFieldDisplayName({
+        farmName: f.farmName,
+        farmCode: f.farmCode,
+        objectId: f.objectId,
+        structureType: f.structureType,
+      }),
+      objectId: f.objectId,
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }))
+}
+
+export function resolveAgroStructureFieldByKey(
+  mask: GeoJSON.FeatureCollection | null | undefined,
+  fieldKey: string,
+): CropAlertFieldInput | null {
+  const fields = extractCropAlertFieldsFromMask(mask as { features?: unknown[] })
+  return fields.find(f => f.fieldKey === fieldKey) ?? null
+}
+
+export type AcpFieldLocateWeatherPoint = {
+  fieldKey: string
+  lng: number
+  lat: number
+}
+
+/** Map fly-to center — CHAS results, weather ticker, or AOI geometry fallback. */
+export function resolveAcpFieldLocateCenter(
+  fieldKey: string,
+  options: {
+    aoiMask: GeoJSON.FeatureCollection | null | undefined
+    allResults: CropAlertFieldResult[]
+    weatherPoints?: AcpFieldLocateWeatherPoint[] | null
+  },
+): [number, number] | null {
+  const key = String(fieldKey || '').trim()
+  if (!key) return null
+
+  const chasHit = options.allResults.find(r => r.fieldKey === key)
+  if (chasHit?.centroid?.length === 2 && chasHit.centroid.every(Number.isFinite)) {
+    return chasHit.centroid
+  }
+
+  const weatherHit = options.weatherPoints?.find(p => p.fieldKey === key)
+  if (weatherHit && Number.isFinite(weatherHit.lng) && Number.isFinite(weatherHit.lat)) {
+    return [weatherHit.lng, weatherHit.lat]
+  }
+
+  const aoiField = resolveAgroStructureFieldByKey(options.aoiMask, key)
+  if (aoiField?.centroid?.length === 2 && aoiField.centroid.every(Number.isFinite)) {
+    return aoiField.centroid
+  }
+
+  return null
+}
+
+export const ACP_FIELD_LOCATE_MIN_ZOOM = 12
+
+export type AcpCountryOption = {
+  value: string
+  label: string
+}
+
+/** Country picker options from full portfolio — independent of active country filter. */
+export function buildAcpPortfolioCountryOptions(
+  mask: GeoJSON.FeatureCollection | null | undefined,
+  countryDescriptionMap?: Map<string, string>,
+): AcpCountryOption[] {
+  const codes = new Set<string>()
+  for (const raw of mask?.features ?? []) {
+    const props = (raw as GeoJSON.Feature).properties ?? {}
+    const code = resolveAgroStructuresCountry(props as Record<string, unknown>)
+    if (code && code !== 'Unknown' && code !== '—') codes.add(code)
+  }
+  const sorted = [...codes].sort((a, b) => {
+    const la = resolveAgroStructuresCountryLabel(a, countryDescriptionMap)
+    const lb = resolveAgroStructuresCountryLabel(b, countryDescriptionMap)
+    return la.localeCompare(lb, undefined, { sensitivity: 'base' })
+  })
+  return [
+    { value: 'all', label: 'All countries' },
+    ...sorted.map(code => ({
+      value: code,
+      label: resolveAgroStructuresCountryLabel(code, countryDescriptionMap),
+    })),
+  ]
+}
+
+export type AcpFieldTableRow = {
+  fieldKey: string
+  objectId: string
+  displayName: string
+  structureType: string
+  /** ArcGIS Country coded value — used for filters. */
+  countryCode: string
+  /** Human-readable country name for UI. */
+  country: string
+  areaHa: number
+  chas: number | null
+  deltaChas: number | null
+  coveragePct: number | null
+  /** NDVI coverage change direction — derived from ΔCHAS vs previous Alert scene. */
+  coverageTrend: AcpCoverageTrendDirection
+  /** ΔCHAS used for coverage trend (previous scene). */
+  coverageTrendDelta: number | null
+  alertTier: string
+  alertColor: string
+  status: string
+  severity: string
+  imageDate: string | null
+  result: CropAlertFieldResult | null
+}
+
+export type AcpCoverageTrendDirection = 'up' | 'down' | 'flat' | null
+
+const COVERAGE_TREND_CHAS_EPS = 0.003
+const COVERAGE_TREND_NDVI_PCT_EPS = 0.5
+
+function resolveRowCoveragePct(result: CropAlertFieldResult | null, sceneDate?: string): number | null {
+  if (!result) return null
+  const want = sceneDate?.trim().slice(0, 10)
+  if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) {
+    const sceneNdvi = resolveNdviForPopupSceneDate(result, want)
+    if (Number.isFinite(sceneNdvi)) {
+      return Number((Math.min(100, Math.max(0, sceneNdvi * 100))).toFixed(1))
+    }
+  }
+  const layerMean = result.layerLiveZonal?.ndvi?.mean
+  if (layerMean != null && Number.isFinite(layerMean)) {
+    return Number((Math.min(100, Math.max(0, layerMean * 100))).toFixed(1))
+  }
+  if (result.current?.ndvi != null && Number.isFinite(result.current.ndvi)) {
+    return Number((Math.min(100, Math.max(0, result.current.ndvi * 100))).toFixed(1))
+  }
+  return null
+}
+
+function resolveRowDeltaChas(result: CropAlertFieldResult | null, sceneDate?: string): number | null {
+  if (!result) return null
+  const want = sceneDate?.trim().slice(0, 10)
+  if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) {
+    const sceneDelta = resolveDeltaChasForSceneDate(result, want)
+    if (sceneDelta != null && Number.isFinite(sceneDelta)) return sceneDelta
+  }
+  if (result.deltaChas != null && Number.isFinite(result.deltaChas)) return result.deltaChas
+  return null
+}
+
+/** Coverage % trend arrow — primary signal is ΔCHAS on the Alert layer scene date. */
+export function resolveFieldCoverageTrend(
+  deltaChas: number | null,
+  fallback?: { currentNdvi: number | null; previousNdvi: number | null },
+): AcpCoverageTrendDirection {
+  if (deltaChas != null && Number.isFinite(deltaChas)) {
+    if (Math.abs(deltaChas) < COVERAGE_TREND_CHAS_EPS) return 'flat'
+    return deltaChas > 0 ? 'up' : 'down'
+  }
+  const current = fallback?.currentNdvi
+  const previous = fallback?.previousNdvi
+  if (current != null && previous != null && Number.isFinite(current) && Number.isFinite(previous)) {
+    const pctDelta = (current - previous) * 100
+    if (Math.abs(pctDelta) < COVERAGE_TREND_NDVI_PCT_EPS) return 'flat'
+    return pctDelta > 0 ? 'up' : 'down'
+  }
+  return null
+}
+
+function resolveRowCurrentNdvi(result: CropAlertFieldResult | null, sceneDate?: string): number | null {
+  if (!result) return null
+  const want = sceneDate?.trim().slice(0, 10)
+  if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) {
+    const ndvi = resolveNdviForPopupSceneDate(result, want)
+    if (Number.isFinite(ndvi)) return Math.max(0, Math.min(1, ndvi))
+  }
+  const layerMean = result.layerLiveZonal?.ndvi?.mean
+  if (layerMean != null && Number.isFinite(layerMean)) return Math.max(0, Math.min(1, layerMean))
+  if (result.current?.ndvi != null && Number.isFinite(result.current.ndvi)) {
+    return Math.max(0, Math.min(1, result.current.ndvi))
+  }
+  return null
+}
+
+function resolveRowPreviousNdvi(result: CropAlertFieldResult | null, sceneDate?: string): number | null {
+  if (!result) return null
+  const want = sceneDate?.trim().slice(0, 10)
+  if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) {
+    const dates = [...(result.ndviSceneDates ?? [])]
+      .map(d => String(d || '').trim().slice(0, 10))
+      .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+      .sort((a, b) => b.localeCompare(a))
+    const prevDate = resolvePreviousAnalyticsSceneDate(dates, want)
+    if (prevDate) {
+      const ndvi = resolveNdviForPopupSceneDate(result, prevDate)
+      if (Number.isFinite(ndvi)) return Math.max(0, Math.min(1, ndvi))
+    }
+  }
+  const prev7 = result.previous7?.ndvi
+  if (prev7 != null && Number.isFinite(prev7)) return Math.max(0, Math.min(1, prev7))
+  const scenes = result.ndviSceneValues
+  if (scenes && scenes.length >= 2 && Number.isFinite(scenes[1]!)) {
+    return Math.max(0, Math.min(1, scenes[1]!))
+  }
+  return null
+}
+
+export type BuildFieldTableRowsOptions = {
+  /** Daily Alert / WMS analysis date — drives coverage % and ΔCHAS trend. */
+  analysisDate?: string
+}
+
+export function buildFieldTableRows(
+  features: AcpGeoFeature[],
+  resultsByKey: Map<string, CropAlertFieldResult>,
+  countryDescriptionMap?: Map<string, string> | null,
+  options?: BuildFieldTableRowsOptions,
+): AcpFieldTableRow[] {
+  const sceneDate = options?.analysisDate?.trim().slice(0, 10)
+  return features.map((f, i) => {
+    const props = f.properties ?? {}
+    const fieldKey = computeStableGisFeatureKey(f, i)
+    const result = resultsByKey.get(fieldKey) ?? null
+    const orb = result ? resolveDchasOrbPresentation(result) : null
+    const areaHa = resolveAgroStructuresFeatureAreaHa(props, f.geometry)
+    const coverage = resolveRowCoveragePct(result, sceneDate)
+    const deltaChas = resolveRowDeltaChas(result, sceneDate) ?? orb?.deltaChas ?? null
+    const currentNdvi = resolveRowCurrentNdvi(result, sceneDate)
+    const previousNdvi = resolveRowPreviousNdvi(result, sceneDate)
+    const coverageTrend = resolveFieldCoverageTrend(deltaChas, {
+      currentNdvi,
+      previousNdvi,
+    })
+    return {
+      fieldKey,
+      objectId: String(props.OBJECTID ?? props.objectid ?? i),
+      displayName: resolveAgroStructuresFieldDisplayName({
+        farmName: String(props.Farm_Name ?? props.farm_name ?? ''),
+        farmCode: String(props.Farm_Code ?? props.farm_code ?? ''),
+        objectId: String(props.OBJECTID ?? i),
+        structureType: resolveAgroStructuresStructureTypeLabel(props),
+      }),
+      structureType: resolveAgroStructuresStructureTypeLabel(props),
+      countryCode: resolveAgroStructuresCountryCode(props) || '—',
+      country:
+        resolveAgroStructuresCountryDisplayName(props, countryDescriptionMap) || '—',
+      areaHa: Number.isFinite(areaHa) && areaHa > 0 ? Number(areaHa.toFixed(2)) : 0,
+      chas: result?.chasCurrent ?? orb?.chasCurrent ?? null,
+      deltaChas,
+      coveragePct: coverage,
+      coverageTrend,
+      coverageTrendDelta: deltaChas,
+      alertTier: orb?.tier ?? 'stable',
+      alertColor: orb?.color ?? '#9e9e9e',
+      status: result?.title ?? '—',
+      severity: result?.severity ?? 'normal',
+      imageDate: result?.imageDate ?? null,
+      result,
+    }
+  })
+}
+
+export function aggregateDailySeriesForFeatures(
+  dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
+  fieldKeys: string[],
+): { labels: string[]; ndvi: number[]; chas: number[]; ndmi: number[] } {
+  const dateSet = new Set<string>()
+  for (const key of fieldKeys) {
+    for (const row of dailyMaps.get(key) ?? []) dateSet.add(row.date)
+  }
+  const labels = [...dateSet].sort()
+  const ndvi: number[] = []
+  const chas: number[] = []
+  const ndmi: number[] = []
+  for (const date of labels) {
+    const ndviVals: number[] = []
+    const ndmiVals: number[] = []
+    const chasVals: number[] = []
+    for (const key of fieldKeys) {
+      const row = dailyMaps.get(key)?.find(d => d.date === date)
+      if (!row) continue
+      if (row.ndvi != null && Number.isFinite(row.ndvi)) ndviVals.push(row.ndvi)
+      if (row.ndmi != null && Number.isFinite(row.ndmi)) ndmiVals.push(row.ndmi)
+      const chasVal = computeChasFromDaily(row) // null on days without NDVI/NDMI
+      if (chasVal != null && Number.isFinite(chasVal)) chasVals.push(chasVal)
+    }
+    ndvi.push(ndviVals.length ? ndviVals.reduce((a, b) => a + b, 0) / ndviVals.length : NaN)
+    ndmi.push(ndmiVals.length ? ndmiVals.reduce((a, b) => a + b, 0) / ndmiVals.length : NaN)
+    chas.push(chasVals.length ? chasVals.reduce((a, b) => a + b, 0) / chasVals.length : NaN)
+  }
+  return { labels, ndvi, chas, ndmi }
+}
+
+export function resolveFieldNdviMean(row: AcpFieldTableRow): number | null {
+  const layerMean = row.result?.layerLiveZonal?.ndvi?.mean
+  if (layerMean != null && Number.isFinite(layerMean)) {
+    return Math.max(0, Math.min(1, layerMean))
+  }
+  const current = row.result?.current?.ndvi
+  if (current != null && Number.isFinite(current)) {
+    return Math.max(0, Math.min(1, current))
+  }
+  return null
+}
+
+/** NDVI mean for a specific Sentinel scene date (engine series + zonal fallback). */
+export function resolveFieldNdviMeanForSceneDate(row: AcpFieldTableRow, sceneDate: string): number | null {
+  const want = sceneDate.trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(want)) return resolveFieldNdviMean(row)
+  if (!row.result) return null
+  const ndvi = resolveNdviForPopupSceneDate(row.result, want)
+  if (!Number.isFinite(ndvi)) return null
+  return Math.max(0, Math.min(1, ndvi))
+}
+
+/** Scene dates available for Distribution analytics (newest first). */
+export function listAnalyticsSceneDates(rows: AcpFieldTableRow[], chartLabels: string[] = []): string[] {
+  const dates = new Set<string>()
+  for (const raw of chartLabels) {
+    const d = String(raw || '').trim().slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) dates.add(d)
+  }
+  for (const row of rows) {
+    for (const raw of row.result?.ndviSceneDates ?? []) {
+      const d = String(raw || '').trim().slice(0, 10)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) dates.add(d)
+    }
+    const imageDate = row.imageDate?.trim().slice(0, 10)
+    if (imageDate && /^\d{4}-\d{2}-\d{2}$/.test(imageDate)) dates.add(imageDate)
+    const usedDate = String(row.result?.usedDate ?? '').trim().slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(usedDate)) dates.add(usedDate)
+  }
+  return [...dates].sort((a, b) => b.localeCompare(a))
+}
+
+export function resolvePreviousAnalyticsSceneDate(sceneDates: string[], sceneDate: string): string | null {
+  const want = sceneDate.trim().slice(0, 10)
+  const idx = sceneDates.findIndex(d => d === want)
+  if (idx < 0 || idx + 1 >= sceneDates.length) return null
+  return sceneDates[idx + 1] ?? null
+}
+
+export type AcpVegetationDonutStats = {
+  vegetationHa: number
+  bareHa: number
+  unanalyzedHa: number
+  vegetationPct: number
+  barePct: number
+  unanalyzedPct: number
+  /** Planted share within NDVI-analyzed area (sums to 100% with unplantedSharePct). */
+  plantedSharePct: number
+  unplantedSharePct: number
+  totalAreaHa: number
+  analyzedAreaHa: number
+  analyzedFieldCount: number
+  totalFieldCount: number
+}
+
+export type AcpVegetationDonutTrend = {
+  /** Change in planted portfolio share vs previous NDVI scene (percentage points). */
+  plantedShareDelta: number | null
+  direction: 'up' | 'down' | 'flat' | null
+}
+
+export function resolveFieldNdviMeanPrevious(row: AcpFieldTableRow): number | null {
+  const prev7 = row.result?.previous7?.ndvi
+  if (prev7 != null && Number.isFinite(prev7)) {
+    return Math.max(0, Math.min(1, prev7))
+  }
+  const scenes = row.result?.ndviSceneValues
+  if (scenes && scenes.length >= 2 && Number.isFinite(scenes[1]!)) {
+    return Math.max(0, Math.min(1, scenes[1]!))
+  }
+  return null
+}
+
+/** Portfolio share (0–100) with one decimal — keeps % aligned with displayed hectares. */
+export function portfolioAreaPct(ha: number, totalAreaHa: number): number {
+  if (totalAreaHa <= 0 || !Number.isFinite(ha)) return 0
+  return Math.round((ha / totalAreaHa) * 1000) / 10
+}
+
+export function vegetationDonutFromRows(
+  rows: AcpFieldTableRow[],
+  totalAreaHaOverride?: number,
+  ndviResolver: (row: AcpFieldTableRow) => number | null = resolveFieldNdviMean,
+): AcpVegetationDonutStats {
+  let vegetationHa = 0
+  let bareHa = 0
+  let rowAreaSum = 0
+  let analyzedAreaHa = 0
+  let analyzedFieldCount = 0
+
+  for (const row of rows) {
+    if (row.areaHa <= 0) continue
+    rowAreaSum += row.areaHa
+    const ndvi = ndviResolver(row)
+    if (ndvi == null) continue
+    analyzedFieldCount += 1
+    analyzedAreaHa += row.areaHa
+    vegetationHa += row.areaHa * ndvi
+    bareHa += row.areaHa * (1 - ndvi)
+  }
+
+  const totalAreaHa =
+    totalAreaHaOverride != null && totalAreaHaOverride > 0 && totalAreaHaOverride >= rowAreaSum
+      ? totalAreaHaOverride
+      : rowAreaSum
+  const unanalyzedHa = Math.max(0, totalAreaHa - analyzedAreaHa)
+
+  const vegetationHaOut = Number(vegetationHa.toFixed(2))
+  const bareHaOut = Number(bareHa.toFixed(2))
+  const unanalyzedHaOut = Number(unanalyzedHa.toFixed(2))
+  const totalAreaHaOut = Number(totalAreaHa.toFixed(2))
+  const analyzedSplitTotal = vegetationHaOut + bareHaOut
+  const plantedSharePct = portfolioAreaPct(vegetationHaOut, analyzedSplitTotal)
+  const unplantedSharePct = portfolioAreaPct(bareHaOut, analyzedSplitTotal)
+
+  return {
+    vegetationHa: vegetationHaOut,
+    bareHa: bareHaOut,
+    unanalyzedHa: unanalyzedHaOut,
+    vegetationPct: portfolioAreaPct(vegetationHaOut, totalAreaHaOut),
+    barePct: portfolioAreaPct(bareHaOut, totalAreaHaOut),
+    unanalyzedPct: portfolioAreaPct(unanalyzedHaOut, totalAreaHaOut),
+    plantedSharePct,
+    unplantedSharePct,
+    totalAreaHa: totalAreaHaOut,
+    analyzedAreaHa: Number(analyzedAreaHa.toFixed(2)),
+    analyzedFieldCount,
+    totalFieldCount: rows.length,
+  }
+}
+
+export function vegetationDonutTrendFromRows(
+  rows: AcpFieldTableRow[],
+  totalAreaHaOverride?: number,
+  ndviResolver: (row: AcpFieldTableRow) => number | null = resolveFieldNdviMean,
+  previousNdviResolver: (row: AcpFieldTableRow) => number | null = resolveFieldNdviMeanPrevious,
+): AcpVegetationDonutTrend {
+  const current = vegetationDonutFromRows(rows, totalAreaHaOverride, ndviResolver)
+  if (current.analyzedFieldCount === 0) {
+    return { plantedShareDelta: null, direction: null }
+  }
+
+  const previous = vegetationDonutFromRows(rows, totalAreaHaOverride, previousNdviResolver)
+  if (previous.analyzedFieldCount === 0) {
+    return { plantedShareDelta: null, direction: null }
+  }
+
+  const delta = Number((current.plantedSharePct - previous.plantedSharePct).toFixed(1))
+  if (!Number.isFinite(delta)) {
+    return { plantedShareDelta: null, direction: null }
+  }
+  if (Math.abs(delta) < 0.5) {
+    return { plantedShareDelta: delta, direction: 'flat' }
+  }
+  return { plantedShareDelta: delta, direction: delta > 0 ? 'up' : 'down' }
+}
+
+/** Planted-share trend for a selected scene vs the previous catalog scene. */
+export function vegetationDonutTrendForSceneDate(
+  rows: AcpFieldTableRow[],
+  sceneDate: string,
+  sceneDates: string[],
+  totalAreaHaOverride?: number,
+): AcpVegetationDonutTrend {
+  const previousDate = resolvePreviousAnalyticsSceneDate(sceneDates, sceneDate)
+  if (!previousDate) {
+    return vegetationDonutTrendFromRows(rows, totalAreaHaOverride)
+  }
+  return vegetationDonutTrendFromRows(
+    rows,
+    totalAreaHaOverride,
+    row => resolveFieldNdviMeanForSceneDate(row, sceneDate),
+    row => resolveFieldNdviMeanForSceneDate(row, previousDate),
+  )
+}
+
+export type AcpLayerLiveIndexStats = {
+  mean: number
+  min: number
+  max: number
+  sceneDate: string | null
+}
+
+export function resolveLayerLiveIndexStats(
+  row: AcpFieldTableRow,
+  wmsLayer: string,
+): AcpLayerLiveIndexStats | null {
+  const zonal = row.result?.layerLiveZonal
+  if (!zonal) return null
+  const key = wmsLayer.toLowerCase()
+  if (key === 'chas') {
+    if (row.chas == null || !Number.isFinite(row.chas)) return null
+    return { mean: row.chas, min: row.chas, max: row.chas, sceneDate: row.imageDate ?? zonal.sceneDate ?? null }
+  }
+  const band = zonal[key as 'ndvi' | 'ndmi' | 'ndwi' | 'evi']
+  if (!band || typeof band.mean !== 'number') return null
+  return {
+    mean: band.mean,
+    min: band.min,
+    max: band.max,
+    sceneDate: zonal.sceneDate ?? row.imageDate,
+  }
+}
+
+export function aggregateLayerLiveIndexStats(
+  rows: AcpFieldTableRow[],
+  wmsLayer: string,
+): AcpLayerLiveIndexStats | null {
+  const vals: AcpLayerLiveIndexStats[] = []
+  for (const row of rows) {
+    const hit = resolveLayerLiveIndexStats(row, wmsLayer)
+    if (hit) vals.push(hit)
+  }
+  if (!vals.length) return null
+  const means = vals.map(v => v.mean)
+  const mins = vals.map(v => v.min)
+  const maxs = vals.map(v => v.max)
+  return {
+    mean: means.reduce((a, b) => a + b, 0) / means.length,
+    min: Math.min(...mins),
+    max: Math.max(...maxs),
+    sceneDate: vals.find(v => v.sceneDate)?.sceneDate ?? null,
+  }
+}
+
+/** Default framing — full Africa + most of Europe (Global home / initial load). */
+export const ACP_DEFAULT_MAP_BOUNDS: [[number, number], [number, number]] = [
+  [-19, -36],
+  [54, 62],
+]
+
+/** Continental default — Africa–Europe center (fallback before fitBounds). */
+export const ACP_DEFAULT_MAP_CENTER: [number, number] = [17.5, 13]
+export const ACP_DEFAULT_MAP_ZOOM = 2.1
+export const ACP_INITIAL_MAP_ZOOM = 2.1
+/** Max zoom when fitting the default Africa–Europe extent. */
+export const ACP_DEFAULT_MAP_MAX_ZOOM = 5
+/** Regional field zoom when a single country / small AOI is selected. */
+export const ACP_FITBOUNDS_MAX_ZOOM = 13
+export const ACP_FITBOUNDS_MIN_ZOOM = 9
+/** Global portfolio view — show all continents without zooming into one country. */
+export const ACP_GLOBAL_FITBOUNDS_MAX_ZOOM = 4
+/** When AOI span exceeds this (degrees), use global fit caps (no min-zoom). */
+export const ACP_GLOBAL_EXTENT_MAX_DEG = 8
+
+export type AcpMapFocusTarget =
+  | {
+      mode: 'bounds'
+      bounds: [[number, number], [number, number]]
+      maxZoom?: number
+      minZoom?: number | null
+    }
+  | { mode: 'center'; center: [number, number]; zoom: number }
+
+export function featureCollectionLngLatBounds(
+  fc: GeoJSON.FeatureCollection,
+): [[number, number], [number, number]] | null {
+  let west = Infinity
+  let south = Infinity
+  let east = -Infinity
+  let north = -Infinity
+  for (const f of fc.features) {
+    const bb = geometryBBox(f.geometry as { type?: string; coordinates?: unknown })
+    if (!bb) continue
+    west = Math.min(west, bb[0])
+    south = Math.min(south, bb[1])
+    east = Math.max(east, bb[2])
+    north = Math.max(north, bb[3])
+  }
+  if (!Number.isFinite(west)) return null
+  return [
+    [west, south],
+    [east, north],
+  ]
+}
+
+function boundsSpanDegrees(bounds: [[number, number], [number, number]]): number {
+  const [[west, south], [east, north]] = bounds
+  return Math.max(east - west, north - south)
+}
+
+export function resolveAcpMapFocusTargetFromGeoJson(
+  fc: GeoJSON.FeatureCollection,
+): AcpMapFocusTarget | null {
+  const bounds = featureCollectionLngLatBounds(fc)
+  if (!bounds) return null
+  const isGlobalPortfolio = boundsSpanDegrees(bounds) > ACP_GLOBAL_EXTENT_MAX_DEG
+  return {
+    mode: 'bounds',
+    bounds,
+    maxZoom: isGlobalPortfolio ? ACP_GLOBAL_FITBOUNDS_MAX_ZOOM : ACP_FITBOUNDS_MAX_ZOOM,
+    minZoom: isGlobalPortfolio ? null : ACP_FITBOUNDS_MIN_ZOOM,
+  }
+}
+
+export function resolveAcpDefaultMapFocusTarget(): AcpMapFocusTarget {
+  return {
+    mode: 'bounds',
+    bounds: ACP_DEFAULT_MAP_BOUNDS,
+    maxZoom: ACP_DEFAULT_MAP_MAX_ZOOM,
+    minZoom: null,
+  }
+}
+
+/** Resolve map home / initial fit — global uses Africa–Europe; country filter zooms regionally. */
+export function resolveAcpMapHomeTarget(
+  fc: GeoJSON.FeatureCollection,
+  countryFilter = 'all',
+): AcpMapFocusTarget {
+  if (!countryFilter || countryFilter === 'all') {
+    return resolveAcpDefaultMapFocusTarget()
+  }
+
+  let features = fc.features
+  features = features.filter(f => {
+    const props = (f as GeoJSON.Feature).properties as Record<string, unknown> | undefined
+    return resolveAgroStructuresCountry(props ?? {}) === countryFilter
+  })
+  if (!features.length) {
+    return resolveAcpDefaultMapFocusTarget()
+  }
+
+  const scoped: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features }
+  const bounds = featureCollectionLngLatBounds(scoped)
+  if (!bounds) {
+    return resolveAcpDefaultMapFocusTarget()
+  }
+
+  const isGlobalPortfolio = boundsSpanDegrees(bounds) > ACP_GLOBAL_EXTENT_MAX_DEG
+
+  return {
+    mode: 'bounds',
+    bounds,
+    maxZoom: isGlobalPortfolio ? ACP_GLOBAL_FITBOUNDS_MAX_ZOOM : ACP_FITBOUNDS_MAX_ZOOM,
+    minZoom: isGlobalPortfolio ? null : ACP_FITBOUNDS_MIN_ZOOM,
+  }
+}
+
+export function applyAcpMapFocusTarget(
+  map: {
+    fitBounds: (
+      b: [[number, number], [number, number]],
+      o?: { padding?: number; maxZoom?: number; duration?: number },
+    ) => void
+    flyTo: (o: { center: [number, number]; zoom: number; duration?: number }) => void
+    getZoom: () => number
+    getCenter: () => { lng: number; lat: number }
+    easeTo: (o: { center: [number, number]; zoom: number; duration?: number }) => void
+    once: (event: string, listener: () => void) => void
+    getContainer?: () => HTMLElement
+  },
+  target: AcpMapFocusTarget,
+  options?: { animate?: boolean; onSettled?: () => void },
+): void {
+  const animate = options?.animate !== false
+  const duration = animate ? 900 : 0
+  const settled = options?.onSettled
+
+  let settledCalled = false
+  const notifySettled = () => {
+    if (settledCalled) return
+    settledCalled = true
+    settled?.()
+  }
+
+  const armSettledFallback = () => {
+    if (!settled) return
+    map.once('moveend', notifySettled)
+    map.once('idle', notifySettled)
+    window.setTimeout(notifySettled, Math.max(400, duration + 600))
+  }
+
+  if (target.mode === 'center') {
+    map.flyTo({ center: target.center, zoom: target.zoom, duration })
+    armSettledFallback()
+    return
+  }
+
+  // Small / still-hidden containers (phones, collapsed panels): MapLibre's camera solver returns
+  // undefined when padding exceeds the viewport and fitBounds then throws reading `.center`.
+  const el = map.getContainer?.()
+  const minSide = el ? Math.min(el.clientWidth, el.clientHeight) : Number.POSITIVE_INFINITY
+  const padding = Math.max(0, Math.min(48, Math.floor(minSide / 4)))
+  try {
+    if (minSide < 8) throw new Error('map container not laid out')
+    map.fitBounds(target.bounds, {
+      padding,
+      maxZoom: target.maxZoom ?? ACP_FITBOUNDS_MAX_ZOOM,
+      duration,
+    })
+  } catch {
+    const [[w, s], [e, n]] = target.bounds
+    map.flyTo({
+      center: [(w + e) / 2, (s + n) / 2],
+      zoom: Math.min(target.maxZoom ?? ACP_FITBOUNDS_MAX_ZOOM, Math.max(target.minZoom ?? 0, map.getZoom())),
+      duration: 0,
+    })
+  }
+  const minZoom = target.minZoom
+  if (minZoom == null || !Number.isFinite(minZoom)) {
+    armSettledFallback()
+    return
+  }
+
+  map.once('moveend', () => {
+    if (map.getZoom() < minZoom) {
+      const c = map.getCenter()
+      map.easeTo({
+        center: [c.lng, c.lat],
+        zoom: minZoom,
+        duration: animate ? 400 : 0,
+      })
+      armSettledFallback()
+      return
+    }
+    notifySettled()
+  })
+  armSettledFallback()
+}

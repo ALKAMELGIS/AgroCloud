@@ -197,7 +197,7 @@ export type FieldAttributesDashboardProps = {
   attributesBusy?: boolean
   attributesStatus?: string | null
   operationProgressPct?: number
-  mapContainerRef?: RefObject<HTMLElement | null>
+  mapContainerRef?: RefObject<HTMLElement>
   onRefreshAttributes?: () => void
   onAddToLayers?: () => void | Promise<void>
 }

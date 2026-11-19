@@ -17,7 +17,7 @@ function resolveThemeIsDark(mode: ThemeMode): boolean {
 export type SiExploreIndexesGalleryPanelProps = {
   open: boolean
   onClose: () => void
-  containerRef: RefObject<HTMLElement | null>
+  containerRef: RefObject<HTMLElement>
   groups: RemoteSensingLayerSelectGroup[]
   value: string
   onChange: (layerId: string) => void

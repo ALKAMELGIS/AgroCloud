@@ -8,7 +8,7 @@ import path from 'node:path'
 
 const proxyPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../../../../../backend/server/agriFieldBoundaryProxy.js',
+  '../../../../../../backend/server/proxies/agriFieldBoundaryProxy.js',
 )
 
 describe('agriFieldBoundaryProxy AFD sources', () => {

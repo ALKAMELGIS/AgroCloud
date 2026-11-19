@@ -59,7 +59,7 @@ export type TrainingAIToolProps = {
   digitizing: boolean
   onDigitizingChange: (active: boolean) => void
   /** Map host for floating Quick Dashboard portal. */
-  mapContainerRef?: RefObject<HTMLElement | null>
+  mapContainerRef?: RefObject<HTMLElement>
   captureTrainingView: (
     bbox: [number, number, number, number],
     opts?: { imagery?: string },

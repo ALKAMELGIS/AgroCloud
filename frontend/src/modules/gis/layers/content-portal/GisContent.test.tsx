@@ -133,13 +133,13 @@ describe('GisContent', () => {
     expect(screen.getAllByRole('status').some(el => /Moved 1 item/i.test(el.textContent ?? ''))).toBe(true)
   })
 
-  it('opens Create app menu with StoryMaps and Dashboards', () => {
+  it('opens Create app menu with StoryMaps only (dashboard builder removed)', () => {
     renderGis()
     fireEvent.click(screen.getByRole('button', { name: /create app/i }))
     const menu = screen.getByRole('menu')
     expect(menu).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /elite agrocloud storymaps/i })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: /dashboards/i })).toBeInTheDocument()
-    expect(screen.getAllByRole('menuitem')).toHaveLength(2)
+    expect(screen.queryByRole('menuitem', { name: /dashboards/i })).toBeNull()
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1)
   })
 })

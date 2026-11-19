@@ -1,3 +1,0 @@
-# layouts
-
-Header and navigation.

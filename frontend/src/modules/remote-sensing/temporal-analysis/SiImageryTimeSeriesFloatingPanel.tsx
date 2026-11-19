@@ -15,10 +15,7 @@ import type { SiAoiMaskBuilderLayerLike } from '../imagery/siAoiMaskBuilder';
 import { useSiInstanceScope } from '@/app/providers/siInstanceScope';
 import { useMapOverlayIsolation } from '@/modules/gis/map/useMapOverlayIsolation';
 import './SiImageryTimeSeriesFloatingPanel.css';
-import {
-  SiImageryTimeSeriesPanel,
-  type SiImageryTimeSeriesPanelProps,
-} from './SiImageryTimeSeriesPanel';
+import type { SiImageryTimeSeriesPanelProps } from './SiImageryTimeSeriesPanel';
 
 const LazySiImageryTimeSeriesPanel = lazy(() =>
   import('./SiImageryTimeSeriesPanel').then(m => ({ default: m.SiImageryTimeSeriesPanel })),
@@ -124,7 +121,7 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   open: boolean;
   onClose: () => void;
   /** Used only for the initial open position anchor (map area). */
-  containerRef: RefObject<HTMLElement | null>;
+  containerRef: RefObject<HTMLElement>;
   agroStructuresMask: GeoJSON.FeatureCollection | null;
   aoiFields: SiAoiFieldRecord[];
   /** KMZ/KML/SHP/GeoJSON layers from the map Layers panel (polygon features → AOI pickers). */
@@ -140,7 +137,11 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   mapboxToken?: string;
   onStormMapOverlayChange?: (overlay: import('./imageryStormAnalysis').SiTsWeatherStormMapOverlay | null) => void;
   stormOverlayDismissEpoch?: number;
-  /** Skip lazy chunk + deferred mount (Develop Elite drawn AOI). */
+  /**
+   * Mount the panel without the one-frame defer and keep it mounted after closing (Develop Elite
+   * drawn AOI). The panel code itself always loads on demand — it carries the Excel/PDF/Word
+   * exporters (~2.5 MB), which must not ship with every page that hosts this floating shell.
+   */
   eagerPanel?: boolean;
   drawnAoiOnly?: boolean;
   chartLookbackDays?: number;
@@ -210,10 +211,6 @@ export function SiImageryTimeSeriesFloatingPanel({
     const frame = requestAnimationFrame(() => setMountHeavyPanel(true));
     return () => cancelAnimationFrame(frame);
   }, [open, eagerPanel]);
-
-  useEffect(() => {
-    if (eagerPanel) setMountHeavyPanel(true);
-  }, [eagerPanel]);
 
   const setBodyIsolationRef = useCallback(
     (node: HTMLElement | null) => {
@@ -479,8 +476,10 @@ export function SiImageryTimeSeriesFloatingPanel({
           {...isolationHandlers}
         >
           {mountHeavyPanel ? (
-            eagerPanel ? (
-              <SiImageryTimeSeriesPanel
+            <Suspense
+              fallback={<p className="si-its-float__loading" role="status">Loading charts…</p>}
+            >
+              <LazySiImageryTimeSeriesPanel
                 agroStructuresMask={agroStructuresMask}
                 aoiFields={aoiFields}
                 vectorLayers={vectorLayers}
@@ -488,20 +487,7 @@ export function SiImageryTimeSeriesFloatingPanel({
                 headerToolsHost={headToolsEl}
                 {...panelBodyProps}
               />
-            ) : (
-              <Suspense
-                fallback={<p className="si-its-float__loading" role="status">Loading charts…</p>}
-              >
-                <LazySiImageryTimeSeriesPanel
-                  agroStructuresMask={agroStructuresMask}
-                  aoiFields={aoiFields}
-                  vectorLayers={vectorLayers}
-                  committedAoiGeometry={committedAoiGeometry}
-                  headerToolsHost={headToolsEl}
-                  {...panelBodyProps}
-                />
-              </Suspense>
-            )
+            </Suspense>
           ) : (
             <p className="si-its-float__loading" role="status">Opening…</p>
           )}

@@ -5,9 +5,9 @@ export async function bootstrapIdentity(app) {
   const ready = await initIdentityDatabase()
   if (ready) {
     registerIdentityRoutes(app)
-    console.info('[identity] PostgreSQL identity module ready')
+    console.info('[identity] identity module ready (SQLite)')
   } else {
-    console.info('[identity] DATABASE_URL not set or schema missing — JSON directory auth only')
+    console.info('[identity] off — admin-directory auth (set AGROCLOUD_IDENTITY=on to enable the identity module)')
   }
   return ready
 }

@@ -1092,7 +1092,7 @@ export function useAgriFieldBoundary({
             empty: true,
           })
           setError(short)
-          setErrorDetail(detail || undefined)
+          setErrorDetail(detail || null)
           setResult(null)
           setPhase('empty')
           return

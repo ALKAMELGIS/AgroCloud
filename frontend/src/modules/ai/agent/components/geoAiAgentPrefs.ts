@@ -166,8 +166,8 @@ export function formatGeoAiAgentGreeting(template: string, name: string): string
 /** Read-only embed note for SI map (no external iframe product yet). */
 export function buildGeoAiAgentEmbedSnippet(): string {
   return [
-    '<!-- AgroCloud AI Agent — Satellite Intelligence map -->',
-    'Deep-link: open Satellite Intelligence, then the AI Agent rail (Geo AI).',
+    '<!-- AgroCloud AI Agent — Map page -->',
+    'Deep-link: open Map, then the AI Agent rail (Geo AI).',
     'Embedded layout places the agent in the analysis dock when a host panel is available;',
     'docked layout keeps the floating map widget.',
     'Prefs persist in localStorage key: ' + GEO_AI_AGENT_PREFS_LS_KEY,

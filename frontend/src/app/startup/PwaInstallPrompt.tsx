@@ -142,8 +142,8 @@ export default function PwaInstallPrompt() {
           <img
             className="pwa-install-card__logo"
             src={AGRO_CLOUD_PWA_LOGO_URL}
-            width={220}
-            height={220}
+            width={96}
+            height={96}
             alt="Agro Cloud"
             decoding="async"
             draggable={false}

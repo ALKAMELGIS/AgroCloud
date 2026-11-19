@@ -5,6 +5,7 @@ import { FieldCalculateTools } from './FieldCalculateTools'
 import { AdvancedLayerMultiSelect, type SavedLayer } from './AdvancedLayerMultiSelect'
 import { dsfTranslations } from './dsfTranslations'
 import { DsfEmptyState } from './DsfEmptyState'
+import { GIS_MAP_STORE_NAME, openGisMapDb } from '../../gis/map/gisMapLayerStore'
 
 export { AdvancedLayerMultiSelect } from './AdvancedLayerMultiSelect'
 
@@ -253,15 +254,9 @@ const normalizeEnabledBySource = (binding: FormBinding | undefined): { sourceIds
   return { sourceIds: ids, enabledBySource }
 }
 
-const DB_NAME = 'GisMapStore'
-const STORE_NAME = 'layers'
+const STORE_NAME = GIS_MAP_STORE_NAME
 
-const initDB = () =>
-  new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
+const initDB = openGisMapDb
 
 const loadSavedLayers = async (): Promise<any[]> => {
   try {
@@ -859,6 +854,115 @@ export function DataSourceFieldsPanel({
     setIsOpen(false)
   }
 
+  // Hooks (and the values they use) must run before the settings-mode early return below;
+  // they used to sit after it, so switching mode on the same instance broke the hook order.
+  const visible = enabledInfo.sourceIds
+  const mgmtKey = mgmtBinding?.sourceId && Array.isArray(mgmtBinding.selectedFields) && mgmtBinding.selectedFields.length
+    ? `management:${mgmtBinding.sourceId}`
+    : null
+  const hasMgmt = Boolean(mgmtKey)
+  const hasAny = hasMgmt || visible.some(id => (enabledInfo.enabledBySource[id] ?? []).length > 0)
+  const stateFromValues = (nextValuesBySource: Record<string, Record<string, string>>): DataSourceFormState => ({
+    sourceIds: mgmtKey ? [mgmtKey, ...enabledInfo.sourceIds] : enabledInfo.sourceIds,
+    selectedFieldsBySource: mgmtKey
+      ? { [mgmtKey]: mgmtBinding?.selectedFields ?? [], ...enabledInfo.enabledBySource }
+      : enabledInfo.enabledBySource,
+    valuesBySource: nextValuesBySource,
+  })
+
+  const toSourceDomId = (sourceId: string) => `ds-source-${String(sourceId).replace(/[^a-zA-Z0-9_-]/g, '_')}`
+
+  useEffect(() => {
+    if (mode !== 'fill') return
+    if (externalApplyKey === undefined || externalApplyKey === null) return
+    if (lastExternalApplyKeyRef.current === externalApplyKey) return
+    lastExternalApplyKeyRef.current = externalApplyKey
+    if (!externalValuesBySource) return
+    setValuesBySource(prev => {
+      const next: Record<string, Record<string, string>> = { ...prev }
+      let changed = false
+      for (const [sid, values] of Object.entries(externalValuesBySource)) {
+        const sourceId = String(sid)
+        if (!values || typeof values !== 'object') continue
+        const prevSource = prev[sourceId] ?? {}
+        const nextSource = { ...prevSource, ...values }
+        if (JSON.stringify(prevSource) !== JSON.stringify(nextSource)) {
+          next[sourceId] = nextSource
+          changed = true
+        }
+      }
+      if (!changed) return prev
+      onChange?.(stateFromValues(next))
+      return next
+    })
+  }, [mode, externalApplyKey, externalValuesBySource])
+
+  useEffect(() => {
+    if (mode !== 'fill') return
+    if (formKey !== 'EC') return
+
+    const prevDrip = readPreviousDripVolumeMl()
+    setValuesBySource(prev => {
+      let changedAny = false
+      const next: Record<string, Record<string, string>> = { ...prev }
+      for (const sourceId of Object.keys(prev)) {
+        const enabled = enabledInfo.enabledBySource[sourceId] ?? []
+        const hasAnyCalc = enabled.some(f => EC_PH_CALCULATED_FIELDS.has(f))
+        if (!hasAnyCalc) continue
+
+        const src = prev[sourceId] ?? {}
+        const calc = computeEcPhCalculatedStrings(src, prevDrip)
+        const nextSource: Record<string, string> = { ...src }
+        let changedThisSource = false
+        for (const [k, v] of Object.entries(calc)) {
+          if (!EC_PH_CALCULATED_FIELDS.has(k)) continue
+          if ((nextSource[k] ?? '') !== v) {
+            nextSource[k] = v
+            changedThisSource = true
+            changedAny = true
+          }
+        }
+        if (changedThisSource) next[sourceId] = nextSource
+      }
+
+      if (!changedAny) return prev
+      onChange?.(stateFromValues(next))
+      return next
+    })
+  }, [mode, formKey, enabledInfo.enabledBySource, valuesBySource])
+
+  useEffect(() => {
+    if (mode !== 'fill') return
+    if (formKey !== 'EC') return
+
+    setValuesBySource(prev => {
+      const next: Record<string, Record<string, string>> = { ...prev }
+      let changed = false
+      const now = getCurrentHHMM()
+
+      for (const [sourceId, enabled] of Object.entries(enabledInfo.enabledBySource)) {
+        if (!Array.isArray(enabled) || !enabled.length) continue
+        if (ecTimeAutoFilledRef.current[sourceId]) continue
+
+        const timeField = enabled.find((f) => /^time$/i.test(String(f)))
+        if (!timeField) continue
+        const current = String(prev[sourceId]?.[timeField] ?? '').trim()
+        if (current) {
+          ecTimeAutoFilledRef.current[sourceId] = true
+          continue
+        }
+
+        next[sourceId] = { ...(prev[sourceId] ?? {}), [timeField]: now }
+        ecTimeAutoFilledRef.current[sourceId] = true
+        changed = true
+      }
+
+      if (!changed) return prev
+      onChange?.(stateFromValues(next))
+      return next
+    })
+  }, [mode, formKey, enabledInfo.enabledBySource])
+
   if (mode === 'settings') {
     const selectedIds = new Set(draftSourceIds)
     return (
@@ -871,7 +975,7 @@ export function DataSourceFieldsPanel({
             <span>{text.dataSourceFields}</span>
           </div>
           <div className="dsf-settings-head__actions">
-            <button id="open-fields-btn" type="button" className="dsf-settings-head__btn dsf-settings-head__btn--secondary" onClick={() => setIsOpen(v => !v)}>
+            <button id="open-fields-btn" type="button" className="dsf-settings-head__btn dsf-settings-head__btn--secondary" onClick={() => setIsOpen(v => !v)} aria-expanded={isOpen} aria-controls="dsf-settings-body">
               {isOpen ? (
                 <>
                   <i className="fa-solid fa-xmark" aria-hidden /> {text.close}
@@ -894,7 +998,7 @@ export function DataSourceFieldsPanel({
         </div>
 
         {!isOpen ? null : (
-          <div className="dsf-settings-body">
+          <div className="dsf-settings-body" id="dsf-settings-body">
             <div className="dsf-settings-layers">
               <div className="dsf-settings-layers__head">
                 <div className="dsf-settings-layers__title">{text.dataSource}</div>
@@ -1247,112 +1351,6 @@ export function DataSourceFieldsPanel({
     )
   }
 
-  const visible = enabledInfo.sourceIds
-  const mgmtKey = mgmtBinding?.sourceId && Array.isArray(mgmtBinding.selectedFields) && mgmtBinding.selectedFields.length
-    ? `management:${mgmtBinding.sourceId}`
-    : null
-  const hasMgmt = Boolean(mgmtKey)
-  const hasAny = hasMgmt || visible.some(id => (enabledInfo.enabledBySource[id] ?? []).length > 0)
-  const stateFromValues = (nextValuesBySource: Record<string, Record<string, string>>): DataSourceFormState => ({
-    sourceIds: mgmtKey ? [mgmtKey, ...enabledInfo.sourceIds] : enabledInfo.sourceIds,
-    selectedFieldsBySource: mgmtKey
-      ? { [mgmtKey]: mgmtBinding?.selectedFields ?? [], ...enabledInfo.enabledBySource }
-      : enabledInfo.enabledBySource,
-    valuesBySource: nextValuesBySource,
-  })
-
-  const toSourceDomId = (sourceId: string) => `ds-source-${String(sourceId).replace(/[^a-zA-Z0-9_-]/g, '_')}`
-
-  useEffect(() => {
-    if (mode !== 'fill') return
-    if (externalApplyKey === undefined || externalApplyKey === null) return
-    if (lastExternalApplyKeyRef.current === externalApplyKey) return
-    lastExternalApplyKeyRef.current = externalApplyKey
-    if (!externalValuesBySource) return
-    setValuesBySource(prev => {
-      const next: Record<string, Record<string, string>> = { ...prev }
-      let changed = false
-      for (const [sid, values] of Object.entries(externalValuesBySource)) {
-        const sourceId = String(sid)
-        if (!values || typeof values !== 'object') continue
-        const prevSource = prev[sourceId] ?? {}
-        const nextSource = { ...prevSource, ...values }
-        if (JSON.stringify(prevSource) !== JSON.stringify(nextSource)) {
-          next[sourceId] = nextSource
-          changed = true
-        }
-      }
-      if (!changed) return prev
-      onChange?.(stateFromValues(next))
-      return next
-    })
-  }, [mode, externalApplyKey, externalValuesBySource])
-
-  useEffect(() => {
-    if (mode !== 'fill') return
-    if (formKey !== 'EC') return
-
-    const prevDrip = readPreviousDripVolumeMl()
-    setValuesBySource(prev => {
-      let changedAny = false
-      const next: Record<string, Record<string, string>> = { ...prev }
-      for (const sourceId of Object.keys(prev)) {
-        const enabled = enabledInfo.enabledBySource[sourceId] ?? []
-        const hasAnyCalc = enabled.some(f => EC_PH_CALCULATED_FIELDS.has(f))
-        if (!hasAnyCalc) continue
-
-        const src = prev[sourceId] ?? {}
-        const calc = computeEcPhCalculatedStrings(src, prevDrip)
-        const nextSource: Record<string, string> = { ...src }
-        let changedThisSource = false
-        for (const [k, v] of Object.entries(calc)) {
-          if (!EC_PH_CALCULATED_FIELDS.has(k)) continue
-          if ((nextSource[k] ?? '') !== v) {
-            nextSource[k] = v
-            changedThisSource = true
-            changedAny = true
-          }
-        }
-        if (changedThisSource) next[sourceId] = nextSource
-      }
-
-      if (!changedAny) return prev
-      onChange?.(stateFromValues(next))
-      return next
-    })
-  }, [mode, formKey, enabledInfo.enabledBySource, valuesBySource])
-
-  useEffect(() => {
-    if (mode !== 'fill') return
-    if (formKey !== 'EC') return
-
-    setValuesBySource(prev => {
-      const next: Record<string, Record<string, string>> = { ...prev }
-      let changed = false
-      const now = getCurrentHHMM()
-
-      for (const [sourceId, enabled] of Object.entries(enabledInfo.enabledBySource)) {
-        if (!Array.isArray(enabled) || !enabled.length) continue
-        if (ecTimeAutoFilledRef.current[sourceId]) continue
-
-        const timeField = enabled.find((f) => /^time$/i.test(String(f)))
-        if (!timeField) continue
-        const current = String(prev[sourceId]?.[timeField] ?? '').trim()
-        if (current) {
-          ecTimeAutoFilledRef.current[sourceId] = true
-          continue
-        }
-
-        next[sourceId] = { ...(prev[sourceId] ?? {}), [timeField]: now }
-        ecTimeAutoFilledRef.current[sourceId] = true
-        changed = true
-      }
-
-      if (!changed) return prev
-      onChange?.(stateFromValues(next))
-      return next
-    })
-  }, [mode, formKey, enabledInfo.enabledBySource])
 
   const buildFarmUpdates = (enabledFieldSet: Set<string>, feature: any) => {
     const attrs = feature?.attributes ?? {}

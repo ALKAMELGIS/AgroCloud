@@ -38,6 +38,9 @@ export type AgroCloudMapViewState = {
   zoom?: number
 }
 
+/** A complete camera (every field known) — for map state that is always fully populated. */
+export type AgroCloudMapCamera = Required<AgroCloudMapViewState>
+
 /** Shift+drag orbit sensitivity (matches Satellite Intelligence). */
 export const AGRO_CLOUD_ORBIT_BEARING_SENSITIVITY = 0.42
 export const AGRO_CLOUD_ORBIT_PITCH_SENSITIVITY = 0.38
@@ -291,6 +294,8 @@ export function bindAgroCloudMapViewportTileWarmup(
   },
 ): () => void {
   if (!map?.on || !map?.off) return () => {}
+  // Narrowed once: the cleanup closure below runs later, where TypeScript cannot keep the check.
+  const events = map as AgroCloudMapboxMapEventLike & Required<Pick<AgroCloudMapboxMapEventLike, 'on' | 'off'>>
 
   const perf = options?.performance
   const repaintOnEnd = options?.repaintOnInteractionEnd !== false
@@ -310,24 +315,24 @@ export function bindAgroCloudMapViewportTileWarmup(
   }
 
   applyAgroCloudMapPerformanceTuning(map, perf)
-  map.on('movestart', onInteractionStart)
-  map.on('zoomstart', onInteractionStart)
-  map.on('rotatestart', onInteractionStart)
-  map.on('pitchstart', onInteractionStart)
-  map.on('moveend', onInteractionEnd)
-  map.on('zoomend', onInteractionEnd)
-  map.on('rotateend', onInteractionEnd)
-  map.on('pitchend', onInteractionEnd)
+  events.on('movestart', onInteractionStart)
+  events.on('zoomstart', onInteractionStart)
+  events.on('rotatestart', onInteractionStart)
+  events.on('pitchstart', onInteractionStart)
+  events.on('moveend', onInteractionEnd)
+  events.on('zoomend', onInteractionEnd)
+  events.on('rotateend', onInteractionEnd)
+  events.on('pitchend', onInteractionEnd)
 
   return () => {
-    map.off('movestart', onInteractionStart)
-    map.off('zoomstart', onInteractionStart)
-    map.off('rotatestart', onInteractionStart)
-    map.off('pitchstart', onInteractionStart)
-    map.off('moveend', onInteractionEnd)
-    map.off('zoomend', onInteractionEnd)
-    map.off('rotateend', onInteractionEnd)
-    map.off('pitchend', onInteractionEnd)
+    events.off('movestart', onInteractionStart)
+    events.off('zoomstart', onInteractionStart)
+    events.off('rotatestart', onInteractionStart)
+    events.off('pitchstart', onInteractionStart)
+    events.off('moveend', onInteractionEnd)
+    events.off('zoomend', onInteractionEnd)
+    events.off('rotateend', onInteractionEnd)
+    events.off('pitchend', onInteractionEnd)
   }
 }
 

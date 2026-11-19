@@ -37,9 +37,9 @@ import { generateAgriculturalObjectIntelligenceExcel } from './generateAgricultu
 import type {
   ImageryChartType,
   ImageryTimeAggregation,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import type { TimeSeriesExportKind, TimeSeriesReportConfig } from './timeSeriesReportTypes'
-import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import type { CropAlertFieldInput } from '../../indices/siCropAlertEngine'
 import type { PlotTimeSeriesAnalyticsOptions } from './plotTimeSeriesAnalyticsTypes'
 import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'

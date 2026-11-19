@@ -1305,7 +1305,7 @@ aside {
 .ecph .form-label .unit { font-size: 11px; color: #81c784; font-weight: 500 }
 .ecph .form-input {
   padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 6px;
-  font-size: 13px; transition: all 0.2s; background-color: #fff; min-height: 36px;
+  font-size: 13px; transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s; background-color: #fff; min-height: 36px;
 }
 .ecph .form-input:focus { outline: none; border-color: var(--primary-green); box-shadow: 0 0 0 3px rgba(46,125,50,0.1) }
 .ecph .form-input:hover { border-color: var(--accent-green) }
@@ -1317,7 +1317,7 @@ aside {
 }
 .ecph .btn {
   padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer;
-  display: flex; align-items: center; gap: 6px; transition: all 0.2s ease; border: none;
+  display: flex; align-items: center; gap: 6px; transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease; border: none;
 }
 .ecph .btn-primary { background: var(--primary-green); color: #fff }
 .ecph .btn-primary:hover { background: var(--primary-green-dark); transform: translateY(-2px) }
@@ -11200,7 +11200,7 @@ path.gis-path-blend--lighten {
   font-size: 13px;
   color: var(--ds-color-text, #0f172a);
   background: var(--ds-color-bg, #f8fafc);
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
 .gis-edit-field input:focus,
@@ -11246,7 +11246,7 @@ path.gis-path-blend--lighten {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
 .gis-btn-delete:hover {

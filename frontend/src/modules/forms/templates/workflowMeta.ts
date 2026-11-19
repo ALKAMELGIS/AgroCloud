@@ -29,11 +29,6 @@ export function getWorkflowShellMeta(
       en: { title: 'Product & Selas Tracking', tagline: 'Configurable, layer-driven production data entry' },
       ar: { title: 'تتبع الإنتاج والمبيعات', tagline: 'إدخال بيانات الإنتاج المرتبطة بالطبقات' },
     },
-    qhis: {
-      iconClass: 'fa-solid fa-shield-halved',
-      en: { title: 'QHIS', tagline: 'Configurable, layer-driven QHIS data entry' },
-      ar: { title: 'QHIS', tagline: 'إدخال بيانات الجودة والصحة والسلامة المرتبطة بالطبقات' },
-    },
     fertigation: {
       iconClass: 'fa-solid fa-droplet',
       en: { title: 'Fertigation Management', tagline: 'Irrigation and nutrient scheduling' },

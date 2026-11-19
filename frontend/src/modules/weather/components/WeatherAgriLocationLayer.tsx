@@ -1,4 +1,4 @@
-import { DevelopEliteMapArcgisLayer } from '@/modules/dashboard/develop-elite/DevelopEliteMapArcgisLayer'
+import { DevelopEliteMapArcgisLayer } from '@/modules/gis/portfolio/DevelopEliteMapArcgisLayer'
 
 type Props = {
   geojson: GeoJSON.FeatureCollection | null

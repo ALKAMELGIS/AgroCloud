@@ -38,6 +38,10 @@ services:
       PORT: '3001'
       FIELD_BOUNDARY_URL: http://agri-field-boundary:8092/detect
       VITE_ELITE_SAME_ORIGIN_API: 'true'
+    volumes:
+      # SQLite database (users, settings, API keys, entries…) — without this volume every
+      # rebuild started from an empty data directory.
+      - agrocloud_data:/var/lib/agrocloud
     expose:
       - '3001'
     depends_on:
@@ -68,6 +72,7 @@ services:
       - caddy_config:/config
 
 volumes:
+  agrocloud_data:
   caddy_data:
   caddy_config:
   agri_ftw_models:

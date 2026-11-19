@@ -5,7 +5,7 @@ Powered by Meta's segment-anything (https://github.com/facebookresearch/segment-
 with GIS-grade post-processing that turns the raw mask into clean, topologically correct
 Point / LineString / Polygon features (EPSG:4326) ready for ArcGIS Pro and QGIS.
 
-Contract (matches backend/server/samDetectionProxy.js):
+Contract (matches backend/server/proxies/samDetectionProxy.js):
   POST /segment   application/json
     {
       "image":  "<data:image/png;base64,...>" | "<base64>",

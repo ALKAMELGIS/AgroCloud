@@ -121,7 +121,7 @@ export type AgriFieldBoundaryPanelProps = {
   referenceNotice?: string | null
   referenceBusy?: boolean
   /** Map viewport host for the floating Results Dashboard (`.si-map-container`). */
-  mapContainerRef?: RefObject<HTMLElement | null>
+  mapContainerRef?: RefObject<HTMLElement>
   onRun: () => void
   onReset: () => void
   onExportGeojson: () => void | Promise<void>

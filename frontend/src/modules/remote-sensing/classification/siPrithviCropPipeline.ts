@@ -4,7 +4,7 @@
  * Drives the async job on the backend orchestrator (`/api/crop-classification/*`):
  *   AOI → Sentinel Hub (3 timesteps) → preprocessing → Prithvi inference → classification.
  *
- * @see backend/server/cropClassificationProxy.js
+ * @see backend/server/proxies/cropClassificationProxy.js
  */
 
 import {

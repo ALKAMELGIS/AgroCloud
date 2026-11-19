@@ -1,3 +1,0 @@
-# icons
-
-Icon components.

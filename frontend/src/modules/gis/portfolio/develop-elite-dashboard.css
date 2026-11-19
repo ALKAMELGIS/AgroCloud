@@ -1,0 +1,1020 @@
+.develop-elite {
+  /* Elite reference mock. Colors stay fixed when the app light/dark toggle changes. */
+  color-scheme: dark;
+  --de-bg: #051a10;
+  --de-panel: #071a11;
+  --de-panel-deep: #051a10;
+  --de-kpi-cell-bg: #051a10;
+  --de-structure-cell-bg: #071a11;
+  --de-surface: #071a11;
+  --de-border: #133d2d;
+  --de-border-strong: #2f6b4a;
+  --de-border-soft: #103825;
+  --de-text: #f4f7f5;
+  --de-muted: #8fa898;
+  --de-kpi-label: #b8c9be;
+  --de-accent: #5cdb5c;
+  --de-accent-bright: #7ee787;
+  --de-map-popup-header-bg: linear-gradient(180deg, #071a11 0%, #051a10 55%, #031208 100%);
+  --de-map-popup-header-fg: #eef2ef;
+  --de-map-popup-header-accent: #2f6b4a;
+  --de-shadow-inset: inset 0 1px 0 rgba(126, 231, 135, 0.06);
+  --de-shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.28);
+  --de-layout-kpi-height: 58px;
+  --de-layout-kpi-card-min: 96px;
+  --de-layout-hero-min: 128px;
+  --de-layout-kpi-icon-fs: 18px;
+  --de-layout-kpi-value-fs: 22px;
+  --de-kpi-number-weight: 700;
+  --de-layout-col-sidebar: 168px;
+  --de-layout-col-zones: 84px;
+  --de-layout-col-structure: 76px;
+  --de-layout-farms-pct: 52%;
+  --de-layout-countries-pct: 48%;
+  --de-layout-map-fr: 1.94;
+  --de-layout-charts-fr: 1;
+  --de-layout-chart-pie: 0.92fr;
+  --de-layout-chart-bar: 1.08fr;
+  --de-layout-chart-table: 1.42fr;
+  --de-layout-structure-glass-fr: 1;
+  --de-layout-structure-net-fr: 1;
+  --de-layout-structure-green-fr: 1;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--de-bg);
+  color: var(--de-text);
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-size: clamp(10px, 1.05vw, 11px);
+  overflow: hidden;
+}
+
+/* UAE digital clock (replaces center logo) — transparent on header green */
+.develop-elite-digital-clock {
+  --de-clock-digit-h: 20px;
+  --de-clock-digit-w: 12px;
+  --de-clock-colon-w: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-height: 36px;
+  padding: 0;
+  background: transparent;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Weekday drum: circular lens over scrolling day strip */
+.develop-elite-digital-clock__day-dial {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.develop-elite-digital-clock__day-dial-track {
+  position: absolute;
+  inset: 1px;
+  overflow: hidden;
+  border-radius: 50%;
+  -webkit-mask-image: radial-gradient(circle, #000 42%, transparent 72%);
+  mask-image: radial-gradient(circle, #000 42%, transparent 72%);
+}
+
+.develop-elite-digital-clock__day-dial-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 4px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.22);
+  transform: translateY(calc(-50% - var(--de-day-offset, 0px)));
+  transition: transform 0.55s cubic-bezier(0.33, 1, 0.68, 1);
+  will-change: transform;
+}
+
+.develop-elite-digital-clock__day-dial-strip span {
+  height: 6px;
+  line-height: 6px;
+  flex-shrink: 0;
+  opacity: 0.28;
+  transform: scale(0.82);
+  transition: opacity 0.35s ease, transform 0.35s ease, color 0.35s ease;
+}
+
+.develop-elite-digital-clock__day-dial-strip span.is-far {
+  opacity: 0.18;
+  transform: scale(0.72);
+}
+
+.develop-elite-digital-clock__day-dial-strip span.is-near {
+  opacity: 0.45;
+  transform: scale(0.88);
+  color: rgba(134, 239, 172, 0.55);
+}
+
+.develop-elite-digital-clock__day-dial-strip span.is-active {
+  opacity: 0;
+}
+
+.develop-elite-digital-clock__day-dial-lens {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  font-size: 5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #facc15;
+  text-shadow: 0 0 5px rgba(250, 204, 21, 0.45);
+  pointer-events: none;
+}
+
+.develop-elite-digital-clock__face {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.develop-elite-digital-clock__time {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.develop-elite-digital-clock__pair {
+  display: inline-flex;
+  gap: 1px;
+  transition: filter 0.2s ease;
+}
+
+.develop-elite-digital-clock__pair.is-flash {
+  filter: brightness(1.2);
+}
+
+.develop-elite-digital-clock__meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 6px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.develop-elite-digital-clock__tz {
+  color: var(--de-accent);
+  text-shadow: 0 0 8px rgba(74, 222, 128, 0.35);
+}
+
+.develop-elite-digital-clock__ampm {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.develop-elite-seven-seg {
+  width: var(--de-clock-digit-w);
+  height: var(--de-clock-digit-h);
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.develop-elite-seven-seg--colon {
+  width: var(--de-clock-colon-w);
+  height: var(--de-clock-digit-h);
+  margin: 0 1px;
+}
+
+.develop-elite-seven-seg__bar {
+  fill: rgba(30, 80, 55, 0.55);
+}
+
+.develop-elite-seven-seg__bar.is-on {
+  fill: rgba(255, 255, 255, 0.96);
+  filter:
+    drop-shadow(0 0 1px rgba(255, 255, 255, 0.9))
+    drop-shadow(0 0 5px rgba(74, 222, 128, 0.45))
+    drop-shadow(0 0 10px rgba(74, 222, 128, 0.2));
+}
+
+.develop-elite-seven-seg__bar.is-on.is-accent {
+  fill: #7ef0c0;
+  filter:
+    drop-shadow(0 0 2px rgba(126, 240, 192, 0.95))
+    drop-shadow(0 0 8px rgba(74, 222, 128, 0.65));
+}
+
+.develop-elite-seven-seg__dot {
+  fill: rgba(30, 80, 55, 0.55);
+}
+
+.develop-elite-seven-seg__dot.is-on {
+  fill: rgba(255, 255, 255, 0.92);
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.55));
+  transition: opacity 0.15s ease;
+}
+
+.develop-elite-seven-seg--colon.is-pulse .develop-elite-seven-seg__dot.is-on {
+  opacity: 0.35;
+}
+
+.develop-elite-map {
+  position: absolute;
+  inset: 0;
+}
+
+/* Field zoom (Mercator): hide starfield; opaque fallback while tiles load. */
+
+.develop-elite-map__legend-rail {
+  flex: 0 0 auto;
+  width: clamp(112px, 14%, 168px);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 8px 8px;
+  box-sizing: border-box;
+  border-left: 1px solid var(--de-border-soft);
+  background: var(--de-structure-cell-bg);
+  z-index: 380;
+  overflow: hidden;
+}
+
+.develop-elite-map__insight-tools {
+  flex-shrink: 0;
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(57, 255, 20, 0.22);
+  box-sizing: border-box;
+}
+
+.develop-elite-map__insight-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  max-width: none;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(57, 255, 20, 0.35);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #d7f5e2;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.develop-elite-map__insight-btn.is-active {
+  background: rgba(74, 222, 128, 0.22);
+  border-color: #4ade80;
+  color: #ecfdf3;
+}
+
+.leaflet-container > .develop-elite-map__insight-panel,
+.maplibregl-map > .develop-elite-map__insight-panel,
+.leaflet-container > .develop-elite-map__swipe-chrome-host,
+.leaflet-container > .develop-elite-map__draw-widget-host,
+.maplibregl-map > .develop-elite-map__draw-widget-host {
+  position: absolute;
+  z-index: 700;
+}
+
+.leaflet-container > .develop-elite-map__swipe-chrome-host {
+  inset: 0;
+  pointer-events: none;
+}
+
+.leaflet-container > .develop-elite-map__swipe-chrome-host .si-map-swipe-overlay {
+  z-index: 1;
+}
+
+.develop-elite-map__insight-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.leaflet-container > .develop-elite-map__draw-widget-host,
+.maplibregl-map > .develop-elite-map__draw-widget-host {
+  inset: 0;
+  pointer-events: none;
+}
+
+.develop-elite-map__draw-widget-host .si-map-draw-widget {
+  pointer-events: auto;
+  top: 10px;
+  border-radius: 3px;
+  border-color: var(--de-border-soft);
+  background: rgba(0, 20, 8, 0.96);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+}
+
+.develop-elite-map__draw-widget-host .si-map-draw-widget__brand {
+  color: var(--de-accent);
+}
+
+.develop-elite-map__draw-widget-host .si-map-draw-widget__tool {
+  border-radius: 2px;
+  border-color: rgba(57, 255, 20, 0.28);
+  color: #d7f5e2;
+  touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+  .develop-elite-map__draw-widget-host .si-map-draw-widget__tool {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+.develop-elite-map__draw-widget-host .si-map-draw-widget__tool.is-on {
+  background: rgba(74, 222, 128, 0.22);
+  border-color: var(--de-accent);
+  color: #ecfdf3;
+}
+
+.leaflet-container.develop-elite-map--intel-pick {
+  cursor: crosshair !important;
+}
+
+.maplibregl-map.develop-elite-map--intel-pick .maplibregl-canvas {
+  cursor: crosshair !important;
+}
+
+.leaflet-container.develop-elite-map--drawing-sketch,
+.maplibregl-map.develop-elite-map--drawing-sketch,
+.maplibregl-canvas-container.develop-elite-map--drawing-sketch {
+  cursor: crosshair !important;
+  touch-action: none;
+}
+
+.leaflet-container.develop-elite-map--drawing-sketch .leaflet-draw-guide-dash {
+  pointer-events: none;
+}
+
+.leaflet-container > .develop-elite-map__insight-panel {
+  pointer-events: auto;
+}
+
+.develop-elite-map__insight-panel {
+  position: absolute;
+  z-index: 720;
+  pointer-events: auto;
+  left: 8px;
+  bottom: 28px;
+  width: min(240px, calc(100% - 16px));
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid rgba(57, 255, 20, 0.4);
+  background: rgba(0, 20, 8, 0.94);
+  color: #f4f7f5;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.develop-elite-map__insight-panel p {
+  margin: 0 0 6px;
+}
+
+.develop-elite-map__insight-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+  font-size: 10px;
+  color: #c9e6d4;
+}
+
+.develop-elite-map__insight-panel select {
+  width: 100%;
+  height: 22px;
+  border: 1px solid rgba(57, 255, 20, 0.35);
+  background: #04140c;
+  color: #f4f7f5;
+  font-size: 11px;
+}
+
+.develop-elite-map .leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #0a1a10;
+  touch-action: none;
+}
+
+.develop-elite-map .leaflet-tile-pane .leaflet-tile,
+.develop-elite-map .develop-elite-basemap-tile {
+  pointer-events: none;
+}
+
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-map-pane {
+  will-change: transform;
+}
+
+/* Basemap-only motion: hide heavy GIS / analysis panes while panning or zooming. */
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-develop-elite-data-layers-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-develop-elite-world-countries-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-pane[name='develop-elite-layer-live'],
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-marker-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-overlay-pane > svg,
+.develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-develop-elite-data-layers-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-develop-elite-world-countries-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-pane[name='develop-elite-layer-live'],
+.develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-marker-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-overlay-pane > svg {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Keep AOI sketch visible while drawing (do not hide sketch pane during map motion). */
+.develop-elite-map .leaflet-container.develop-elite-map--interacting:not(.develop-elite-map--drawing-sketch)
+  .leaflet-pane[name='develop-elite-draw-sketch'],
+.develop-elite-map .leaflet-container.develop-elite-map--zooming:not(.develop-elite-map--drawing-sketch)
+  .leaflet-pane[name='develop-elite-draw-sketch'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Canvas vector paths: avoid SVG overlay flicker during wheel zoom. */
+.develop-elite-map .leaflet-overlay-pane canvas,
+.develop-elite-map .leaflet-develop-elite-data-layers-pane canvas {
+  image-rendering: auto;
+}
+
+/* Grid field map (Mercator): avoid compositor repaints that flash vector tiles. */
+
+.develop-elite-map .leaflet-top.leaflet-right {
+  display: none;
+}
+
+.develop-elite-map .leaflet-control-attribution {
+  display: none !important;
+}
+
+.develop-elite-map__map-chrome {
+  position: absolute;
+  inset: 0;
+  z-index: 850;
+  pointer-events: none;
+}
+
+.develop-elite-map__map-chrome > * {
+  pointer-events: auto;
+}
+
+.develop-elite-map__tools {
+  --de-map-tool-size: 20px;
+  --de-map-tool-icon: 9px;
+  --de-map-tool-gap: 2px;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--de-map-tool-gap);
+  z-index: 820;
+  max-height: calc(100% - 12px);
+  overflow-x: visible;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.develop-elite-map {
+  --de-nav-fab-size: 22px;
+  --de-nav-stack-gap: 5px;
+  --de-nav-stack-inset: 6px;
+}
+
+.develop-elite-map .maplibregl-ctrl-bottom-left {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.develop-elite-map__tool {
+  width: var(--de-map-tool-size, 20px);
+  height: var(--de-map-tool-size, 20px);
+  min-width: var(--de-map-tool-size, 20px);
+  min-height: var(--de-map-tool-size, 20px);
+  border: var(--de-theme-border-width, 1px) solid var(--de-border-soft);
+  background: rgba(0, 20, 8, 0.92);
+  color: var(--de-accent);
+  cursor: pointer;
+  font-size: var(--de-map-tool-icon, 9px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.develop-elite-map__tool:hover,
+.develop-elite-map__tool.is-active {
+  background: rgba(0, 40, 20, 0.98);
+  border-color: var(--de-accent);
+  color: #fff;
+}
+
+/* Compact 3D orbit navigator */
+
+.develop-elite-map__tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.develop-elite-map__panel {
+  position: absolute;
+  top: 4px;
+  left: auto;
+  right: calc(var(--de-map-tool-size, 20px) + 10px);
+  width: min(260px, 42vw);
+  max-height: min(320px, 55vh);
+  z-index: 600;
+  background: rgba(0, 20, 8, 0.96);
+  border: 1px solid var(--de-border-soft);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Bottom-center attribute table (ArcGIS Online style) — compact, map stays usable above */
+
+.develop-elite-map .develop-elite-irrigation-pipe-arrow-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.develop-elite-map .develop-elite-irrigation-pipe-arrow {
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.develop-elite-map:fullscreen {
+  background: #0a1a10;
+}
+
+/* Keep Agro Structures / Tree / AgroLocation above Sentinel & Layer Live */
+.develop-elite-map .leaflet-pane.leaflet-overlay-pane,
+.develop-elite-map .leaflet-pane.leaflet-marker-pane,
+.develop-elite-map .leaflet-pane.leaflet-develop-elite-data-layers-pane {
+  z-index: 620;
+}
+
+/* Global index.css sets svg { max-width: 100% }, which collapses Leaflet overlay SVG width (parent pane is 0px). */
+.develop-elite-map .leaflet-container svg.leaflet-zoom-animated {
+  max-width: none;
+}
+
+/* Picture markers (Tree / valves / AgroLocation) — global img { max-width: 100% } collapses Leaflet icons. */
+.develop-elite-map .leaflet-marker-pane img.leaflet-marker-icon,
+.develop-elite-map .leaflet-marker-pane img.leaflet-marker-shadow {
+  max-width: none !important;
+  width: auto;
+  height: auto;
+}
+
+.develop-elite-map .leaflet-pane.leaflet-develop-elite-world-countries-pane {
+  z-index: 580;
+  pointer-events: none;
+}
+
+.develop-elite-map .leaflet-develop-elite-world-countries-pane path.leaflet-interactive,
+.develop-elite-map .leaflet-develop-elite-world-countries-pane path {
+  pointer-events: none !important;
+}
+
+.develop-elite-map .leaflet-pane.leaflet-popup-pane {
+  z-index: 850;
+}
+
+.develop-elite-map .maplibregl-popup.develop-elite-map-popup-wrap {
+  z-index: 920;
+  max-width: 320px;
+  pointer-events: auto;
+}
+
+.develop-elite-map-popup-wrap.maplibregl-popup .maplibregl-popup-content {
+  background: rgba(0, 18, 10, 0.97);
+  color: var(--de-text);
+  border: 1px solid rgba(74, 222, 128, 0.28);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.52);
+  padding: 8px 10px 9px;
+  width: min(280px, calc(100vw - 24px));
+  max-width: 280px;
+  overflow: hidden;
+}
+
+.develop-elite-map-popup-wrap.maplibregl-popup .maplibregl-popup-close-button {
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  font-size: 16px;
+  line-height: 16px;
+  color: rgba(255, 255, 255, 0.62);
+  padding: 0;
+}
+
+.develop-elite-map-popup-wrap.maplibregl-popup .maplibregl-popup-close-button:hover {
+  color: rgba(255, 255, 255, 0.92);
+  background: transparent;
+}
+
+.develop-elite-map-popup-wrap.maplibregl-popup .maplibregl-popup-tip {
+  border-top-color: rgba(0, 18, 10, 0.97);
+  border-bottom-color: rgba(0, 18, 10, 0.97);
+}
+
+.develop-elite-map-popup-wrap .leaflet-popup-content-wrapper {
+  background: rgba(0, 18, 10, 0.97);
+  color: var(--de-text);
+  border: 1px solid rgba(74, 222, 128, 0.28);
+  border-radius: 3px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  padding: 0;
+}
+
+.develop-elite-map-popup-wrap .leaflet-popup-content {
+  margin: 6px 8px 7px;
+  box-sizing: border-box;
+  width: 200px !important;
+  max-width: 200px;
+  overflow: hidden;
+}
+
+.develop-elite-map-popup-wrap .leaflet-popup-close-button {
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  font-size: 16px;
+  line-height: 16px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.develop-elite-map-popup-wrap .leaflet-popup-close-button:hover {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.develop-elite-map-popup-wrap .leaflet-popup-tip {
+  background: rgba(0, 18, 10, 0.97);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  box-shadow: none;
+}
+
+.develop-elite-map-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 9px;
+  line-height: 1.3;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.develop-elite-map-popup--compact {
+  gap: 3px;
+}
+
+/* ArcGIS Online–style identify popup */
+.develop-elite-map-popup--ago {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.develop-elite-map-popup__ago-header {
+  background: var(--de-map-popup-header-bg);
+  color: var(--de-map-popup-header-fg, #eef2ef);
+  padding: 8px 28px 8px 10px;
+  border-bottom: 1px solid var(--de-map-popup-header-accent, #2f6b4a);
+  box-shadow: inset 0 1px 0 rgba(126, 231, 135, 0.08);
+}
+
+.develop-elite-map-popup__ago-pager {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.develop-elite-map-popup__ago-pager-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--de-map-popup-header-fg, #eef2ef);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+.develop-elite-map-popup__ago-pager-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.develop-elite-map-popup__ago-pager-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.develop-elite-map-popup__ago-pager-label {
+  font-weight: 600;
+}
+
+.develop-elite-map-popup__ago-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.develop-elite-map-popup__ago-sub {
+  margin: 4px 0 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--de-muted, #8fa898);
+}
+
+.develop-elite-map-popup__ago-scroll {
+  max-height: min(220px, 42vh);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.develop-elite-map-popup__ago-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.develop-elite-map-popup__ago-table th,
+.develop-elite-map-popup__ago-table td {
+  padding: 6px 10px;
+  vertical-align: top;
+  border-bottom: 1px solid #e5e5e5;
+  text-align: start;
+  font-size: 12px;
+}
+
+.develop-elite-map-popup__ago-table th {
+  width: 42%;
+  font-weight: 600;
+  color: #6e6e6e;
+  word-break: break-word;
+}
+
+.develop-elite-map-popup__ago-table td {
+  color: #323232;
+  word-break: break-word;
+}
+
+.develop-elite-map-popup__ago-empty {
+  padding: 12px 10px;
+  color: #6e6e6e;
+  font-style: italic;
+}
+
+.develop-elite-map-popup__ago-footer {
+  padding: 8px 10px 10px;
+  border-top: 1px solid #e5e5e5;
+  background: #fafafa;
+}
+
+.develop-elite-map-popup__ago-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #0079c1;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.develop-elite-map-popup__ago-link:hover {
+  color: #005e95;
+}
+
+.develop-elite-map-popup strong {
+  font-size: 11px;
+  color: #fff;
+}
+
+.develop-elite-map-popup__head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.develop-elite-map-popup__kicker {
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(134, 239, 172, 0.75);
+  line-height: 1.2;
+}
+
+.develop-elite-map-popup__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.92);
+  padding: 0 20px 4px 0;
+  margin-bottom: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.develop-elite-map-popup__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.develop-elite-map-popup__zoom {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.develop-elite-map-popup__zoom:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.develop-elite-map-popup__scroll {
+  max-height: min(132px, 38vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 2px 2px 0;
+  margin: 0;
+  scrollbar-gutter: stable;
+}
+
+.develop-elite-map-popup__attrs {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.develop-elite-map-popup__row {
+  display: grid;
+  grid-template-columns: minmax(52px, 38%) minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.develop-elite-map-popup__row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.develop-elite-map-popup__row dt {
+  margin: 0;
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.25;
+}
+
+.develop-elite-map-popup__row dd {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.develop-elite-map-popup__scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.develop-elite-map-popup__scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+}
+
+.develop-elite-map-popup__empty {
+  margin: 0;
+  color: var(--de-muted);
+  font-size: 9px;
+}
+
+/* Data tab — grouped ArcGIS sources */
+
+@media (max-width: 767px) {
+  .develop-elite {
+    overflow-y: auto;
+    height: auto;
+    min-height: 100%;
+  }
+
+  .develop-elite-digital-clock {
+    --de-clock-digit-h: 18px;
+    --de-clock-digit-w: 11px;
+    --de-clock-colon-w: 5px;
+    gap: 5px;
+    max-height: 32px;
+  }
+
+  .develop-elite-digital-clock__day-dial {
+    width: 17px;
+    height: 17px;
+  }
+
+  .develop-elite-digital-clock__day-dial-lens {
+    font-size: 4.5px;
+  }
+}
+
+/* Map: phone + tablet — full-width map, legend below, touch-friendly tools */
+@media (max-width: 1199px) {
+}
+
+@media (max-width: 767px) {
+}
+
+/* App light/dark toggle must not restyle this dashboard. */
+html[data-theme='light'] .develop-elite.page,
+html[data-theme='dark'] .develop-elite.page {
+  color-scheme: dark;
+  background: var(--de-bg);
+  color: var(--de-text);
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}

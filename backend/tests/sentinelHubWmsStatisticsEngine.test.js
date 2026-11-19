@@ -8,7 +8,7 @@ import {
   decodeWmsZonalStatsFromPng,
   estimateEtMmDayFromMoisture,
   geometryToWmsClipWkt3857,
-} from '../server/sentinelHubWmsStatisticsEngine.js'
+} from '../server/engines/sentinelHubWmsStatisticsEngine.js'
 
 describe('sentinelHubWmsStatisticsEngine', () => {
   it('geometryToWmsClipWkt3857 builds EPSG:3857 polygon WKT', () => {
@@ -98,7 +98,7 @@ describe('sentinelHubWmsStatisticsEngine', () => {
   })
 
   it('selectClearSceneDates accepts granule cloud >5% and prefers clearest dates', async () => {
-    const { selectClearSceneDates } = await import('../server/sentinelHubWmsStatisticsEngine.js')
+    const { selectClearSceneDates } = await import('../server/engines/sentinelHubWmsStatisticsEngine.js')
     const geometry = {
       type: 'Polygon',
       coordinates: [

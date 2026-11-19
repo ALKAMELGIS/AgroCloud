@@ -100,7 +100,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
     <link rel="shortcut icon" href="/favicon.png" />
     <title>Elite AgroCloud</title>
   </head>
@@ -206,6 +206,10 @@
           'error',
           function (e) {
             if (done || !boot || !boot.isConnected) return
+            // Capture phase also sees failed <img>/<link>/font loads; only a failed <script> or an
+            // uncaught error (target === window) can actually stop the app from starting.
+            var t = e && e.target
+            if (t && t !== window && t.tagName !== 'SCRIPT') return
             var msg = (e && (e.message || (e.error && e.error.message))) || 'Script error'
             boot.innerHTML =
               '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Failed to start</div>' +

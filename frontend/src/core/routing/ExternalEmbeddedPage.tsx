@@ -14,8 +14,8 @@ export default function ExternalEmbeddedPage({ title, externalUrl, chromeless = 
   const url = sanitizeExternalUrl(externalUrl)
 
   return (
-    <main className="sensor-shell gps-in-app-browser external-embed-shell" aria-label={title}>
+    <section className="sensor-shell gps-in-app-browser external-embed-shell" aria-label={title}>
       <ExternalPageLink url={url} title={title} chromeless={chromeless} />
-    </main>
+    </section>
   )
 }

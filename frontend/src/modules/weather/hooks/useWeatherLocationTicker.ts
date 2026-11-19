@@ -16,7 +16,7 @@ function prefersReducedMotion(): boolean {
 export function useWeatherLocationTicker(
   enabled: boolean,
   paused: boolean,
-  listRef: RefObject<HTMLElement | null>,
+  listRef: RefObject<HTMLElement>,
   itemCount: number,
   options?: Options,
 ) {

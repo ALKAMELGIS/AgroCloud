@@ -88,7 +88,7 @@ export type RunGeoExplorerGeminiTurnParams = {
    * Satellite must pass `false` so Geo AI stays isolated from GIS Map storage and cannot recurse on huge combined layer sets.
    */
   attachGisSavedLayers?: boolean
-  /** Optional extra authoritative blocks (e.g. Develop Dashboard snapshot excerpt). */
+  /** Optional extra authoritative blocks (e.g. live map state). */
   extraSystemAppend?: string
   /**
    * User edited an existing question in-place; history already ends with the revised user message.

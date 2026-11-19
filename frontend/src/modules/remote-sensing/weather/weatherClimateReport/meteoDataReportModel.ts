@@ -8,7 +8,7 @@ import {
   formatImageryTimePeriodLabel,
   imageryTimePeriodKey,
   type ImageryTimeAggregation,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import type { ClimateExportAggregation } from './weatherClimateReportTypes'
 import { climateAggregationLabel, meanWindDirectionDeg } from './weatherClimateAnalysisEngine'
 

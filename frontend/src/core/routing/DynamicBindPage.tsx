@@ -1,10 +1,11 @@
 import { Suspense } from 'react'
 import Home from '@/app/layouts/Home'
-import Overview from '@/modules/dashboards/operational/Overview'
 import ExternalEmbeddedPage from './ExternalEmbeddedPage'
 import { lazyWithRetry } from './lazyWithRetry'
 
 const GisMap = lazyWithRetry(() => import('@/modules/gis/map/GisMap'), 'GisMap')
+// Lazy: Overview pulls in chart.js (~66 KB gzip), which no first screen needs.
+const Overview = lazyWithRetry(() => import('@/modules/dashboards/operational/Overview'), 'Overview')
 const SatelliteIntelligence = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/SatelliteIntelligence'), 'SatelliteIntelligence')
 
 function Placeholder({ title }: { title: string }) {

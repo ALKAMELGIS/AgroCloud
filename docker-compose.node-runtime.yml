@@ -1,4 +1,4 @@
-# Node API runtime deploy — no Docker build (pulls node:20 + git clone on start).
+# Node API runtime deploy — no Docker build (pulls node:22 + git clone on start).
 # Fixes Global v3 Export + health; AgroDetect S2 still needs Python (:8092) via systemd.
 #
 # Hostinger MCP:
@@ -8,20 +8,23 @@
 
 services:
   app:
-    image: node:20-bookworm-slim
+    image: node:22-bookworm-slim
     restart: unless-stopped
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: '3001'
       FIELD_BOUNDARY_URL: http://agri-field-boundary:8092/detect
+      AGROCLOUD_DATA_DIR: /var/lib/agrocloud
     volumes:
       - agrocloud_repo:/opt/AgroCloud
+      # SQLite database, kept apart from the git checkout that is reset on every start.
+      - agrocloud_data:/var/lib/agrocloud
     command:
       - bash
       - -ec
       - |
-        apt-get update -qq && apt-get install -y -qq git ca-certificates
+        apt-get update -qq && apt-get install -y -qq git ca-certificates python3 make g++
         if [ ! -d /opt/AgroCloud/.git ]; then
           git clone --depth 1 -b main https://github.com/ALKAMELGIS/AgroCloud.git /opt/AgroCloud
         fi
@@ -91,6 +94,7 @@ services:
         exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 
 volumes:
+  agrocloud_data:
   agrocloud_repo:
   afb_venv:
   caddy_data:

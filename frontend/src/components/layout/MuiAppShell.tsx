@@ -22,6 +22,7 @@ import { useMergedNavigation } from '@/core/state/SystemSettingsContext'
 import { isFullBleedMainClass } from '@/theme/fullBleedRoutes'
 import { agroTokens } from '@/theme/tokens'
 import { MobileBottomNav } from '../navigation/MobileBottomNav'
+import { MAIN_CONTENT_ID, SkipLink } from '../navigation/SkipLink'
 
 type MuiAppShellProps = {
   children: ReactNode
@@ -79,6 +80,7 @@ export function MuiAppShell({ children, mainClassName, onLogout }: MuiAppShellPr
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100dvh', bgcolor: 'background.default' }}>
+      <SkipLink />
       <AppBar position="fixed" color="default" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Toolbar sx={{ minHeight: agroTokens.headerHeight, pt: 'env(safe-area-inset-top, 0px)' }}>
           {!isDesktop ? (
@@ -122,6 +124,8 @@ export function MuiAppShell({ children, mainClassName, onLogout }: MuiAppShellPr
 
       <Box
         component="main"
+        id={MAIN_CONTENT_ID}
+        tabIndex={-1}
         className={mainClassName}
         sx={{
           flexGrow: 1,

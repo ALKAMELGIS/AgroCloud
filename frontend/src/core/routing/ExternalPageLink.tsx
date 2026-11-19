@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useLanguage } from '../localization/i18n'
 import { resolveEmbeddedIframeSrc } from './embeddedIframeSrc'
-import '@/modules/dashboards/management/AgroCloudDashboard.css'
+import '@/core/routing/external-page.css'
 import '@/modules/operations/other/sensors/gps-in-app-browser.css'
 import './external-page-link.css'
 

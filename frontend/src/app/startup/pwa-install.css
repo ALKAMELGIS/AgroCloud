@@ -74,11 +74,11 @@ html[data-theme='dark'] .pwa-install-card {
 
 .pwa-install-card__logo {
   display: block;
-  width: min(220px, 74vw);
-  height: auto;
+  width: 96px;
+  height: 96px;
   margin: 0 auto 14px;
-  padding: 10px 14px;
-  border-radius: 14px;
+  padding: 0;
+  border-radius: 22px;
   background: #fff;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
   object-fit: contain;

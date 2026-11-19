@@ -103,6 +103,28 @@ export async function fetchCreditWallet(): Promise<{ balance: number }> {
   return data.wallet
 }
 
+export type CreditTransaction = {
+  id: string
+  amount: number
+  balanceAfter: number
+  type: string
+  reason: string | null
+  referenceId: string | null
+  actorUserId: string | null
+  createdAt: string
+}
+
+/** The signed-in user's credit ledger, newest first. */
+export async function fetchCreditTransactions(limit = 50): Promise<CreditTransaction[]> {
+  const res = await fetch(`/api/v1/credits/transactions?limit=${encodeURIComponent(String(limit))}`, {
+    credentials: 'include',
+  })
+  const data = await parse<{ ok?: boolean; transactions?: CreditTransaction[]; error?: string }>(res)
+  if (!res.ok || !Array.isArray(data?.transactions)) throw new Error(data?.error || 'Failed to load transactions')
+  return data.transactions
+}
+
+/** Add (positive) or remove (negative) credits for a user in your organisation and scope. */
 export async function adjustUserCredits(body: {
   userId: string
   amount: number

@@ -1,4 +1,4 @@
-import type { AgroCloudMapViewState } from './agroCloudMapNavigation'
+import type { AgroCloudMapCamera, AgroCloudMapViewState } from './agroCloudMapNavigation'
 import {
   applyMapLibreGlobeGalaxySky,
   MAPLIBRE_GLOBE_FOG_GALAXY,
@@ -6,7 +6,7 @@ import {
 } from './maplibreGlobeEnvironment'
 
 /** Default centered 2D globe — full Earth in the map canvas (Satellite Intelligence cockpit). */
-export const SI_GLOBE_COCKPIT_2D_VIEW: AgroCloudMapViewState = {
+export const SI_GLOBE_COCKPIT_2D_VIEW: AgroCloudMapCamera = {
   longitude: 20,
   latitude: 0,
   zoom: 1.06,

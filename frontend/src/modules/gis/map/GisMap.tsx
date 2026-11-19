@@ -18,13 +18,13 @@ import { GeoJSON } from 'react-leaflet'
 import { EsriImageServerLayer } from '../layers/EsriImageServerLayer'
 import MapboxMap, { Layer, NavigationControl, Source } from 'react-map-gl/mapbox'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import MapView from '@/shared/maps/MapView'
-import { AgroCloudMark } from '@/shared/components/AgroCloudMark'
+import MapView from '@/components/map/MapView'
+import { AgroCloudMark } from '@/components/brand/AgroCloudMark'
 import type { LayerData, SymbologyClassMethod, SymbologyColorRamp, SymbologyConfig, SymbologyStyle } from '../layers/LayerManager'
 import { FieldVisibilityControl } from '../layers/FieldVisibilityControl'
 import { GeoExplorerGeminiInputRow } from '@/modules/ai/agent/GeoExplorerGeminiInputRow'
 import { MapPopup } from '../selection/MapPopup'
-import { SiCopyTextButton } from '@/shared/components/SiCopyTextButton'
+import { SiCopyTextButton } from '@/components/actions/CopyTextButton'
 import { DrawToolsController } from '../editing/DrawTools'
 import { BasemapGallery, BasemapLayer, type BasemapType } from './BasemapGallery'
 import {
@@ -61,8 +61,7 @@ import {
   type GeoExplorerMessage,
   type GeoExplorerPart,
 } from '@/modules/ai/agent/geoExplorerGemini'
-import { appAlert, appConfirm, appPrompt } from '@/shared/dialogs/appDialog'
-import { DEVELOP_DATA_CONTEXT_LS_KEY } from '@/modules/ai/agent/geoAiChatClaude'
+import { appAlert, appConfirm, appPrompt } from '@/components/overlays/appDialog'
 import {
   arcLegendLabelForFieldValue,
   buildArcFieldsByLower,
@@ -106,7 +105,7 @@ import { GisGeoExplorerChartConfig } from '@/modules/ai/agent/GisGeoExplorerChar
 import { GeoExplorerGeminiMessageParts } from '@/modules/ai/agent/GeoExplorerGeminiMessageParts'
 import { GisMapBrowseLayersPane } from '../layers/GisMapBrowseLayersPane'
 import { GisMapSaveOpenFlyout } from './GisMapSaveOpenPanel'
-import { SelectMapFromGisContentModal } from '@/modules/dashboards/management/agrocloud/SelectMapFromGisContentModal'
+import { SelectMapFromGisContentModal } from '@/modules/gis/map/web-map/SelectMapFromGisContentModal'
 import type { GisContentRow } from '../layers/content-portal/gisContentPortalData'
 import { gisContentPortalDisplayTypeLabel } from '../layers/content-portal/gisContentPortalData'
 import { siDefaultNewVectorLayerFields, SI_DEFAULT_VECTOR_OUTLINE_COLOR, SI_DEFAULT_VECTOR_POLYGON_FILL_ALPHA, SI_DEFAULT_VECTOR_LINE_WEIGHT } from '../layers/symbology/siSymbolStyleStudio'
@@ -124,6 +123,7 @@ import {
 } from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
 import { flyToLikeGoogleEarth } from './googleEarthFlyTo'
 import { computeStableGisFeatureKey } from '../layers/gisFeatureStableKey'
+import { GIS_MAP_STORE_NAME, openGisMapDb } from './gisMapLayerStore'
 
 const GIS_AGOL_RAIL_COMPACT_LS_KEY = 'gis-agol-rail-compact-v2'
 const GEO_AI_CHAT_PAGE_SIZE = 40
@@ -638,19 +638,9 @@ const readStoredBasemap = (): BasemapType => {
 /** Mapbox GL requires a token even for raster fallbacks; avoid Mapbox-only basemap when token is missing. */
 const readInitialGlobeBasemap = (): BasemapType => readStoredBasemap()
 
-const DB_NAME = 'GisMapStore'
-const STORE_NAME = 'layers'
+const STORE_NAME = GIS_MAP_STORE_NAME
 
-const initDB = () => new Promise<IDBDatabase>((resolve, reject) => {
-  const req = indexedDB.open(DB_NAME, 1)
-  req.onupgradeneeded = () => {
-    if (!req.result.objectStoreNames.contains(STORE_NAME)) {
-      req.result.createObjectStore(STORE_NAME)
-    }
-  }
-  req.onsuccess = () => resolve(req.result)
-  req.onerror = () => reject(req.error)
-})
+const initDB = openGisMapDb
 
 const saveLayersToDB = async (layers: LayerData[]) => {
   try {
@@ -1905,7 +1895,7 @@ export default function GisMap() {
       ? (mapboxGlobeRef.current?.getMap ? mapboxGlobeRef.current.getMap() : mapboxGlobeRef.current)
       : null
     if (!map && !globe) return
-    setMapSearchStatus('Searching...')
+    setMapSearchStatus('Searching…')
     const coordinateMatch = query.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/)
     if (coordinateMatch) {
       const lat = Number(coordinateMatch[1])
@@ -2796,16 +2786,6 @@ export default function GisMap() {
             return
           }
         }
-        let developAppend = ''
-        try {
-          const raw =
-            typeof localStorage !== 'undefined' ? localStorage.getItem(DEVELOP_DATA_CONTEXT_LS_KEY) : null
-          if (raw?.trim()) {
-            developAppend = `### Develop Dashboard — Data pane snapshot (JSON)\n${raw.slice(0, 14000)}`
-          }
-        } catch {
-          /* ignore */
-        }
         const result = await runGeoExplorerGeminiTurn({
           apiKey,
           historyWithUser,
@@ -2822,7 +2802,6 @@ export default function GisMap() {
           mapPopup: null,
           addedLayersHeading: '### GIS Map — Active vector layers (this session)',
           attachGisSavedLayers: true,
-          extraSystemAppend: developAppend || undefined,
           questionEditInPlace,
         })
         setGeoExplorerMessages(h => [...h, result.modelMsg])
@@ -5981,7 +5960,7 @@ export default function GisMap() {
                   <i className="fa-solid fa-satellite" />
                 </span>
                 <span className="gis-map-tool-surface-app-row__main">
-                  <strong>Satellite Intelligence</strong>
+                  <strong>Map</strong>
                   <small>Indices &amp; imagery workflows</small>
                 </span>
                 <i className="fa-solid fa-chevron-right gis-map-tool-surface-app-row__chev" aria-hidden="true" />
@@ -9629,7 +9608,7 @@ export default function GisMap() {
             setServiceUrl(url)
             if (token) setToken(token)
             if (name) setLayerName(name)
-            setDiscoverError('Paste confirmed. Use ArcGIS Connect from Satellite Intelligence Data Manager for full discovery, or save the URL for this session.')
+            setDiscoverError('Paste confirmed. Use ArcGIS Connect from the Map page Data Manager for full discovery, or save the URL for this session.')
           }}
         />
       ) : null}

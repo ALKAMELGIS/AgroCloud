@@ -28,7 +28,7 @@ import {
   type LulcClassCompositionStat,
 } from '../classification/siLulcClassAreaLive'
 import { isLulcClassificationLayerId } from '../classification/siLulcClassification'
-import { lulcPctLabelsPlugin } from '@/shared/charts/lulcCompositionChartPlugin'
+import { lulcPctLabelsPlugin } from '@/components/charts/lulcCompositionChartPlugin'
 import { SiImageryIndexInterpretationCard, type ImageryInterpretationActionId } from '../indices/SiImageryIndexInterpretationCard'
 import type { SiAoiFieldRecord } from '../imagery/siAoiFields'
 import type { SiAoiMaskBuilderLayerLike } from '../imagery/siAoiMaskBuilder'
@@ -49,11 +49,11 @@ import {
   type ImageryCorrelationScatterAnalysis,
   type ImageryTimeAggregation,
   type ImageryTimeSeriesLayerSeries,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { SiScatterCorrelationInsight } from './SiScatterCorrelationInsight'
-import { AcpImageryLayerMultiSelect } from '@/modules/dashboards/gis/agroCloudPlatform/map/AcpImageryLayerMultiSelect'
-import { SiAoiFieldMultiSelect } from '@/modules/dashboards/gis/agroCloudPlatform/map/SiAoiFieldMultiSelect'
-import { SiAoiFieldSelect } from '@/modules/dashboards/gis/agroCloudPlatform/map/SiAoiFieldSelect'
+import { AcpImageryLayerMultiSelect } from '@/modules/remote-sensing/shared/map/AcpImageryLayerMultiSelect'
+import { SiAoiFieldMultiSelect } from '@/modules/remote-sensing/shared/map/SiAoiFieldMultiSelect'
+import { SiAoiFieldSelect } from '@/modules/remote-sensing/shared/map/SiAoiFieldSelect'
 import { SiMultiLayerAoiTrendView } from './SiMultiLayerAoiTrendView'
 import { SiPlotLayerTimeSeriesView } from './SiPlotLayerTimeSeriesView'
 import type { SiImageryAnalysisMode } from './siMultiLayerAoiTrendAnalysis'
@@ -73,8 +73,8 @@ import {
 import { TimeSeriesExportManager } from './ExportManager'
 import { SiDynamicMapSnapshotsPanel } from '../imagery/SiDynamicMapSnapshotsPanel'
 import { SiImageryWeatherTab } from '../weather/SiImageryWeatherTab'
-import { useImageryChartInk } from '@/shared/charts/imageryChartInk'
-import '@/modules/dashboards/gis/agroCloudPlatform/AgroCloudPlatformDashboard.css'
+import { useImageryChartInk } from '@/components/charts/imageryChartInk'
+import '@/modules/remote-sensing/shared/AgroCloudPlatformDashboard.css'
 
 ChartJS.register(
   CategoryScale,

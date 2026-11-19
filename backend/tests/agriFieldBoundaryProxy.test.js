@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
-import { registerAgriFieldBoundaryRoutes } from '../server/agriFieldBoundaryProxy.js'
+import { registerAgriFieldBoundaryRoutes } from '../server/proxies/agriFieldBoundaryProxy.js'
 
 function listen(app) {
   return new Promise((resolve, reject) => {
@@ -49,7 +49,7 @@ test('agri-field-boundary /config reports configured with builtin fallback', asy
 })
 
 test('ftw-mosaic-vectorize preserves concave mask corners (not convex hull)', async () => {
-  const { vectorizeBinaryMaskBuiltin } = await import('../server/fieldBoundaryBuiltin.js')
+  const { vectorizeBinaryMaskBuiltin } = await import('../server/engines/fieldBoundaryBuiltin.js')
   const { PNG } = await import('pngjs')
   const w = 32
   const h = 32

@@ -1,3 +1,0 @@
-# dialogs
-
-Dialogs and modals.

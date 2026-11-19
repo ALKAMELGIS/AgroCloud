@@ -1,5 +1,0 @@
-/**
- * Self-hosted web fonts for enterprise deployments (no Google Fonts CDN).
- * Core stack is in `fonts-core.css`. Optional picker fonts load on demand.
- */
-@import './fonts-core.css';

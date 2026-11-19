@@ -8,11 +8,12 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgres://user:password@db:5432/agri_cloud
+      # SQLite: one file in the agrocloud_data volume (no database server needed).
+      # Identity/RBAC is opt-in: AGROCLOUD_IDENTITY=on
+      - AGROCLOUD_DATA_DIR=/var/lib/agrocloud
       - TITILER_URL=http://titiler:8000
       - IMAGE_CLASSIFICATION_URL=http://image-classification:8000
     depends_on:
-      - db
       - titiler
       - image-classification
     volumes:
@@ -20,17 +21,7 @@ services:
       - /app/node_modules
       - ./backend/uploads/rasters:/app/backend/uploads/rasters
       - raster_tile_cache:/app/backend/cache/tiles
-
-  db:
-    image: postgis/postgis:15-3.3
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=agri_cloud
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - agrocloud_data:/var/lib/agrocloud
 
   # Dynamic COG tiling (EPSG:3857 XYZ). Express proxies /api/raster/:id/tiles → TiTiler.
   titiler:
@@ -72,5 +63,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  agrocloud_data:
   raster_tile_cache:

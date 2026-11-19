@@ -6,7 +6,7 @@ import './GisFloatingWorkspacePanel.css';
 export type GisFloatingWorkspacePanelProps = {
   open: boolean;
   onClose: () => void;
-  containerRef: RefObject<HTMLElement | null>;
+  containerRef: RefObject<HTMLElement>;
   storageKey: string;
   panelId: string;
   title: string;

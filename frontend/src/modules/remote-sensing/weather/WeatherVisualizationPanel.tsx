@@ -115,7 +115,7 @@ function readSlides(storageKey: string): WeatherVizSlide[] {
 
 function useVizPanelGeometry(
   storageKey: string,
-  shellRef: RefObject<HTMLElement | null>,
+  shellRef: RefObject<HTMLElement>,
   minimized: boolean,
 ) {
   const [geom, setGeom] = useState<PanelGeom>(() => readPanelGeom(storageKey));
@@ -356,7 +356,7 @@ export type WeatherVisualizationPanelProps = {
   open: boolean;
   onClose: () => void;
   /** @deprecated Position is viewport-fixed; kept for API compatibility. */
-  containerRef?: RefObject<HTMLElement | null>;
+  containerRef?: RefObject<HTMLElement>;
   sim: WeatherSimState;
   onChange: (patch: Partial<WeatherSimState>) => void;
   onReset: () => void;
@@ -407,9 +407,10 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
     if (!open || !getMap) return;
     const map = getMap() as { setFog?: (fog: unknown) => void } | null;
     if (!map || typeof map.setFog !== 'function') return;
+    const setFog = map.setFog.bind(map);
     const t = window.setTimeout(() => {
       try {
-        map.setFog(weatherSimToMapboxFog(sim));
+        setFog(weatherSimToMapboxFog(sim));
       } catch {
         /* fog unsupported on this style */
       }

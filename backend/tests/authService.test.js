@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { authServiceInternals } from '../server/authService.js'
+import { authServiceInternals } from '../server/services/authService.js'
 
 const { hashPasswordScrypt, verifyPassword, sha256Hex, isSha256Hex } = authServiceInternals
 

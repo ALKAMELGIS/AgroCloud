@@ -4,7 +4,7 @@ import {
   formatImageryTimePeriodLabel,
   imageryTimePeriodKey,
   type ImageryTimeAggregation,
-} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import { kmhToMs } from './timeSeriesReport/timeSeriesWeatherTimeline'
 
 export type WeatherStormAnalysisMode = 'snow_storm' | 'storm'

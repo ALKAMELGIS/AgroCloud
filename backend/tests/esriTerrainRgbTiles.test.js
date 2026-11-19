@@ -7,7 +7,7 @@ import express from 'express'
 import http from 'node:http'
 
 test('terrain esri-rgb route returns PNG', async () => {
-  const { registerEsriTerrainTileRoutes } = await import('../server/esriTerrainRgbTiles.js')
+  const { registerEsriTerrainTileRoutes } = await import('../server/engines/esriTerrainRgbTiles.js')
   const app = express()
   registerEsriTerrainTileRoutes(app)
   const server = http.createServer(app)

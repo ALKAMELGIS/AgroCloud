@@ -1,0 +1,118 @@
+/**
+ * Enterprise-style admin directory persistence: users + audit log, stored in the SQLite database
+ * (`documents` table, store `agri_admin_directory`). An existing agri_admin_directory.json is
+ * imported on first read and then kept only as a backup.
+ *
+ * Env:
+ *   AGRI_ADMIN_DIRECTORY_FILE — legacy JSON file to import (absolute or relative to `backend/server`)
+ *   AGRI_ADMIN_DIRECTORY_TOKEN — optional; send X-Agri-Admin-Directory-Token or Authorization: Bearer …
+ */
+import { readFileDocument, writeFileDocument } from '../database/documentStore.js'
+
+const MAX_USERS = 20000
+const MAX_AUDIT = 8000
+
+function emptyStore() {
+  return { version: 1, updatedAt: null, users: [], auditLog: [] }
+}
+
+function readStore(filePath) {
+  try {
+    const { exists, value: raw } = readFileDocument(filePath)
+    if (!exists) return { persisted: false, data: emptyStore() }
+    if (!raw || typeof raw !== 'object') return { persisted: true, data: emptyStore() }
+    const users = Array.isArray(raw.users) ? raw.users : []
+    const auditLog = Array.isArray(raw.auditLog) ? raw.auditLog : []
+    return {
+      persisted: true,
+      data: {
+        version: 1,
+        updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+        users: users.slice(0, MAX_USERS),
+        auditLog: auditLog.slice(0, MAX_AUDIT),
+      },
+    }
+  } catch (e) {
+    console.error('[admin-directory] read failed', e)
+    return { persisted: false, data: emptyStore() }
+  }
+}
+
+export function readAdminDirectoryStore(filePath) {
+  return readStore(filePath)
+}
+
+export function writeAdminDirectoryStore(filePath, data) {
+  return writeStore(filePath, data)
+}
+
+function writeStore(filePath, data) {
+  const next = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    users: Array.isArray(data.users) ? data.users.slice(0, MAX_USERS) : [],
+    auditLog: Array.isArray(data.auditLog) ? data.auditLog.slice(0, MAX_AUDIT) : [],
+  }
+  return writeFileDocument(filePath, next)
+}
+
+/**
+ * @param {import('express').Express} app
+ * @param {{ filePath: string, accessToken?: string }} opts
+ */
+export function registerAdminDirectoryPersistence(app, opts) {
+  const filePath = opts.filePath
+  const token = String(opts.accessToken || '').trim()
+
+  function guard(req, res, next) {
+    if (process.env.NODE_ENV === 'production' && !token) {
+      return res.status(401).json({ ok: false, error: 'Admin directory token required in production.' })
+    }
+    if (!token) return next()
+    const hdr = String(req.headers['x-agri-admin-directory-token'] || '').trim()
+    const auth = String(req.headers.authorization || '')
+      .replace(/^Bearer\s+/i, '')
+      .trim()
+    if (hdr === token || auth === token) return next()
+    return res.status(401).json({ ok: false, error: 'Invalid or missing admin directory token.' })
+  }
+
+  app.get('/api/v1/admin/directory', guard, async (_req, res) => {
+    try {
+      const { exportDirectorySnapshot } = await import('../identity/directoryExport.js')
+      const { isIdentityReady } = await import('../identity/db.js')
+      if (isIdentityReady()) {
+        const snapshot = await exportDirectorySnapshot()
+        if (snapshot) return res.json({ ok: true, ...snapshot })
+      }
+    } catch (e) {
+      console.error('[admin-directory] identity export failed', e)
+    }
+    const { data } = readStore(filePath)
+    return res.json({ ok: true, ...data })
+  })
+
+  app.put('/api/v1/admin/directory', guard, async (req, res) => {
+    try {
+      const { isIdentityReady } = await import('../identity/db.js')
+      if (isIdentityReady()) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Directory PUT is disabled while the identity module is active. Use /api/v1/identity APIs.',
+          code: 'directory_read_only',
+        })
+      }
+      const body = req.body && typeof req.body === 'object' ? req.body : {}
+      const users = Array.isArray(body.users) ? body.users : null
+      const auditLog = Array.isArray(body.auditLog) ? body.auditLog : null
+      if (!users || !auditLog) {
+        return res.status(400).json({ ok: false, error: 'Body must include users[] and auditLog[] arrays.' })
+      }
+      writeStore(filePath, { users, auditLog })
+      return res.json({ ok: true, updatedAt: new Date().toISOString() })
+    } catch (e) {
+      console.error('[admin-directory] write failed', e)
+      return res.status(500).json({ ok: false, error: 'Failed to persist admin directory.' })
+    }
+  })
+}

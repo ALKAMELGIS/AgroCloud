@@ -43,7 +43,7 @@ import {
   type DeviceGeoReading,
 } from '@/core/utils/deviceGeolocation';
 import '@/assets/styles/gisModalSystem.css';
-import '@/modules/dashboards/management/develop-dashboard.css';
+import '@/modules/remote-sensing/imagery/si-dashboard-shell.css';
 import { parseFile, parseRemoteUrlAsFile } from '@/modules/data-management/import/FileLoader';
 import type { RasterMapCoordinates } from '@/modules/data-management/import/FileLoader';
 import type { CircleCardinal, DrawStyleConfig, VertexRef } from '@/modules/gis/editing/drawingUtils';
@@ -244,11 +244,10 @@ import {
 import {
   buildGeoAiDataContext,
   claudeGeoAiComplete,
-  DEVELOP_DATA_CONTEXT_LS_KEY,
   GEO_AI_CHAT_SYSTEM_BASE,
   type GeoAiChatTurn,
 } from '@/modules/ai/agent/geoAiChatClaude';
-import { appConfirm } from '@/shared/dialogs/appDialog';
+import { appConfirm } from '@/components/overlays/appDialog';
 import { loadGisMapSavedLayers } from '@/modules/gis/map/gisMapLayerStore';
 import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey';
 import { satelliteCustomLayersToGeoAiLayers } from '@/modules/ai/agent/geoAiMapLayerSources';
@@ -601,7 +600,7 @@ import {
   writeSiStyleClipboard,
 } from '@/modules/gis/layers/symbology/siSymbolStyleStudio';
 import { FieldVisibilityControl } from '@/modules/gis/layers/FieldVisibilityControl';
-import { SiCopyTextButton } from '@/shared/components/SiCopyTextButton';
+import { SiCopyTextButton } from '@/components/actions/CopyTextButton';
 import type { AoiStaticMultiLayerLineChartDataset } from '../temporal-analysis/AoiStaticMultiLayerLineChart';
 import { SatelliteMapAnalysisChrome, type MapToolboxNavigateHandler } from './SatelliteMapAnalysisChrome';
 import { LayerLiveLegendPanel } from '../indices/LayerLiveLegendPanel';
@@ -889,6 +888,10 @@ import {
   type MpcTemplateId,
 } from './mpcPlanetaryApi';
 
+/** Feature switches for map overlays that are built but currently hidden (enable to show them). */
+const SI_SHOW_MULTI_AOI_CENTROID_MARKERS = false
+const SI_SHOW_AOI_HEAT_POINTS = false
+
 const EMPTY_MAP_STYLE: any = {
   version: 8,
   // Bake the globe projection into the style itself so an imperative `setStyle()`
@@ -1012,10 +1015,40 @@ function siExtractRasterSpecs(style: unknown): SiRasterSpec[] {
 }
 
 /** Rebuild a style with stable ids so tile swaps are diff-friendly / in-place. */
+/**
+ * Local globe base drawn under the imagery: ocean colour + Natural Earth land outlines served from
+ * this app (public/si-globe-land.geojson). The globe is visible the moment the style loads, even
+ * while satellite tiles are still downloading or when the imagery host is slow / unreachable —
+ * previously the canvas stayed black until tiles arrived (often only after a page refresh).
+ * Ids use the basemap prefixes so overlay ordering treats them as basemap, never as overlays.
+ */
+const SI_GLOBE_BASE_OCEAN_LAYER_ID = `${SI_BASE_LAYER_PREFIX}globe-ocean`;
+const SI_GLOBE_BASE_LAND_SOURCE_ID = `${SI_BASE_SOURCE_PREFIX}globe-land`;
+const SI_GLOBE_BASE_LAND_LAYER_ID = `${SI_BASE_LAYER_PREFIX}globe-land`;
+
+function siGlobeBaseLandUrl(): string {
+  const path = `${import.meta.env.BASE_URL}si-globe-land.geojson`;
+  try {
+    return new URL(path, window.location.href).href;
+  } catch {
+    return path;
+  }
+}
+
 function siBuildStableRasterStyle(specs: SiRasterSpec[]): any {
   if (!specs.length) return EMPTY_MAP_STYLE;
-  const sources: Record<string, unknown> = {};
-  const layers: unknown[] = [];
+  const sources: Record<string, unknown> = {
+    [SI_GLOBE_BASE_LAND_SOURCE_ID]: { type: 'geojson', data: siGlobeBaseLandUrl() },
+  };
+  const layers: unknown[] = [
+    { id: SI_GLOBE_BASE_OCEAN_LAYER_ID, type: 'background', paint: { 'background-color': '#16324a' } },
+    {
+      id: SI_GLOBE_BASE_LAND_LAYER_ID,
+      type: 'fill',
+      source: SI_GLOBE_BASE_LAND_SOURCE_ID,
+      paint: { 'fill-color': '#2f4a35', 'fill-outline-color': '#46664c', 'fill-antialias': true },
+    },
+  ];
   specs.forEach((spec, i) => {
     const sid = `${SI_BASE_SOURCE_PREFIX}${i}`;
     sources[sid] = {
@@ -6456,7 +6489,83 @@ export default function SatelliteIntelligence() {
     if (!basemapTileErrorShouldFallback(url, status)) return;
     basemapRasterFallbackRef.current = true;
     setBasemapId(RASTER_BASEMAP_FALLBACK_ID);
-    setStacStatus('Basemap tiles unavailable â€” using Esri World Imagery.');
+    setStacStatus('Basemap tiles unavailable — using Esri World Imagery.');
+  }, []);
+  /** Failed basemap tile requests since the map loaded (network errors report status 0 / none). */
+  const siBasemapTileFailCountRef = useRef(0);
+  /** Set once any basemap imagery tile has rendered — the boot watchdog then stands down. */
+  const siBasemapTileSeenRef = useRef(false);
+  const siMapReadyDoneRef = useRef(false);
+  const siMapReadyHandlerRef = useRef<((map: any) => void) | null>(null);
+  /**
+   * Bumped to rebuild the map from scratch when the browser drops its WebGL context and does not
+   * give it back (GPU reset, driver hiccup, too many WebGL pages). Mapbox cannot draw without the
+   * context, so the canvas stayed black until a manual page refresh.
+   */
+  const [siMapGeneration, setSiMapGeneration] = useState(0);
+  // Start the page as soon as the map style is ready (see siMapReadyHandlerRef), not when the
+  // last imagery tile has arrived.
+  useEffect(() => {
+    let cancelled = false;
+    let poll: number | undefined;
+    let attachedMap: any = null;
+    const onStyleLoad = () => {
+      if (!cancelled) siMapReadyHandlerRef.current?.(attachedMap);
+    };
+    const attach = () => {
+      if (cancelled) return;
+      const map = mapRef.current?.getMap?.() ?? mapRef.current;
+      if (!map || typeof map.on !== 'function') {
+        poll = window.setTimeout(attach, 50);
+        return;
+      }
+      attachedMap = map;
+      map.on('webglcontextlost', onContextLost);
+      map.on('webglcontextrestored', onContextRestored);
+      if (map.isStyleLoaded?.()) siMapReadyHandlerRef.current?.(map);
+      else map.once('style.load', onStyleLoad);
+    };
+    let lostTimer: number | undefined;
+    const onContextLost = () => {
+      if (cancelled || lostTimer) return;
+      // Give the browser a moment to restore the context itself; otherwise start a fresh map.
+      lostTimer = window.setTimeout(() => {
+        lostTimer = undefined;
+        if (cancelled) return;
+        console.warn('[Map] WebGL context lost and not restored; rebuilding the map.');
+        siMapReadyDoneRef.current = false;
+        setSiMapGeneration(g => g + 1);
+      }, 1500);
+    };
+    const onContextRestored = () => {
+      if (lostTimer) window.clearTimeout(lostTimer);
+      lostTimer = undefined;
+      try {
+        attachedMap?.triggerRepaint?.();
+      } catch {
+        /* ignore */
+      }
+    };
+    attach();
+    return () => {
+      cancelled = true;
+      if (poll) window.clearTimeout(poll);
+      if (lostTimer) window.clearTimeout(lostTimer);
+      attachedMap?.off?.('style.load', onStyleLoad);
+      attachedMap?.off?.('webglcontextlost', onContextLost);
+      attachedMap?.off?.('webglcontextrestored', onContextRestored);
+    };
+  }, [siMapGeneration]);
+  // Boot watchdog: if no imagery tile has rendered 8 s after opening (slow, hung or blocked
+  // imagery host), switch to the fallback imagery instead of waiting indefinitely.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      if (siBasemapTileSeenRef.current) return;
+      const firstTile = activeBasemapRasterSpecsRef.current[0]?.tiles?.[0] ?? '';
+      tryFallbackBasemapFromTileError(firstTile, 0);
+    }, 8000);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const siTableFeatureKeyCacheRef = useRef<Map<object, string>>(new Map());
   const clearRemoteSensingAoiSketchOnlyRef = useRef<() => void>(() => {});
@@ -6957,18 +7066,6 @@ export default function SatelliteIntelligence() {
             return;
           }
         }
-        let developAppend = '';
-        if (!siScope.isolateRouting) {
-          try {
-            const raw =
-              typeof localStorage !== 'undefined' ? localStorage.getItem(DEVELOP_DATA_CONTEXT_LS_KEY) : null;
-            if (raw?.trim()) {
-              developAppend = `### Develop Dashboard â€” Data pane snapshot (JSON)\n${raw.slice(0, 14000)}`;
-            }
-          } catch {
-            /* ignore */
-          }
-        }
         const result = await runGeoExplorerGeminiTurn({
           apiKey,
           historyWithUser,
@@ -6987,7 +7084,6 @@ export default function SatelliteIntelligence() {
             [
               geoAiFloatingOpen ? NEIGHBORHOOD_AGENT_MAP_REPLY_ADDENDUM : '',
               geoAiLiveMapStateBlockRef.current,
-              developAppend,
             ]
               .filter(Boolean)
               .join('\n\n') || undefined,
@@ -7013,22 +7109,23 @@ export default function SatelliteIntelligence() {
             pitch: is3DView ? Math.max(typeof vs.pitch === 'number' ? vs.pitch : 0, 42) : vs.pitch ?? 0,
             bearing: typeof vs.bearing === 'number' ? vs.bearing : 0,
           }));
-          if (me.layerHit) {
-            const lyrCfg = customLayers.find(l => l.name === me.layerHit.layerName);
+          const meHit = me.layerHit; // keep the null check inside callbacks below
+          if (meHit) {
+            const lyrCfg = customLayers.find(l => l.name === meHit.layerName);
             const built = buildGeoAiInspectCardContent({
-              properties: me.layerHit.properties,
-              arcgisLayerDefinition: me.layerHit.arcgisLayerDefinition,
+              properties: meHit.properties,
+              arcgisLayerDefinition: meHit.arcgisLayerDefinition,
               popupConfig: lyrCfg?.popupConfig,
               queryContext: userTextForMapFallback,
               inspectCoords: { lng: me.coords[0], lat: me.coords[1] },
             });
             stageGeoAiInspectCard({
-              title: me.layerHit.layerName,
+              title: meHit.layerName,
               rows: built.rows,
               inspect: built.inspect,
               lng: me.coords[0],
               lat: me.coords[1],
-              ...pickGeoAiHumanPlaceFields(me.layerHit.properties),
+              ...pickGeoAiHumanPlaceFields(meHit.properties),
             });
           } else {
             stageGeoAiInspectCard({
@@ -7967,7 +8064,7 @@ export default function SatelliteIntelligence() {
       });
       setSiUploadPhase('processing');
       setSiUploadProgressPct(40);
-      setAddLayerStatus('Processing...');
+      setAddLayerStatus('Processing…');
 
       if (parsed.type === 'table') {
         throw new Error('This CSV has no latitude/longitude columns. Add lat/lon columns or use GeoJSON / KML / SHP (.zip).');
@@ -12992,22 +13089,23 @@ export default function SatelliteIntelligence() {
         pitch: is3DView ? Math.max(typeof prev.pitch === 'number' ? prev.pitch : 0, 42) : prev.pitch ?? 0,
         bearing: typeof prev.bearing === 'number' ? prev.bearing : 0,
       }));
-      if (pin.layerHit) {
-        const lyrCfg = customLayers.find(l => l.name === pin.layerHit.layerName);
+      const pinHit = pin.layerHit; // keep the null check inside callbacks below
+      if (pinHit) {
+        const lyrCfg = customLayers.find(l => l.name === pinHit.layerName);
         const built = buildGeoAiInspectCardContent({
-          properties: pin.layerHit.properties,
-          arcgisLayerDefinition: pin.layerHit.arcgisLayerDefinition,
+          properties: pinHit.properties,
+          arcgisLayerDefinition: pinHit.arcgisLayerDefinition,
           popupConfig: lyrCfg?.popupConfig,
           queryContext: userText,
           inspectCoords: { lng: pin.coords[0], lat: pin.coords[1] },
         });
         stageGeoAiInspectCard({
-          title: pin.layerHit.layerName,
+          title: pinHit.layerName,
           rows: built.rows,
           inspect: built.inspect,
           lng: pin.coords[0],
           lat: pin.coords[1],
-          ...pickGeoAiHumanPlaceFields(pin.layerHit.properties),
+          ...pickGeoAiHumanPlaceFields(pinHit.properties),
         });
       } else {
         stageGeoAiInspectCard({
@@ -18620,7 +18718,7 @@ export default function SatelliteIntelligence() {
         geojson: l.geojson as { features?: unknown[] } | null | undefined,
       }));
 
-      if (map?.queryRenderedFeatures && map.project) {
+      if (map?.queryRenderedFeatures && typeof map.project === 'function') {
         const { hits, overlapState } = selectFeaturesAtMapPoint({
           map,
           lng,
@@ -22318,6 +22416,8 @@ export default function SatelliteIntelligence() {
     () => (siIsPureRasterStyle(rawBasemapStyle) ? siExtractRasterSpecs(rawBasemapStyle) : []),
     [rawBasemapStyle],
   );
+  const activeBasemapRasterSpecsRef = useRef(activeBasemapRasterSpecs);
+  activeBasemapRasterSpecsRef.current = activeBasemapRasterSpecs;
   const effectiveMapStyle = useMemo(
     () =>
       ensureRasterStyleMaxNativeZoom(
@@ -24069,19 +24169,19 @@ export default function SatelliteIntelligence() {
                 onRemove={'onRemove' in layer ? layer.onRemove : undefined}
                 showTypeIcon={!canReorder}
                 headerActions={
-                  'actionable' in layer && layer.actionable && 'sourceLayerId' in layer && layer.sourceLayerId ? (
+                  'actionable' in layer && layer.actionable && reorderId ? (
                     <div className="si-env-layer-actions si-env-layer-actions--menu-only">
                       <div className="si-env-layer-actions-more-wrap">
                         <SiLayerOptionsMenuPortal
-                          open={layerOptionsMenuLayerId === layer.sourceLayerId}
+                          open={layerOptionsMenuLayerId === reorderId}
                           layerLabel={layer.label}
                           onToggleOpen={() =>
                             setLayerOptionsMenuLayerId(v => (v === reorderId ? null : reorderId))
                           }
                         >
-                        {layerOptionsMenuLayerId === layer.sourceLayerId
+                        {layerOptionsMenuLayerId === reorderId
                           ? (() => {
-                              const lid = layer.sourceLayerId!;
+                              const lid = reorderId;
                               const L = customLayers.find(x => x.id === lid);
                               if (!L) return null;
                               const isRaster = L.renderMode === 'raster';
@@ -25797,6 +25897,50 @@ export default function SatelliteIntelligence() {
     circleRefineDraft != null ||
     polylineStart != null;
 
+  /**
+   * One-time map start-up, run on the first of Mapbox `style.load` (style ready) or `load`. Mapbox
+   * only fires `load` after every tile has finished, so waiting for it let one slow or unreachable
+   * imagery host hold back the whole page (black canvas, no overlays) until a manual refresh.
+   */
+  siMapReadyHandlerRef.current = (target: any) => {
+    if (siMapReadyDoneRef.current) return;
+    siMapReadyDoneRef.current = true;
+    try {
+      applyAgroCloudMapboxBranding(target.getContainer());
+    } catch {
+      /* ignore */
+    }
+    setIsMapLoaded(true);
+    setIsMapStyleReady(true);
+    ensureAgroCloudMapScrollZoom(target);
+    applyAgroCloudMapPerformanceTuning(target);
+    applyAgroCloudMapGoogleEarthMouseHandlers(target);
+    applySiGlobeCockpitFog(target);
+    if (!siGlobeCockpitBootRef.current) {
+      siGlobeCockpitBootRef.current = true;
+      viewStateLiveRef.current = { ...SI_GLOBE_COCKPIT_2D_VIEW };
+      setViewState(SI_GLOBE_COCKPIT_2D_VIEW);
+      syncAgroCloudMapboxCamera(target, SI_GLOBE_COCKPIT_2D_VIEW);
+    } else {
+      syncAgroCloudMapboxCamera(target, viewStateLiveRef.current);
+    }
+    warmAgroCloudTerrainDemSource(target);
+    siEnsureGlobeProjection();
+    syncAgroCloudTerrain3d(target, activeBasemapId, viewStateLiveRef.current.pitch, {
+      terrainLayerEnabled: terrainLayerEnabledRef.current,
+    });
+    syncLiveViewport(true);
+    nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(target), siMapContainerRef.current);
+    requestAnimationFrame(() => {
+      nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(target), siMapContainerRef.current);
+    });
+    [80, 320, 900].forEach(ms =>
+      window.setTimeout(() => {
+        nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(target), siMapContainerRef.current);
+      }, ms),
+    );
+  };
+
   return (
     <div className="si-page">
       <div className="si-main-content">
@@ -25894,7 +26038,7 @@ export default function SatelliteIntelligence() {
               />
           ) : null}
           <MapGL
-            key="si-map-globe"
+            key={`si-map-globe-${siMapGeneration}`}
             ref={mapRef}
             antialias={false}
             initialViewState={initialMapViewStateRef.current}
@@ -26026,6 +26170,23 @@ export default function SatelliteIntelligence() {
               const status = e?.error?.status;
               const stack = String(e?.error?.stack || '');
 
+              // Basemap imagery that cannot be reached (DNS / TLS / offline report status 0 or none)
+              // switches to the fallback imagery after two failures. This used to be swallowed by the
+              // status-0 early return below, leaving a black globe until a manual refresh.
+              // Connection failures carry only a message ("Failed to fetch") — no url, no status —
+              // so recognise basemap imagery by its source id and test the active tile template.
+              const errSourceId = String(e?.sourceId || '');
+              const isBaseImagery =
+                errSourceId.startsWith(SI_BASE_SOURCE_PREFIX) && errSourceId !== SI_GLOBE_BASE_LAND_SOURCE_ID;
+              const tileUrl = url || (isBaseImagery ? activeBasemapRasterSpecsRef.current[0]?.tiles?.[0] ?? '' : '');
+              if (tileUrl && !/abort/i.test(message) && basemapTileErrorShouldFallback(tileUrl, status ?? 0)) {
+                siBasemapTileFailCountRef.current += 1;
+                if (!siBasemapTileSeenRef.current && siBasemapTileFailCountRef.current >= 2) {
+                  tryFallbackBasemapFromTileError(tileUrl, status ?? 0);
+                }
+                return;
+              }
+
               if (message.includes("reading 'get'")) {
                 const map = mapRef.current?.getMap?.() ?? mapRef.current;
                 cancelAgroCloudTerrainSync(map);
@@ -26073,41 +26234,13 @@ export default function SatelliteIntelligence() {
                 /* ignore */
               }
             }}
-            onLoad={evt => {
-              try {
-                applyAgroCloudMapboxBranding(evt.target.getContainer());
-              } catch {
-                /* ignore */
+            onLoad={evt => siMapReadyHandlerRef.current?.(evt.target)}
+            onSourceData={(ev: any) => {
+              // A basemap imagery tile rendered: the boot watchdog can stand down.
+              const sid = String(ev?.sourceId || '');
+              if (ev?.tile?.state === 'loaded' && sid.startsWith(SI_BASE_SOURCE_PREFIX) && sid !== SI_GLOBE_BASE_LAND_SOURCE_ID) {
+                siBasemapTileSeenRef.current = true;
               }
-              setIsMapLoaded(true);
-              setIsMapStyleReady(true);
-              ensureAgroCloudMapScrollZoom(evt.target);
-              applyAgroCloudMapPerformanceTuning(evt.target);
-              applyAgroCloudMapGoogleEarthMouseHandlers(evt.target);
-              applySiGlobeCockpitFog(evt.target);
-              if (!siGlobeCockpitBootRef.current) {
-                siGlobeCockpitBootRef.current = true;
-                viewStateLiveRef.current = { ...SI_GLOBE_COCKPIT_2D_VIEW };
-                setViewState(SI_GLOBE_COCKPIT_2D_VIEW);
-                syncAgroCloudMapboxCamera(evt.target, SI_GLOBE_COCKPIT_2D_VIEW);
-              } else {
-                syncAgroCloudMapboxCamera(evt.target, viewStateLiveRef.current);
-              }
-              warmAgroCloudTerrainDemSource(evt.target);
-              siEnsureGlobeProjection();
-              syncAgroCloudTerrain3d(evt.target, activeBasemapId, viewStateLiveRef.current.pitch, {
-                terrainLayerEnabled: terrainLayerEnabledRef.current,
-              });
-              syncLiveViewport(true);
-              nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(evt.target), siMapContainerRef.current);
-              requestAnimationFrame(() => {
-                nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(evt.target), siMapContainerRef.current);
-              });
-              [80, 320, 900].forEach(ms =>
-                window.setTimeout(() => {
-                  nudgeSiMapboxGlobeCanvas(asSiGlobeNudgeMap(evt.target), siMapContainerRef.current);
-                }, ms),
-              );
             }}
           >
             {isMapStyleReady ? (
@@ -27040,7 +27173,7 @@ export default function SatelliteIntelligence() {
                     />
                   </Source>
                 ) : null}
-                {false && isMapStyleReady && multiAoiCentroidCollection.features.length > 0 ? (
+                {SI_SHOW_MULTI_AOI_CENTROID_MARKERS && isMapStyleReady && multiAoiCentroidCollection.features.length > 0 ? (
                   <Source
                     id="si-multi-aoi-centroids"
                     type="geojson"
@@ -27086,7 +27219,7 @@ export default function SatelliteIntelligence() {
                     />
                   </Source>
                 ) : null}
-                {false && aoiHeatPointGeoJson?.features?.length ? (
+                {SI_SHOW_AOI_HEAT_POINTS && aoiHeatPointGeoJson?.features?.length ? (
                   <Source id="si-aoi-heat-source" type="geojson" data={aoiHeatPointGeoJson as any}>
                     <Layer
                       id="si-aoi-heatmap"
@@ -28196,7 +28329,7 @@ export default function SatelliteIntelligence() {
             showMapToolbox={true}
           />
 
-          {false && aoiHeatPointGeoJson?.features?.length ? (
+          {SI_SHOW_AOI_HEAT_POINTS && aoiHeatPointGeoJson?.features?.length ? (
             <div className="si-aoi-class-legend" dir="ltr">
               <div className="si-aoi-class-legend-title">{selectedIndex} classified (5 classes)</div>
               {aoiFiveClassLegend.map(row => (

@@ -701,11 +701,11 @@ export function GisDataManager({
                 </div>
                 {(
                   [
-                    ['opacity', 'Opacity', 0, 1, 0.01, v => `${Math.round(v * 100)}%`],
-                    ['brightness', 'Brightness', 0, 1, 0.01, v => `${Math.round(v * 100)}%`],
-                    ['contrast', 'Contrast', -1, 1, 0.01, v => v.toFixed(2)],
-                    ['saturation', 'Saturation', -1, 1, 0.01, v => v.toFixed(2)],
-                    ['hue', 'Hue', 0, 359, 1, v => `${Math.round(v)}°`],
+                    ['opacity', 'Opacity', 0, 1, 0.01, (v: number) => `${Math.round(v * 100)}%`],
+                    ['brightness', 'Brightness', 0, 1, 0.01, (v: number) => `${Math.round(v * 100)}%`],
+                    ['contrast', 'Contrast', -1, 1, 0.01, (v: number) => v.toFixed(2)],
+                    ['saturation', 'Saturation', -1, 1, 0.01, (v: number) => v.toFixed(2)],
+                    ['hue', 'Hue', 0, 359, 1, (v: number) => `${Math.round(v)}°`],
                   ] as const
                 ).map(([key, label, min, max, step, fmt]) => (
                   <label key={key} className="gis-dm-raster-slider">

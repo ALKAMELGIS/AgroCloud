@@ -6,12 +6,17 @@
   "scripts": {
     "dev": "node server/index.js",
     "start": "node server/index.js",
-    "test": "node --test \"tests/**/*.test.js\"",
-    "identity:migrate": "node scripts/identity-migrate.js",
+    "test": "node --experimental-test-module-mocks --test \"tests/**/*.test.js\"",
+    "db:migrate": "node scripts/db-migrate.js",
+    "db:status": "node scripts/db-status.js",
+    "db:import-postgres": "node scripts/db-import-postgres.js",
+    "db:backup": "node scripts/db-backup.js",
+    "identity:migrate": "npm run db:migrate",
     "identity:import": "node scripts/identity-import.js"
   },
   "dependencies": {
     "@gradio/client": "^2.3.0",
+    "better-sqlite3": "^12.11.1",
     "cors": "^2.8.5",
     "epsg-index": "^2.0.0",
     "express": "^4.18.2",

@@ -4,7 +4,7 @@ import {
   buildMasterGeometry,
   spatialGroupFields,
   zonalIndexStatsFromGrid,
-} from '../server/sentinelFieldBatchEngine.js'
+} from '../server/engines/sentinelFieldBatchEngine.js'
 
 describe('sentinelFieldBatchEngine', () => {
   it('groups nearby fields into one spatial cluster', () => {

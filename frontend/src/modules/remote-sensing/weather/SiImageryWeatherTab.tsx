@@ -14,7 +14,7 @@ import {
   type ChartOptions,
 } from 'chart.js'
 import { Chart } from 'react-chartjs-2'
-import type { ImageryTimeAggregation, ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation, ImageryTimeSeriesLayerSeries } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import {
   buildWeatherIndexInterpretation,
   primaryIndexSeries,
@@ -33,7 +33,7 @@ import {
   buildTimeSeriesWeatherTimeline,
   type TimeSeriesWeatherBlock,
 } from '../temporal-analysis/timeSeriesReport/timeSeriesWeatherTimeline'
-import { useImageryChartInk } from '@/shared/charts/imageryChartInk'
+import { useImageryChartInk } from '@/components/charts/imageryChartInk'
 
 ChartJS.register(
   CategoryScale,

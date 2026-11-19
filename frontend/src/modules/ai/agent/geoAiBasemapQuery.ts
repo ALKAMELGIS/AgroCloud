@@ -287,10 +287,12 @@ function sortAndLimit(list: GeoAiBasemapFeature[], limit: number): GeoAiBasemapF
     .slice(0, limit)
 }
 
-function asQueryable(map: unknown): QueryableMap | null {
+type QueryableMapWithQuery = QueryableMap & { queryRenderedFeatures: NonNullable<QueryableMap['queryRenderedFeatures']> }
+
+function asQueryable(map: unknown): QueryableMapWithQuery | null {
   const m = map as QueryableMap | null
   if (!m || typeof m.queryRenderedFeatures !== 'function') return null
-  return m
+  return m as QueryableMapWithQuery
 }
 
 /**

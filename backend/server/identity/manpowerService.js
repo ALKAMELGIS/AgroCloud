@@ -35,24 +35,25 @@ export async function getOrgManpowerSummary(client, organizationId) {
 
 export async function ensureAllocationRow(client, organizationId, roleCode, holderUserId = null) {
   const pool = client || getPool()
+  // Look up first: ON CONFLICT cannot detect the pool row (holder_user_id NULL never conflicts),
+  // which used to add an empty duplicate row on every call. See migration 004.
+  const existing = await pool.query(
+    `SELECT * FROM manpower_allocations
+     WHERE organization_id = $1 AND role_code = $2 AND holder_user_id IS $3`,
+    [organizationId, roleCode, holderUserId],
+  )
+  if (existing.rows[0]) return existing.rows[0]
   const { rows } = await pool.query(
     `INSERT INTO manpower_allocations (organization_id, holder_user_id, role_code, total, used, reserved)
      VALUES ($1, $2, $3, 0, 0, 0)
-     ON CONFLICT (organization_id, role_code, holder_user_id) DO NOTHING
      RETURNING *`,
     [organizationId, holderUserId, roleCode],
   )
-  if (rows[0]) return rows[0]
-  const existing = await pool.query(
-    `SELECT * FROM manpower_allocations
-     WHERE organization_id = $1 AND role_code = $2 AND holder_user_id IS NOT DISTINCT FROM $3`,
-    [organizationId, roleCode, holderUserId],
-  )
-  return existing.rows[0]
+  return rows[0]
 }
 
 export async function consumeManpower(client, actor, roleCode, quantity = 1, targetUserId = null) {
-  const pool = client
+  const pool = client || getPool()
   const orgId = actor.user.organization_id
   const row = await ensureAllocationRow(pool, orgId, roleCode, null)
   const { rows } = await pool.query(
@@ -82,12 +83,12 @@ export async function consumeManpower(client, actor, roleCode, quantity = 1, tar
 }
 
 export async function releaseManpower(client, actor, roleCode, quantity = 1, targetUserId = null) {
-  const pool = client
+  const pool = client || getPool()
   const orgId = actor.user.organization_id
   const row = await ensureAllocationRow(pool, orgId, roleCode, null)
   const { rows } = await pool.query(
     `UPDATE manpower_allocations
-     SET used = GREATEST(0, used - $1), updated_at = now()
+     SET used = max(0, used - $1), updated_at = now()
      WHERE id = $2
      RETURNING *`,
     [quantity, row.id],
@@ -101,7 +102,7 @@ export async function releaseManpower(client, actor, roleCode, quantity = 1, tar
 }
 
 export async function allocateManpower(client, actor, { roleCode, total, holderUserId = null, reason = '' }) {
-  const pool = client
+  const pool = client || getPool()
   requirePermission(actor, 'manpower.allocate')
   const orgId = actor.user.organization_id
   const row = await ensureAllocationRow(pool, orgId, roleCode, holderUserId)

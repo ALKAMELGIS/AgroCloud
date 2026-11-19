@@ -18,8 +18,6 @@ import {
   type GisContentSharing,
   type GisPortalTopTab,
   type GisRowMenuAction,
-  agroCloudDashboardEditPath,
-  agroCloudDashboardWorkspacePath,
   isAgroCloudDashboardApp,
   isGisPortalRowMapAddable,
 } from './gisContentPortalData'
@@ -45,7 +43,7 @@ import { GisPortalFolderOptionsMenu } from './GisPortalFolderOptionsMenu'
 import { MoveItemsModal } from './MoveItemsModal'
 import { NewItemModal } from './NewItemModal'
 import { ShareItemsModal } from './ShareItemsModal'
-import { appConfirm, appPrompt } from '@/shared/dialogs/appDialog'
+import { appConfirm, appPrompt } from '@/components/overlays/appDialog'
 import { publishGisContentNewItem, ensureDefaultGisContentPortalHostedLayers } from '../gisContentPortalPublish'
 
 const PAGE_SIZE = 20
@@ -441,19 +439,7 @@ export default function GisContent() {
           navigate(`/satellite/indices?content=${encodeURIComponent(row.id)}&mode=field-maps`)
           break
         case 'open-dashboard':
-          if (isAgroCloudDashboardApp(row)) {
-            navigate(agroCloudDashboardWorkspacePath(row.id))
-          } else {
-            navigate(`/satellite/indices?content=${encodeURIComponent(row.id)}`)
-          }
-          break
-        case 'edit-dashboard':
-          if (isAgroCloudDashboardApp(row)) {
-            navigate(agroCloudDashboardEditPath(row.id))
-          } else {
-            navigate(gisContentItemPath(row.id))
-            showToast(`"${row.title}" — ${action.label}`)
-          }
+          navigate(`/satellite/indices?content=${encodeURIComponent(row.id)}`)
           break
         case 'share': {
           const shareUrl =
@@ -691,9 +677,9 @@ export default function GisContent() {
   )
 
   return (
-    <main className="gis-portal-page" aria-label="GIS Content">
+    <section className="gis-portal-page" aria-labelledby="gis-portal-title">
       <nav className="gis-portal-topnav" aria-label="Content navigation">
-        <div className="gis-portal-topnav__brand">GIS Content</div>
+        <h1 id="gis-portal-title" className="gis-portal-topnav__brand">GIS Content</h1>
         <div className="gis-portal-topnav__tabs" role="tablist">
           {GIS_PORTAL_TOP_TABS.map(tab => (
             <button
@@ -718,7 +704,7 @@ export default function GisContent() {
           <strong>Central GIS Repository</strong>
           <p>
             Save, organize, and control all geographic layers here. Changes sync instantly to Map Canvas,
-            Intelligence Dashboard, Satellite Intelligence, AOI tools, and remote sensing layers.
+            Intelligence Dashboard, Map, AOI tools, and remote sensing layers.
           </p>
         </div>
         <div className="gis-portal-hub-banner__stats">
@@ -1083,6 +1069,6 @@ export default function GisContent() {
           {toastMessage}
         </div>
       ) : null}
-    </main>
+    </section>
   )
 }

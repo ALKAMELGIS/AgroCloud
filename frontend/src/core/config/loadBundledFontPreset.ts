@@ -1,4 +1,4 @@
-import { findPresetByCss } from './system-settings/headerFontCatalog'
+import { findPresetByCss } from '@/core/config/headerFontCatalog'
 
 type FontLoader = () => Promise<unknown>
 

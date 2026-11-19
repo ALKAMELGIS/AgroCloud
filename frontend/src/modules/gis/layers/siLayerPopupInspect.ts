@@ -83,7 +83,7 @@ export function buildSiPopupInspectPayload(args: {
 }): SiPopupInspectPayload {
   const cfg = normalizeSiLayerPopupConfig(args.popupConfig ?? undefined)
   const hit: Pick<LayerQueryMatch, 'properties' | 'arcgisLayerDefinition'> = {
-    properties: args.properties,
+    properties: args.properties ?? null,
     arcgisLayerDefinition: args.arcgisLayerDefinition,
   }
   const all = buildGeoAiLayerPopupAllAttributeRows(hit, { maxRows: 420, inspectCoords: args.inspectCoords })
@@ -126,7 +126,7 @@ export function buildGeoAiInspectCardContent(args: {
   inspect: SiPopupInspectPayload;
 } {
   const hit: Pick<LayerQueryMatch, 'properties' | 'arcgisLayerDefinition'> = {
-    properties: args.properties,
+    properties: args.properties ?? null,
     arcgisLayerDefinition: args.arcgisLayerDefinition,
   }
   const rows = buildGeoAiLayerPopupAttributeRows(hit, {
@@ -135,7 +135,7 @@ export function buildGeoAiInspectCardContent(args: {
     inspectCoords: args.inspectCoords,
   })
   const inspect = buildSiPopupInspectPayload({
-    properties: args.properties,
+    properties: args.properties ?? null,
     arcgisLayerDefinition: args.arcgisLayerDefinition,
     popupConfig: args.popupConfig ?? defaultSiLayerPopupConfig(),
     queryContext: args.queryContext,

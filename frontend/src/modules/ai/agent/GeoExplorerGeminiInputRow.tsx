@@ -13,7 +13,7 @@ export type GeoExplorerGeminiInputRowProps = {
   busy: boolean
   /** When `showAttach` is true, image attach is shown and pending image gates Send. */
   pendingImage: { mime: string; base64: string } | null
-  fileInputRef?: RefObject<HTMLInputElement | null>
+  fileInputRef?: RefObject<HTMLInputElement>
   onAttachChange?: (e: ChangeEvent<HTMLInputElement>) => void
   textareaAriaLabel: string
   showAttach?: boolean

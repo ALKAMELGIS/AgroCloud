@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process'
-import { VITE_PORT } from '../../scripts/devPorts.mjs'
+import { VITE_PORT } from '../../deploy/devPorts.mjs'
 
 const portArg = process.argv.find(a => /^\d+$/.test(a))
 const port = portArg ? Number(portArg) : VITE_PORT

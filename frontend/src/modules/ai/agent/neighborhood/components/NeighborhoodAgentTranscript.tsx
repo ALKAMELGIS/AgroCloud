@@ -40,7 +40,7 @@ export type NeighborhoodAgentTranscriptProps = {
   mapFocusFeatureKey?: string | null
   onTableQuerySelectApplied?: () => void
   onFocusMap?: (focus: { lng: number; lat: number; label?: string }) => void
-  messagesRef?: React.RefObject<HTMLDivElement | null>
+  messagesRef?: React.RefObject<HTMLDivElement>
   onMessagesScroll?: () => void
   hasOlderMessages?: boolean
   onLoadOlder?: () => void

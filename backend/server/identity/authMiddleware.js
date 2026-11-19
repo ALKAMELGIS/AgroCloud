@@ -20,7 +20,7 @@ export async function requireIdentitySession(req, res, next) {
 }
 
 export function identityErrorHandler(err, res) {
-  if (err instanceof AuthzError) {
+  if (err instanceof AuthzError || err instanceof CreditsError) {
     return res.status(err.status).json({ ok: false, error: err.message, code: err.code })
   }
   console.error('[identity]', err)

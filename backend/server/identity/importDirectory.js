@@ -1,7 +1,8 @@
 /**
- * Import legacy agri_admin_directory.json users into PostgreSQL.
+ * Import the admin-directory users (documents store `agri_admin_directory`, or its legacy JSON file)
+ * into the identity tables. Runs automatically the first time identity starts with no users.
  */
-import fs from 'fs'
+import { readAdminDirectoryStore } from '../persistence/adminDirectoryPersistence.js'
 import { getPool, isIdentityConfigured, runMigrations } from './db.js'
 import { mapLegacyRoleToCode, normalizeEmail } from './userService.js'
 import { defaultScopeForRoleCode, getRoleByCode } from './authorizationService.js'
@@ -15,13 +16,13 @@ function mapStatus(raw) {
 }
 
 export async function importAdminDirectory(filePath, { dryRun = false } = {}) {
-  if (!isIdentityConfigured()) throw new Error('DATABASE_URL is not set')
+  if (!isIdentityConfigured()) throw new Error('Identity is off — set AGROCLOUD_IDENTITY=on')
   const pool = getPool()
   const client = await pool.connect()
   try {
     await runMigrations(client)
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'))
-    const users = Array.isArray(raw.users) ? raw.users : []
+    const { data } = readAdminDirectoryStore(filePath)
+    const users = Array.isArray(data.users) ? data.users : []
     const { rows: orgRows } = await client.query(`SELECT id FROM organizations WHERE slug = 'default' LIMIT 1`)
     let orgId = orgRows[0]?.id
     if (!orgId) {
@@ -36,7 +37,7 @@ export async function importAdminDirectory(filePath, { dryRun = false } = {}) {
       return { dryRun: true, count: users.length, orgId }
     }
 
-    await client.query('BEGIN')
+    await client.query('BEGIN IMMEDIATE') // takes the write lock up front (SQLite's equivalent of SELECT … FOR UPDATE)
     for (const u of users) {
       const email = normalizeEmail(u.email)
       if (!email) continue

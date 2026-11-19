@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs'
 import type { CropAlertFieldInput } from '../../indices/siCropAlertEngine'
 import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'
-import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import {
   AOI_EXCEL_NO_DATA,
   cleanAoiPlotDisplayId,

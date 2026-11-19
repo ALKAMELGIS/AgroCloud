@@ -22,7 +22,7 @@ type RemoteSensingLayerSelectProps = {
   menuMinWidth?: number
   menuMaxHeight?: number
   /** When set with `menuPortal`, menu stays inside this element (map viewport). */
-  menuBoundsRef?: RefObject<HTMLElement | null>
+  menuBoundsRef?: RefObject<HTMLElement>
   /** Secondary scientific / descriptive line under each abbreviation (default off). */
   showScienceLines?: boolean
   'aria-label'?: string

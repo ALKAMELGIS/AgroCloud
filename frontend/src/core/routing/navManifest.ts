@@ -7,9 +7,6 @@ import { normalizeAppPath } from '../services/settingsStorage'
 export type NavTranslationKey =
   | 'home'
   | 'dashboard'
-  | 'developDashboard'
-  | 'agroCloudDashboard'
-  | 'agroCloudPlatform'
   | 'aiAgroCloud'
   | 'aiAgroChat'
   | 'satelliteImagery'
@@ -20,7 +17,6 @@ export type NavTranslationKey =
   | 'irrigation'
   | 'ecph'
   | 'harvest'
-  | 'qhis'
   | 'productTracking'
   | 'sensors'
   | 'soilSensors'
@@ -30,11 +26,11 @@ export type NavTranslationKey =
   | 'gpsVehicleTracking'
   | 'masterData'
   | 'workflowDataSources'
-  | 'dashboardSettings'
   | 'gisContent'
   | 'admin'
   | 'userManagement'
   | 'manpower'
+  | 'credits'
   | 'rolesPermissions'
   | 'hierarchy'
   | 'githubIntegration'
@@ -68,35 +64,6 @@ export const NAV_HOME: NavLeafDef = {
 }
 
 export const NAV_DEFAULT_GROUPS: NavGroupDef[] = [
-  {
-    id: 'dashboard',
-    i18nKey: 'dashboard',
-    defaultIcon: 'fa-solid fa-chart-line',
-    headerClass: 'nav-header-dashboard',
-    children: [
-      {
-        id: 'dashboard-develop',
-        path: '/dashboard/develop',
-        i18nKey: 'developDashboard',
-        defaultIcon: 'fa-solid fa-grip',
-        subitemClass: 'nav-item-dashboard-edit',
-      },
-      {
-        id: 'dashboard-agro-cloud',
-        path: '/dashboards/agro-cloud',
-        i18nKey: 'agroCloudDashboard',
-        defaultIcon: 'fa-solid fa-chart-pie',
-        subitemClass: 'nav-item-dashboard-agro',
-      },
-      {
-        id: 'dashboard-agro-platform',
-        path: '/dashboards/agro-cloud-platform',
-        i18nKey: 'agroCloudPlatform',
-        defaultIcon: 'fa-solid fa-seedling',
-        subitemClass: 'nav-item-dashboard-platform',
-      },
-    ],
-  },
   {
     id: 'application',
     i18nKey: 'application',
@@ -170,13 +137,6 @@ export const NAV_DEFAULT_GROUPS: NavGroupDef[] = [
         subitemClass: 'nav-item-harvest',
       },
       {
-        id: 'data-qhis',
-        path: '/data/qhis',
-        i18nKey: 'qhis',
-        defaultIcon: 'fa-solid fa-shield-halved',
-        subitemClass: 'nav-item-qhis',
-      },
-      {
         id: 'data-production',
         path: '/data/production',
         i18nKey: 'productTracking',
@@ -242,13 +202,6 @@ export const NAV_DEFAULT_GROUPS: NavGroupDef[] = [
         subitemClass: 'nav-item-data-management',
       },
       {
-        id: 'master-dashboard-settings',
-        path: '/master/dashboard-settings',
-        i18nKey: 'dashboardSettings',
-        defaultIcon: 'fa-solid fa-link',
-        subitemClass: 'nav-item-master',
-      },
-      {
         id: 'master-gis',
         path: '/master/gis-content',
         i18nKey: 'gisContent',
@@ -275,6 +228,13 @@ export const NAV_DEFAULT_GROUPS: NavGroupDef[] = [
         path: '/admin/manpower',
         i18nKey: 'manpower',
         defaultIcon: 'fa-solid fa-people-group',
+        subitemClass: 'nav-item-admin',
+      },
+      {
+        id: 'admin-credits',
+        path: '/admin/credits',
+        i18nKey: 'credits',
+        defaultIcon: 'fa-solid fa-coins',
         subitemClass: 'nav-item-admin',
       },
       {

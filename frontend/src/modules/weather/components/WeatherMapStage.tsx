@@ -6,7 +6,7 @@ import { DEFAULT_BASEMAP_ID, buildBasemapCatalog, catalogEntryById, resolveBasem
 import { readWeatherBasemapId, writeWeatherBasemapId } from '../config/weatherBasemapPreference'
 import { GeoJSON, TileLayer } from 'react-leaflet'
 import L from 'leaflet'
-import MapView from '@/shared/maps/MapView'
+import MapView from '@/components/map/MapView'
 import { getWeatherMapLayer, type WeatherMapLayerId } from '../config/weatherLayerCatalog'
 import { WeatherLiveRasterOverlay } from '../map/WeatherLiveRasterOverlay'
 import { WeatherOpenMeteoTileLayer } from '../map/WeatherOpenMeteoTileLayer'

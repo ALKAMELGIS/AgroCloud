@@ -1,4 +1,4 @@
-/** Google Maps Platform key (satellite basemap tiles, Develop Dashboard geocoding). */
+/** Google Maps Platform key (satellite basemap tiles and geocoding). */
 
 export function getGoogleMapsApiKeyFromEnv(): string {
   const a = import.meta.env.VITE_GOOGLE_MAPS_SERVER_API_KEY

@@ -2,7 +2,7 @@
  * AgroCloud design tokens — single source of truth for the MUI theme and the CSS token layer
  * (`assets/styles/agro-premium.css` mirrors these values as `--ds-*` custom properties).
  *
- * Derived from the UI UX Pro Max recommendation for AgroCloud (design-system/agrocloud/MASTER.md):
+ * Derived from the UI UX Pro Max recommendation for AgroCloud (home/design-system/MASTER.md):
  * earth green primary (kept on the existing AgroCloud brand emerald #047857, used in 120+ legacy
  * stylesheets) + harvest gold accent, subtle glass, WCAG 4.5:1 text contrast in both modes.
  */

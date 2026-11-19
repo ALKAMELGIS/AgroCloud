@@ -65,11 +65,10 @@ export async function consumePasswordResetToken(rawToken, newPasswordHash) {
   const tokenHash = hashResetToken(rawToken)
   const client = await pool.connect()
   try {
-    await client.query('BEGIN')
+    await client.query('BEGIN IMMEDIATE') // takes the write lock up front (SQLite's equivalent of SELECT … FOR UPDATE)
     const { rows } = await client.query(
       `SELECT * FROM password_reset_tokens
-       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
-       FOR UPDATE`,
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()`,
       [tokenHash],
     )
     const row = rows[0]

@@ -2,7 +2,7 @@
  * Client-side country-aware crop classification engine.
  *
  * Faithful in-browser port of the backend `country` engine
- * (`backend/server/cropClassificationProxy.js` → `cropFieldClassifier.js` +
+ * (`backend/server/proxies/cropClassificationProxy.js` → `cropFieldClassifier.js` +
  * `cropCountryDatabase.js`). Lets the Crop AI tool run fully client-side on a
  * static deployment (GitHub Pages / Hostinger static) with NO Node backend:
  *   AOI → Sentinel Hub OGC WMS index grids (browser fetch + canvas) → NDVI

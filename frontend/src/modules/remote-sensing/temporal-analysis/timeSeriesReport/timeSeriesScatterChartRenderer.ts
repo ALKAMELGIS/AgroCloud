@@ -10,8 +10,8 @@ import {
   Tooltip,
   Filler,
 } from 'chart.js'
-import type { ImageryCorrelationScatterAnalysis } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
-import { buildImageryCorrelationScatterAnalysis } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryCorrelationScatterAnalysis } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
+import { buildImageryCorrelationScatterAnalysis } from '@/modules/remote-sensing/shared/acpImageryTimeSeries'
 import type { DocxNativeChartSpec } from './timeSeriesDocxNativeCharts'
 
 Chart.register(
