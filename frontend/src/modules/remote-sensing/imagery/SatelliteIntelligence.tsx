@@ -6497,6 +6497,12 @@ export default function SatelliteIntelligence() {
   const siBasemapTileSeenRef = useRef(false);
   const siMapReadyDoneRef = useRef(false);
   const siMapReadyHandlerRef = useRef<((map: any) => void) | null>(null);
+  /**
+   * Bumped to rebuild the map from scratch when the browser drops its WebGL context and does not
+   * give it back (GPU reset, driver hiccup, too many WebGL pages). Mapbox cannot draw without the
+   * context, so the canvas stayed black until a manual page refresh.
+   */
+  const [siMapGeneration, setSiMapGeneration] = useState(0);
   // Start the page as soon as the map style is ready (see siMapReadyHandlerRef), not when the
   // last imagery tile has arrived.
   useEffect(() => {
@@ -6514,16 +6520,42 @@ export default function SatelliteIntelligence() {
         return;
       }
       attachedMap = map;
+      map.on('webglcontextlost', onContextLost);
+      map.on('webglcontextrestored', onContextRestored);
       if (map.isStyleLoaded?.()) siMapReadyHandlerRef.current?.(map);
       else map.once('style.load', onStyleLoad);
+    };
+    let lostTimer: number | undefined;
+    const onContextLost = () => {
+      if (cancelled || lostTimer) return;
+      // Give the browser a moment to restore the context itself; otherwise start a fresh map.
+      lostTimer = window.setTimeout(() => {
+        lostTimer = undefined;
+        if (cancelled) return;
+        console.warn('[Map] WebGL context lost and not restored; rebuilding the map.');
+        siMapReadyDoneRef.current = false;
+        setSiMapGeneration(g => g + 1);
+      }, 1500);
+    };
+    const onContextRestored = () => {
+      if (lostTimer) window.clearTimeout(lostTimer);
+      lostTimer = undefined;
+      try {
+        attachedMap?.triggerRepaint?.();
+      } catch {
+        /* ignore */
+      }
     };
     attach();
     return () => {
       cancelled = true;
       if (poll) window.clearTimeout(poll);
+      if (lostTimer) window.clearTimeout(lostTimer);
       attachedMap?.off?.('style.load', onStyleLoad);
+      attachedMap?.off?.('webglcontextlost', onContextLost);
+      attachedMap?.off?.('webglcontextrestored', onContextRestored);
     };
-  }, []);
+  }, [siMapGeneration]);
   // Boot watchdog: if no imagery tile has rendered 8 s after opening (slow, hung or blocked
   // imagery host), switch to the fallback imagery instead of waiting indefinitely.
   useEffect(() => {
@@ -26006,7 +26038,7 @@ export default function SatelliteIntelligence() {
               />
           ) : null}
           <MapGL
-            key="si-map-globe"
+            key={`si-map-globe-${siMapGeneration}`}
             ref={mapRef}
             antialias={false}
             initialViewState={initialMapViewStateRef.current}

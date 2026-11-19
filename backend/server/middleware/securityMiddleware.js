@@ -27,7 +27,9 @@ function resolveTrustedConnectHosts() {
  */
 export function buildContentSecurityPolicy() {
   const connectExtra = resolveTrustedConnectHosts()
-  const connectSrc = ["'self'", 'https:', 'wss:', ...connectExtra].join(' ')
+  // data:/blob: — Mapbox GL fetches its own placeholder tiles and decoded images through fetch();
+  // blocking them raised map errors on every basemap load.
+  const connectSrc = ["'self'", 'data:', 'blob:', 'https:', 'wss:', ...connectExtra].join(' ')
 
   const directives = [
     "default-src 'self'",
